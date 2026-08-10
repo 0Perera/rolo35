@@ -81,6 +81,13 @@ Continuar na branch `epic-2-gestao-de-sessoes-organizador` (já existe, criada n
   - [x] Atualizar o Status desta story pra `review` (mesmo ciclo já usado nas Stories 1.1/1.2/2.1: code-review antes de `done`).
   - [x] Commit: `docs(sessoes): confirmação final e fecha Story 2.3 pra review`
 
+### Review Findings
+
+- [ ] [Review][Decision] Sessões passadas continuam aparecendo pra sempre na listagem pública — `listarPublicadas()` não tem `WHERE data_hora >= now()` nem qualquer filtro temporal. Um visitante vê sessões já ocorridas há meses misturadas com as futuras, sem distinção nenhuma, e isso persiste indefinidamente (todo AC desta story trata de status esgotada/vaga, nenhum trata de tempo). [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:23-36]
+- [ ] [Review][Patch] `SecurityConfig` encadeia dois `.requestMatchers(...).permitAll()` separados em vez de agrupar os paths num único `requestMatchers(...)` antes de um `.permitAll()` — diverge do estilo anterior (login+health agrupados numa chamada), puramente estilístico, sem efeito funcional. [api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java:43-48]
+- [x] [Review][Defer] `listarPublicadas()` usa `JOIN assentos` (INNER) — uma sessão cuja sala não tivesse nenhum assento cadastrado desapareceria da listagem, o que violaria literalmente o AC1 ("todas aparecem"). Hoje é inalcançável: `SessaoService.criar()` já rejeita com `SalaSemAssentosException` a criação de sessão pra sala sem assentos, então toda sessão existente sempre tem sala com assentos. Risco fica latente pra quando existir edição/remoção de assentos de uma sala já com sessões — deferido, pré-existente na modelagem, não causado por esta story. [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:31]
+- [x] [Review][Defer] `LEFT JOIN assento_sessao` sem tratamento pra assento sem linha correspondente pra aquela sessão — nesse caso ele não conta nem como livre nem como vendido, podendo subcontar `assentosLivres` e marcar `esgotada=true` indevidamente. Hoje inalcançável: `SessaoService.criar()` sempre popula `assento_sessao` pra 100% dos assentos da sala no momento da criação da sessão — nenhum caminho de código atual adiciona assento a uma sala depois. Mesmo risco latente do finding anterior, mesma causa raiz — deferido junto. [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:28,32]
+
 ## Dev Notes
 
 - **Não existe coluna `publicada`/estado de rascunho em `sessoes`.** `V1__schema.sql` não tem esse campo — toda sessão criada pela Story 2.1 já é, por definição, "publicada". `listarPublicadas()` lista **todas** as sessões da tabela, sem filtro de status. Não inventar uma coluna ou flag nova pra isso — não é pedido por nenhuma AC desta story, e mudar o schema aqui é escopo fora do que foi solicitado.
@@ -100,6 +107,8 @@ Continuar na branch `epic-2-gestao-de-sessoes-organizador` (já existe, criada n
 - **Ordenação por `data_hora` ascendente.** Sessões mais próximas primeiro — não é uma AC explícita, mas é o único critério que faz sentido pra "descobrir o que tem em cartaz" sem introduzir paginação ou filtro (fora de escopo, nenhuma AC pede).
 
 - **Sem paginação, filtro ou busca por título nesta story.** FR-8/AC1-5 cobrem só listar e marcar esgotada. Busca/filtro de sessão pública não é pedido aqui — não implementar antecipando Epic 3.
+
+- **Filtro `WHERE s.data_hora >= now()` adicionado após o code review.** Nenhuma AC original pedia isso, mas sem o filtro `listarPublicadas()` acumula pra sempre toda sessão já ocorrida — "Sessões em cartaz" misturaria filmes de meses atrás com os futuros, indefinidamente. Decisão do code review, aplicada como patch: filtro temporal na própria query nativa, coberto por `SessaoListagemRepositoryTest.listarPublicadasNaoTrazSessaoComDataHoraNoPassado`.
 
 ## Project Structure Notes
 

@@ -270,3 +270,10 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: a AC2 desta story exige "uma única consulta (projection/fetch join)", mesmo padrão de estilo já usado em `SessaoRepository.existeConflitante` (Story 2.1) — `@Query` nativa com agregação em SQL, não fetch join JPQL, porque o `CASE WHEN` + `COUNT DISTINCT` correlacionado não é natural em JPQL sem subquery, o que reintroduziria risco de N+1 dependendo de como o Hibernate traduz. Não expor `assentosLivres` bruto evita que um visitante estime quantos ingressos já foram vendidos de uma sessão — informação sem valor pro caso de uso e desnecessária de vazar.
 
 ---
+
+## Listagem pública esconde sessões passadas (code review da Story 2.3)
+
+- **Decisão**: `listarPublicadas()` ganhou `WHERE s.data_hora >= now()`, dentro da mesma query nativa — sessão já ocorrida some da listagem pública.
+- **Por quê**: nenhuma AC original da Story 2.3 pedia filtro temporal (só status esgotada/vaga), mas sem ele a listagem acumularia toda sessão já ocorrida pra sempre — "Sessões em cartaz" misturaria filmes de meses atrás com os futuros, indefinidamente, sem nenhuma forma de esconder o que já passou. Levantado no code review adversarial da story (Blind Hunter + Edge Case Hunter, achado independente pelos dois); usuário decidiu corrigir na hora em vez de deferir. Filtro na própria query nativa mantém a garantia de uma única consulta (AC2), sem segunda chamada nem filtro em memória.
+
+---

@@ -30,6 +30,7 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
         JOIN salas sa ON sa.id = s.sala_id
         JOIN assentos a ON a.sala_id = s.sala_id
         LEFT JOIN assento_sessao asx ON asx.sessao_id = s.id AND asx.assento_id = a.id
+        WHERE s.data_hora >= now()
         GROUP BY s.id, sa.nome
         ORDER BY s.data_hora
         """, nativeQuery = true)
