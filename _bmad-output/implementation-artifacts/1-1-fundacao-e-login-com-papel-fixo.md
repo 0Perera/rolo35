@@ -62,10 +62,10 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
   - [x] `web/src/api/client.ts`: wrapper de `fetch` com timeout com folga (~90s) pro cold start documentado do Render (AD-2); `web/src/api/auth.ts`: função tipada de login
   - [x] **Design tokens do tema cinema 35mm** — definir agora, no CSS-first `@theme` do Tailwind (`web/src/index.css`), pra toda tela futura herdar sem retrabalho de retrofit. Só tokens (cor/tipografia), nenhum componente construído em cima ainda — ver paleta e fontes exatas em Dev Notes
 
-- [ ] **Task 5 — Tela de login (AC: 7)**
-  - [ ] Formulário de login com estados de carregando/erro/sucesso
-  - [ ] Sucesso: guarda o token em `localStorage`, decodifica o claim `papel`, redireciona pra uma rota placeholder por papel (`/organizador`, `/cliente`, `/portaria`) — as telas reais de cada papel são construídas em épicos futuros, este placeholder só prova o redirecionamento correto
-  - [ ] Erro: mensagem clara na própria tela, sem travar em estado de carregamento indefinido
+- [x] **Task 5 — Tela de login (AC: 7)**
+  - [x] Formulário de login com estados de carregando/erro/sucesso
+  - [x] Sucesso: guarda o token em `localStorage`, decodifica o claim `papel`, redireciona pra uma rota placeholder por papel (`/organizador`, `/cliente`, `/portaria`) — as telas reais de cada papel são construídas em épicos futuros, este placeholder só prova o redirecionamento correto
+  - [x] Erro: mensagem clara na própria tela, sem travar em estado de carregamento indefinido
 
 - [ ] **Task 6 — Testes (nascem antes do código, por camada)**
   - [ ] Unitário (JUnit/Mockito, sem contexto Spring): `JwtService` — gera token com claim `papel` correto e `exp` futuro; token adulterado/expirado falha na validação
