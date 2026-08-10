@@ -1,6 +1,10 @@
+---
+baseline_commit: 4fc6b7d9c8058f4710d127cfa7f1ae5eccc9d807
+---
+
 # Story 1.1: Fundação e Login com Papel Fixo
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -30,12 +34,12 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Schema completo via Flyway (AC: 1, 8)**
-  - [ ] Criar `api/src/main/resources/db/migration/V1__schema.sql` com as 7 tabelas do ERD da Architecture Spine: `usuarios`, `salas`, `assentos`, `sessoes`, `assento_sessao`, `reservas`, `ingressos` — colunas, FKs, PKs e constraints conforme detalhado em Dev Notes
-  - [ ] `usuarios.email` com `UNIQUE` + índice explícito (AC 8, NFR-8)
-  - [ ] Adicionar `spring-boot-starter-actuator` ao `pom.xml`; expor só `/actuator/health` (`management.endpoints.web.exposure.include=health`)
-  - [ ] **Corrigir bug existente em `api/src/main/resources/application.properties`:** a chave `ddl-auto = validate` não é uma property real do Spring (falta o prefixo) — trocar por `spring.jpa.hibernate.ddl-auto=validate`. Sem essa correção, o Hibernate não está de fato configurado pra só validar o schema aplicado pelo Flyway.
-  - [ ] Validar: `docker compose up` sobe Postgres saudável, API aplica a migration no boot (`spring.jpa.hibernate.ddl-auto=validate`), `GET /actuator/health` responde `200`
+- [x] **Task 1 — Schema completo via Flyway (AC: 1, 8)**
+  - [x] Criar `api/src/main/resources/db/migration/V1__schema.sql` com as 7 tabelas do ERD da Architecture Spine: `usuarios`, `salas`, `assentos`, `sessoes`, `assento_sessao`, `reservas`, `ingressos` — colunas, FKs, PKs e constraints conforme detalhado em Dev Notes
+  - [x] `usuarios.email` com `UNIQUE` + índice explícito (AC 8, NFR-8)
+  - [x] Adicionar `spring-boot-starter-actuator` ao `pom.xml`; expor só `/actuator/health` (`management.endpoints.web.exposure.include=health`)
+  - [x] **Corrigir bug existente em `api/src/main/resources/application.properties`:** a chave `ddl-auto = validate` não é uma property real do Spring (falta o prefixo) — trocar por `spring.jpa.hibernate.ddl-auto=validate`. Sem essa correção, o Hibernate não está de fato configurado pra só validar o schema aplicado pelo Flyway.
+  - [x] Validar: `docker compose up` sobe Postgres saudável, API aplica a migration no boot (`spring.jpa.hibernate.ddl-auto=validate`), `GET /actuator/health` responde `200`
 
 - [ ] **Task 2 — Seed versionado (AC: 2)**
   - [ ] Criar `api/src/main/resources/db/migration/V2__seed.sql`: 1 `sala` com seus `assentos`, 1 `sessao` publicada vinculada a essa sala com dado de filme placeholder (tmdb_id/título/pôster fictícios — integração real TMDb é da Story 1.2), e uma linha `assento_sessao` (`status='LIVRE'`) pra **cada** assento da sala dessa sessão (AD-3 exige a linha populada na criação da sessão — seed não é exceção a essa regra)
