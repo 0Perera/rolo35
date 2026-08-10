@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -23,10 +24,12 @@ import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
+import br.com.rolo35.api.sessoes.repository.SessaoListagemProjection;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -263,5 +266,52 @@ class SessaoServiceTest {
                 .isInstanceOf(OrganizadorNaoEncontradoException.class);
 
         verify(salaRepository, never()).findByIdForUpdate(any());
+    }
+
+    private SessaoListagemProjection projecaoCom(Long id, long assentosLivres) {
+        SessaoListagemProjection projecao = mock(SessaoListagemProjection.class);
+        given(projecao.getId()).willReturn(id);
+        given(projecao.getSalaNome()).willReturn("Sala 1");
+        given(projecao.getTmdbId()).willReturn(550L);
+        given(projecao.getTitulo()).willReturn("Clube da Luta");
+        given(projecao.getPosterUrl()).willReturn("http://poster");
+        given(projecao.getSinopse()).willReturn("sinopse");
+        given(projecao.getDataEstreia()).willReturn(Date.valueOf("1999-10-15"));
+        given(projecao.getDataHora()).willReturn(LocalDateTime.now().plusDays(7));
+        given(projecao.getPreco()).willReturn(new BigDecimal("25.00"));
+        given(projecao.getCapacidade()).willReturn(40);
+        given(projecao.getAssentosLivres()).willReturn(assentosLivres);
+        return projecao;
+    }
+
+    @Test
+    void listarPublicadasMarcaEsgotadaFalseQuandoHaAssentoLivre() {
+        SessaoListagemProjection projecao = projecaoCom(1L, 12L);
+        given(sessaoRepository.listarPublicadas()).willReturn(List.of(projecao));
+
+        var listagem = sessaoService.listarPublicadas();
+
+        assertThat(listagem).hasSize(1);
+        assertThat(listagem.get(0).esgotada()).isFalse();
+    }
+
+    @Test
+    void listarPublicadasMarcaEsgotadaTrueQuandoZeroAssentosLivres() {
+        SessaoListagemProjection projecao = projecaoCom(2L, 0L);
+        given(sessaoRepository.listarPublicadas()).willReturn(List.of(projecao));
+
+        var listagem = sessaoService.listarPublicadas();
+
+        assertThat(listagem).hasSize(1);
+        assertThat(listagem.get(0).esgotada()).isTrue();
+    }
+
+    @Test
+    void listarPublicadasRetornaListaVaziaSemLancarExcecaoQuandoRepositoryNaoTemNada() {
+        given(sessaoRepository.listarPublicadas()).willReturn(List.of());
+
+        var listagem = sessaoService.listarPublicadas();
+
+        assertThat(listagem).isEmpty();
     }
 }

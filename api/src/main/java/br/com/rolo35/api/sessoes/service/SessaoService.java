@@ -14,6 +14,7 @@ import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
@@ -107,6 +108,16 @@ public class SessaoService {
                 sessaoSalva.getId(), sala.getId(), sala.getNome(), sessaoSalva.getTmdbId(), sessaoSalva.getTitulo(),
                 sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(), request.dataEstreia(),
                 sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
+    }
+
+    public List<SessaoListagemDto> listarPublicadas() {
+        return sessaoRepository.listarPublicadas().stream()
+                .map(projecao -> new SessaoListagemDto(
+                        projecao.getId(), projecao.getSalaNome(), projecao.getTmdbId(), projecao.getTitulo(),
+                        projecao.getPosterUrl(), projecao.getSinopse(), projecao.getDataEstreia(),
+                        projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
+                        projecao.getAssentosLivres() == 0))
+                .toList();
     }
 
     private LocalDate parseDataEstreia(String dataEstreia) {
