@@ -12,6 +12,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class AuthService {
 
+    // Hash BCrypt válido usado só pra equalizar o tempo de resposta quando o
+    // e-mail não existe — sem ele, essa via seria sistematicamente mais rápida
+    // que "senha errada" (que roda BCrypt de verdade), vazando por tempo quais
+    // e-mails estão cadastrados (fere o espírito da AC5).
+    private static final String DUMMY_HASH = "$2a$10$opn4ZXwT3eINEaBDXcu24OoJ7Bbv8yQGtieMQB2cl7zeutrBnByE2";
+
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -23,14 +29,15 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        Usuario usuario = usuarioRepository
-                .findByEmail(request.email())
-                .orElseThrow(CredenciaisInvalidasException::new);
+        var usuarioOpt = usuarioRepository.findByEmail(request.email());
+        String senhaHashParaComparar = usuarioOpt.map(Usuario::getSenhaHash).orElse(DUMMY_HASH);
+        boolean senhaConfere = passwordEncoder.matches(request.senha(), senhaHashParaComparar);
 
-        if (!passwordEncoder.matches(request.senha(), usuario.getSenhaHash())) {
+        if (usuarioOpt.isEmpty() || !senhaConfere) {
             throw new CredenciaisInvalidasException();
         }
 
+        Usuario usuario = usuarioOpt.get();
         String token = jwtService.generateToken(usuario.getEmail(), usuario.getPapel());
         return new LoginResponse(token, usuario.getPapel());
     }
