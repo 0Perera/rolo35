@@ -136,6 +136,17 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <environmentVariables>
+                        <!-- application.properties exige JWT_SECRET sem fallback (non-negotiable de
+                             segredo); testes que sobem o contexto Spring completo precisam de um valor. -->
+                        <JWT_SECRET>test-secret-nao-usar-em-producao-0123456789abcdef</JWT_SECRET>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <executions>
                     <execution>
