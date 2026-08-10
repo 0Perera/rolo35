@@ -13,6 +13,7 @@ export function BuscaFilmesPage() {
     event.preventDefault();
     setEstado('loading');
     setMensagemErro('');
+    setResultados(null);
 
     try {
       const filmes = await buscarFilmes(query);

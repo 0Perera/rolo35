@@ -67,4 +67,20 @@ class FilmeControllerTest {
                 .andExpect(jsonPath("$.codigo").value("CATALOGO_INDISPONIVEL"))
                 .andExpect(jsonPath("$.mensagem").exists());
     }
+
+    @Test
+    void returns400WhenQueryParamIsMissing() throws Exception {
+        mockMvc.perform(get("/api/filmes/buscar"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    @Test
+    void returns400WhenQueryParamIsBlank() throws Exception {
+        mockMvc.perform(get("/api/filmes/buscar").param("query", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
 }

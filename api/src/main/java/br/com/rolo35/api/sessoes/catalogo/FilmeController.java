@@ -16,6 +16,9 @@ public class FilmeController {
 
     @GetMapping("/api/filmes/buscar")
     public List<FilmeDto> buscar(@RequestParam String query) {
+        if (query.isBlank()) {
+            throw new ParametroInvalidoException("Parâmetro 'query' não pode ser vazio");
+        }
         return tmdbClient.buscarPorTitulo(query);
     }
 }

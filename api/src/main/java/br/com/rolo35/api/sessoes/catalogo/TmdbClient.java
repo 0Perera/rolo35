@@ -2,6 +2,8 @@ package br.com.rolo35.api.sessoes.catalogo;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -11,6 +13,7 @@ import org.springframework.web.client.RestClientException;
 @Component
 public class TmdbClient {
 
+    private static final Logger log = LoggerFactory.getLogger(TmdbClient.class);
     private static final String BASE_URL = "https://api.themoviedb.org/3";
     private static final String POSTER_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
@@ -44,6 +47,7 @@ public class TmdbClient {
             }
             return response.results().stream().map(this::toFilmeDto).toList();
         } catch (RestClientException e) {
+            log.warn("Falha ao buscar filmes no TMDb pra query '{}': {}", query, e.getMessage(), e);
             throw new CatalogoIndisponivelException();
         }
     }

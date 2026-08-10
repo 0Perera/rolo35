@@ -89,4 +89,55 @@ describe('BuscaFilmesPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível buscar filmes/i);
     expect(screen.queryByText(/nenhum filme encontrado/i)).not.toBeInTheDocument();
   });
+
+  it('clears results from a previous successful search when a later search fails', async () => {
+    const buscarFilmesMock = vi.spyOn(filmesApi, 'buscarFilmes');
+    buscarFilmesMock.mockResolvedValueOnce([
+      {
+        tmdbId: 550,
+        titulo: 'Clube da Luta',
+        posterUrl: null,
+        sinopse: 'Sinopse do filme',
+        dataEstreia: '1999-10-15',
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.type(screen.getByPlaceholderText(/título do filme/i), 'clube');
+    await user.click(screen.getByRole('button', { name: /buscar/i }));
+    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
+
+    buscarFilmesMock.mockRejectedValueOnce(new Error('falha de rede'));
+    await user.clear(screen.getByPlaceholderText(/título do filme/i));
+    await user.type(screen.getByPlaceholderText(/título do filme/i), 'outro filme');
+    await user.click(screen.getByRole('button', { name: /buscar/i }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('Clube da Luta')).not.toBeInTheDocument();
+  });
+
+  it('ignores a resubmit while a search is already in flight', async () => {
+    let resolveBusca: (filmes: filmesApi.Filme[]) => void = () => {};
+    const buscarFilmesMock = vi.spyOn(filmesApi, 'buscarFilmes').mockReturnValue(
+      new Promise((resolve) => {
+        resolveBusca = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+
+    const input = screen.getByPlaceholderText(/título do filme/i);
+    await user.type(input, 'clube');
+    await user.click(screen.getByRole('button', { name: /buscando|buscar/i }));
+    await user.type(input, '{Enter}');
+
+    resolveBusca([]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /buscar/i })).toBeEnabled();
+    });
+    expect(buscarFilmesMock).toHaveBeenCalledTimes(1);
+  });
 });
