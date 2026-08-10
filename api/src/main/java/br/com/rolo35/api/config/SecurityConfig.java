@@ -40,6 +40,11 @@ public class SecurityConfig {
                 // Autenticação é decidida aqui; papel é decidido por @PreAuthorize no método do
                 // controller, pra que uma rota nova não herde permissão por esquecimento de
                 // matcher — sem anotação, ela simplesmente não passa.
+                // Dois grupos de permitAll() intencionalmente separados: o primeiro libera
+                // /api/auth/login e /actuator/health em qualquer método; o segundo libera só o
+                // método GET de /api/sessoes (POST /api/sessoes continua exigindo autenticação +
+                // @PreAuthorize("hasRole('ORGANIZADOR')") no controller). Não dá pra unificar num
+                // requestMatchers() só porque um grupo é por path e o outro é por método+path.
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/login", "/actuator/health")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessoes")
