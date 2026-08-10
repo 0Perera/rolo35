@@ -46,14 +46,14 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
   - [x] Inserir 1 organizador, 2 clientes, 1 portaria em `usuarios`, com `senha_hash` BCrypt pré-computado — gerar os hashes com `new BCryptPasswordEncoder().encode("senha-escolhida")` num teste/scratch descartável (não usar gerador BCrypt externo/online pra senha que vai documentada no repo), colar o hash resultante no `V2__seed.sql`
   - [x] Documentar no README as senhas em texto plano dos 4 perfis seed
 
-- [ ] **Task 3 — Domínio `auth` no back-end (AC: 4, 5, 6)**
-  - [ ] Pacote `br.com.rolo35.api.auth` com `controller/service/repository` próprios; entidade `Usuario`; `UsuarioRepository.findByEmail`
-  - [ ] Adicionar dependências JJWT ao `pom.xml`: `jjwt-api`, `jjwt-impl` (runtime), `jjwt-jackson` (runtime), versão `0.13.0`
-  - [ ] `JwtService`: gera token HS256 com claim `papel`, expiração definida (sugestão: 8h), assina com `security.jwt.secret` (env `JWT_SECRET`, sem fallback hardcoded em produção — só um default de conveniência pra dev local)
-  - [ ] Spring Security: sessão stateless, filtro de autenticação JWT, `PasswordEncoder` = `BCryptPasswordEncoder`; `POST /api/auth/login` público, todo o resto exige token por padrão
-  - [ ] Configurar CORS com allow-list explícita incluindo a origem do Vite dev (`http://localhost:5173`), sem `credentials` (AD-10) — sem isso o front não consegue nem chamar `/api/auth/login` em dev
-  - [ ] `LoginRequest`/`LoginResponse` como DTOs explícitos — nunca serializar `Usuario`/`senha_hash` (AC 6, AD-12); `LoginRequest` com Bean Validation (`@NotBlank` em email/senha), mesmo padrão que AD-7 já fixa pra DTOs de entrada
-  - [ ] `common/GlobalExceptionHandler` (`@RestControllerAdvice`) + `common/ApiError` — envelope `{codigo, mensagem}` (AD-11); credenciais inválidas mapeiam pra `401` com mensagem genérica idêntica pra "senha errada" e "e-mail inexistente" (AC 5); fallback genérico pra exceção não mapeada (`500`, `ERRO_INTERNO`)
+- [x] **Task 3 — Domínio `auth` no back-end (AC: 4, 5, 6)**
+  - [x] Pacote `br.com.rolo35.api.auth` com `controller/service/repository` próprios; entidade `Usuario`; `UsuarioRepository.findByEmail`
+  - [x] Adicionar dependências JJWT ao `pom.xml`: `jjwt-api`, `jjwt-impl` (runtime), `jjwt-jackson` (runtime), versão `0.13.0`
+  - [x] `JwtService`: gera token HS256 com claim `papel`, expiração definida (sugestão: 8h), assina com `security.jwt.secret` (env `JWT_SECRET`, sem fallback hardcoded em produção — só um default de conveniência pra dev local)
+  - [x] Spring Security: sessão stateless, filtro de autenticação JWT, `PasswordEncoder` = `BCryptPasswordEncoder`; `POST /api/auth/login` público, todo o resto exige token por padrão
+  - [x] Configurar CORS com allow-list explícita incluindo a origem do Vite dev (`http://localhost:5173`), sem `credentials` (AD-10) — sem isso o front não consegue nem chamar `/api/auth/login` em dev
+  - [x] `LoginRequest`/`LoginResponse` como DTOs explícitos — nunca serializar `Usuario`/`senha_hash` (AC 6, AD-12); `LoginRequest` com Bean Validation (`@NotBlank` em email/senha), mesmo padrão que AD-7 já fixa pra DTOs de entrada
+  - [x] `common/GlobalExceptionHandler` (`@RestControllerAdvice`) + `common/ApiError` — envelope `{codigo, mensagem}` (AD-11); credenciais inválidas mapeiam pra `401` com mensagem genérica idêntica pra "senha errada" e "e-mail inexistente" (AC 5); fallback genérico pra exceção não mapeada (`500`, `ERRO_INTERNO`)
 
 - [ ] **Task 4 — Re-scaffold do front-end pra Vite+React (AC: 3)**
   - [ ] Remover artefatos Next.js: `web/src/app/`, `web/next.config.ts`, `web/next-env.d.ts`, `web/.next/`, `web/node_modules/`, `web/package-lock.json`, `web/AGENTS.md` e `web/CLAUDE.md` (gerados automaticamente pelo `next dev` — não são arquivo de projeto)
