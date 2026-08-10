@@ -4,7 +4,7 @@ baseline_commit: 4fc6b7d9c8058f4710d127cfa7f1ae5eccc9d807
 
 # Story 1.1: Fundação e Login com Papel Fixo
 
-Status: in-progress
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -67,12 +67,12 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
   - [x] Sucesso: guarda o token em `localStorage`, decodifica o claim `papel`, redireciona pra uma rota placeholder por papel (`/organizador`, `/cliente`, `/portaria`) — as telas reais de cada papel são construídas em épicos futuros, este placeholder só prova o redirecionamento correto
   - [x] Erro: mensagem clara na própria tela, sem travar em estado de carregamento indefinido
 
-- [ ] **Task 6 — Testes (nascem antes do código, por camada)**
-  - [ ] Unitário (JUnit/Mockito, sem contexto Spring): `JwtService` — gera token com claim `papel` correto e `exp` futuro; token adulterado/expirado falha na validação
-  - [ ] `@WebMvcTest` com `AuthService` mockado: `POST /api/auth/login` → `200` + token pra credencial válida; `401` + envelope `{codigo, mensagem}` genérico pra credencial inválida (AC 5); resposta nunca inclui `senha_hash` (AC 6)
-  - [ ] Smoke test de repository com Testcontainers (`.withReuse(true)`): contexto Spring sobe com Postgres real, Flyway aplica `V1__schema.sql` + `V2__seed.sql` sem erro, `UsuarioRepository.findByEmail` encontra os 4 perfis seed
-  - [ ] **Corrigir `api/src/test/java/br/com/rolo35/api/TestcontainersConfiguration.java` existente:** hoje usa `DockerImageName.parse("postgres:latest")` sem `.withReuse(true)` — trocar pra `postgres:16-alpine` (mesma versão pinada no `docker-compose.yml` e na Architecture Spine) e adicionar `.withReuse(true)` (prática XP explícita do projeto, evita subir Postgres do zero a cada rodada de teste)
-  - [ ] Front: teste leve de contrato do formulário de login (submit chama `api/auth.ts`, trata sucesso e erro), escrito depois do componente pronto — não é teste de renderização
+- [x] **Task 6 — Testes (nascem antes do código, por camada)**
+  - [x] Unitário (JUnit/Mockito, sem contexto Spring): `JwtService` — gera token com claim `papel` correto e `exp` futuro; token adulterado/expirado falha na validação
+  - [x] `@WebMvcTest` com `AuthService` mockado: `POST /api/auth/login` → `200` + token pra credencial válida; `401` + envelope `{codigo, mensagem}` genérico pra credencial inválida (AC 5); resposta nunca inclui `senha_hash` (AC 6)
+  - [x] Smoke test de repository com Testcontainers (`.withReuse(true)`): contexto Spring sobe com Postgres real, Flyway aplica `V1__schema.sql` + `V2__seed.sql` sem erro, `UsuarioRepository.findByEmail` encontra os 4 perfis seed
+  - [x] **Corrigir `api/src/test/java/br/com/rolo35/api/TestcontainersConfiguration.java` existente:** hoje usa `DockerImageName.parse("postgres:latest")` sem `.withReuse(true)` — trocar pra `postgres:16-alpine` (mesma versão pinada no `docker-compose.yml` e na Architecture Spine) e adicionar `.withReuse(true)` (prática XP explícita do projeto, evita subir Postgres do zero a cada rodada de teste)
+  - [x] Front: teste leve de contrato do formulário de login (submit chama `api/auth.ts`, trata sucesso e erro), escrito depois do componente pronto — não é teste de renderização
 
 ## Dev Notes
 

@@ -21,7 +21,8 @@ assentos, pagamento simulado e ingresso com QR assinado.
 3. Suba o banco + API: `docker compose up -d --build` (Flyway aplica o schema e o
    seed automaticamente no boot da API).
 4. Health-check: `GET http://localhost:8080/actuator/health` deve responder `200`.
-5. _(preencher: comando pra rodar o front, depois do scaffold Vite)_
+5. Front: `cd web`, copie `.env.example` pra `.env` (padrão já aponta pra API local),
+   `npm install` e `npm run dev` — SPA sobe em `http://localhost:5173`.
 
 > ⚠️ Em produção (deploy no Render, plano free), o serviço dorme após 15 min sem
 > tráfego e leva ~1 min pra acordar no próximo request. O banco Postgres free
