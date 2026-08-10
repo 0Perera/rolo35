@@ -3,6 +3,7 @@ import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
 import { BuscaFilmesPage } from './pages/BuscaFilmesPage';
 import { CriarSessaoPage } from './pages/CriarSessaoPage';
+import { ListagemSessoesPage } from './pages/ListagemSessoesPage';
 
 function App() {
   return (
@@ -11,7 +12,7 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/organizador" element={<BuscaFilmesPage />} />
         <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
-        <Route path="/cliente" element={<PapelPlaceholderPage titulo="Área do Cliente" />} />
+        <Route path="/cliente" element={<ListagemSessoesPage />} />
         <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
       </Routes>
     </BrowserRouter>
