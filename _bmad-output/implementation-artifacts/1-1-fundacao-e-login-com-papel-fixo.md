@@ -41,10 +41,10 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
   - [x] **Corrigir bug existente em `api/src/main/resources/application.properties`:** a chave `ddl-auto = validate` não é uma property real do Spring (falta o prefixo) — trocar por `spring.jpa.hibernate.ddl-auto=validate`. Sem essa correção, o Hibernate não está de fato configurado pra só validar o schema aplicado pelo Flyway.
   - [x] Validar: `docker compose up` sobe Postgres saudável, API aplica a migration no boot (`spring.jpa.hibernate.ddl-auto=validate`), `GET /actuator/health` responde `200`
 
-- [ ] **Task 2 — Seed versionado (AC: 2)**
-  - [ ] Criar `api/src/main/resources/db/migration/V2__seed.sql`: 1 `sala` com seus `assentos`, 1 `sessao` publicada vinculada a essa sala com dado de filme placeholder (tmdb_id/título/pôster fictícios — integração real TMDb é da Story 1.2), e uma linha `assento_sessao` (`status='LIVRE'`) pra **cada** assento da sala dessa sessão (AD-3 exige a linha populada na criação da sessão — seed não é exceção a essa regra)
-  - [ ] Inserir 1 organizador, 2 clientes, 1 portaria em `usuarios`, com `senha_hash` BCrypt pré-computado — gerar os hashes com `new BCryptPasswordEncoder().encode("senha-escolhida")` num teste/scratch descartável (não usar gerador BCrypt externo/online pra senha que vai documentada no repo), colar o hash resultante no `V2__seed.sql`
-  - [ ] Documentar no README as senhas em texto plano dos 4 perfis seed
+- [x] **Task 2 — Seed versionado (AC: 2)**
+  - [x] Criar `api/src/main/resources/db/migration/V2__seed.sql`: 1 `sala` com seus `assentos`, 1 `sessao` publicada vinculada a essa sala com dado de filme placeholder (tmdb_id/título/pôster fictícios — integração real TMDb é da Story 1.2), e uma linha `assento_sessao` (`status='LIVRE'`) pra **cada** assento da sala dessa sessão (AD-3 exige a linha populada na criação da sessão — seed não é exceção a essa regra)
+  - [x] Inserir 1 organizador, 2 clientes, 1 portaria em `usuarios`, com `senha_hash` BCrypt pré-computado — gerar os hashes com `new BCryptPasswordEncoder().encode("senha-escolhida")` num teste/scratch descartável (não usar gerador BCrypt externo/online pra senha que vai documentada no repo), colar o hash resultante no `V2__seed.sql`
+  - [x] Documentar no README as senhas em texto plano dos 4 perfis seed
 
 - [ ] **Task 3 — Domínio `auth` no back-end (AC: 4, 5, 6)**
   - [ ] Pacote `br.com.rolo35.api.auth` com `controller/service/repository` próprios; entidade `Usuario`; `UsuarioRepository.findByEmail`
