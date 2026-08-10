@@ -6,8 +6,8 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -19,6 +19,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Value("${cors.allowed-origins}")
@@ -35,13 +36,15 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Autenticação é decidida aqui; papel é decidido por @PreAuthorize no método do
+                // controller, pra que uma rota nova não herde permissão por esquecimento de
+                // matcher — sem anotação, ela simplesmente não passa.
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/login", "/actuator/health")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/sessoes")
-                        .hasRole("ORGANIZADOR")
                         .anyRequest()
                         .authenticated())
-                .exceptionHandling(ex -> ex.accessDeniedHandler(new RestAccessDeniedHandler(objectMapper)))
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new RestAuthenticationEntryPoint(objectMapper))
+                        .accessDeniedHandler(new RestAccessDeniedHandler(objectMapper)))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

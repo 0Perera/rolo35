@@ -1,5 +1,6 @@
 package br.com.rolo35.api.sessoes.controller;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -20,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -121,6 +123,63 @@ class SessaoControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    // A mensagem tem que nomear o campo: quem cria uma sessão não tem "parâmetro de busca"
+    // nenhum na tela, e o front repassa esse texto direto pro alerta da página.
+    @Test
+    void validationMessageNamesTheOffendingField() throws Exception {
+        CriarSessaoRequest request = new CriarSessaoRequest(
+                null, 550L, "Clube da Luta", null, null, null, LocalDateTime.now().plusDays(30),
+                new BigDecimal("25.00"));
+
+        mockMvc.perform(post("/api/sessoes")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value(containsString("salaId")));
+    }
+
+    @Test
+    void returns400WithParametroInvalidoWhenPrecoHasMoreThanTwoDecimals() throws Exception {
+        CriarSessaoRequest request = new CriarSessaoRequest(
+                1L, 550L, "Clube da Luta", null, null, null, LocalDateTime.now().plusDays(30),
+                new BigDecimal("25.555"));
+
+        mockMvc.perform(post("/api/sessoes")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"));
+    }
+
+    @Test
+    void returns400WithCorpoInvalidoForMalformedBody() throws Exception {
+        mockMvc.perform(post("/api/sessoes")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content("{\"salaId\": 1, \"dataHora\": \"amanhã\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("CORPO_INVALIDO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    // Estouro do lock_timeout da transação de criação não pode virar 500: a requisição é
+    // válida, só perdeu a vez na fila da sala.
+    @Test
+    void returns503WithSalaOcupadaWhenLockCannotBeAcquired() throws Exception {
+        given(sessaoService.criar(any(CriarSessaoRequest.class), anyString()))
+                .willThrow(new CannotAcquireLockException("lock timeout"));
+
+        mockMvc.perform(post("/api/sessoes")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.codigo").value("SALA_OCUPADA"))
                 .andExpect(jsonPath("$.mensagem").exists());
     }
 }

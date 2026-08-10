@@ -1,20 +1,33 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
+import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import br.com.rolo35.api.sessoes.catalogo.ParametroInvalidoException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(CredenciaisInvalidasException.class)
     public ResponseEntity<ApiError> handleCredenciaisInvalidas() {
@@ -28,13 +41,56 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("CATALOGO_INDISPONIVEL", "Catálogo de filmes indisponível no momento"));
     }
 
-    @ExceptionHandler({
-        ParametroInvalidoException.class, MissingServletRequestParameterException.class,
-        MethodArgumentNotValidException.class
-    })
+    @ExceptionHandler({ParametroInvalidoException.class, MissingServletRequestParameterException.class})
     public ResponseEntity<ApiError> handleParametroInvalido() {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiError("PARAMETRO_INVALIDO", "Parâmetro de busca inválido"));
+    }
+
+    // Falha de @Valid em corpo de requisição. Handler próprio (e não agrupado no de busca
+    // acima) porque a mensagem precisa nomear os campos que falharam — quem cria uma sessão
+    // não tem "parâmetro de busca" nenhum na tela.
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> handleCorpoInvalido(MethodArgumentNotValidException exception) {
+        String campos = exception.getBindingResult().getFieldErrors().stream()
+                .map(erro -> erro.getField() + ": " + erro.getDefaultMessage())
+                .sorted()
+                .reduce((a, b) -> a + "; " + b)
+                .orElse("corpo da requisição inválido");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiError("PARAMETRO_INVALIDO", campos));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiError> handleCorpoIlegivel() {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError("CORPO_INVALIDO", "Corpo da requisição ausente ou em formato inválido"));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTipoIncompativel() {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError("PARAMETRO_INVALIDO", "Parâmetro em formato inválido"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiError> handleMidiaNaoSuportada() {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(new ApiError("MIDIA_NAO_SUPORTADA", "Content-Type não suportado — use application/json"));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiError> handleMetodoNaoSuportado() {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(new ApiError("METODO_NAO_SUPORTADO", "Método HTTP não suportado por este recurso"));
+    }
+
+    // @PreAuthorize nega dentro do DispatcherServlet, então a negação chega neste advice em vez
+    // de passar pelo RestAccessDeniedHandler (que só cobre negação no nível da filter chain).
+    // Os dois caminhos precisam devolver o mesmo envelope.
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAcessoNegado() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError("NAO_AUTORIZADO", "Você não tem permissão para acessar este recurso"));
     }
 
     @ExceptionHandler(SessaoConflitanteException.class)
@@ -43,10 +99,26 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("SESSAO_CONFLITANTE", "Já existe uma sessão nessa sala com horário conflitante"));
     }
 
+    // Estouro do lock_timeout da transação de criação: a requisição é válida, o servidor só não
+    // conseguiu a vez na fila da sala a tempo. 503 sinaliza "tente de novo", ao contrário de um
+    // 500, que o cliente não tem motivo pra repetir.
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> handleSalaOcupada(PessimisticLockingFailureException exception) {
+        log.warn("Lock da sala não obtido dentro do timeout da transação", exception);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiError("SALA_OCUPADA", "Outra criação de sessão para essa sala está em andamento. Tente novamente."));
+    }
+
     @ExceptionHandler(DataHoraNoPassadoException.class)
     public ResponseEntity<ApiError> handleDataHoraNoPassado() {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiError("DATA_HORA_NO_PASSADO", "Data e hora da sessão precisam estar no futuro"));
+    }
+
+    @ExceptionHandler(DataEstreiaInvalidaException.class)
+    public ResponseEntity<ApiError> handleDataEstreiaInvalida() {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError("DATA_ESTREIA_INVALIDA", "Data de estreia precisa estar no formato AAAA-MM-DD"));
     }
 
     @ExceptionHandler(SalaNaoEncontradaException.class)
@@ -54,8 +126,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError("SALA_NAO_ENCONTRADA", "Sala não encontrada"));
     }
 
+    @ExceptionHandler(SalaSemAssentosException.class)
+    public ResponseEntity<ApiError> handleSalaSemAssentos() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("SALA_SEM_ASSENTOS", "Sala não tem mapa de assentos cadastrado"));
+    }
+
+    @ExceptionHandler(OrganizadorNaoEncontradoException.class)
+    public ResponseEntity<ApiError> handleOrganizadorNaoEncontrado() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError("NAO_AUTENTICADO", "Usuário do token não existe mais"));
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleGeneric() {
+    public ResponseEntity<ApiError> handleGeneric(Exception exception) {
+        log.error("Erro não tratado", exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiError("ERRO_INTERNO", "Erro interno do servidor"));
     }

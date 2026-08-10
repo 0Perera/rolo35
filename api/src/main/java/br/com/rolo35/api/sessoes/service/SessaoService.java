@@ -5,9 +5,12 @@ import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
+import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
@@ -20,6 +23,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SessaoService {
 
     private static final int BUFFER_MINUTOS = 240;
+    private static final String STATUS_LIVRE = "LIVRE";
 
     private final SalaRepository salaRepository;
     private final AssentoRepository assentoRepository;
@@ -50,11 +55,17 @@ public class SessaoService {
 
     @Transactional
     public SessaoResponse criar(CriarSessaoRequest request, String organizadorEmail) {
+        // Tudo que depende só do request roda antes de qualquer lock: a transação que segura a
+        // linha da sala precisa ser a mais curta possível (AD-5), então nenhuma validação
+        // evitável acontece com o lock em mãos.
         if (!request.dataHora().isAfter(LocalDateTime.now())) {
             throw new DataHoraNoPassadoException();
         }
+        LocalDate dataEstreia = parseDataEstreia(request.dataEstreia());
 
-        Usuario organizador = usuarioRepository.findByEmail(organizadorEmail).orElseThrow();
+        Usuario organizador = usuarioRepository
+                .findByEmail(organizadorEmail)
+                .orElseThrow(OrganizadorNaoEncontradoException::new);
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         Sala sala = salaRepository.findByIdForUpdate(request.salaId()).orElseThrow(SalaNaoEncontradaException::new);
@@ -63,9 +74,15 @@ public class SessaoService {
             throw new SessaoConflitanteException();
         }
 
-        int capacidade = sala.getLinhas() * sala.getColunas();
+        // AC1: a capacidade sai do mapa de assentos de fato cadastrado, não do retângulo
+        // linhas x colunas declarado na sala — as duas fontes podem divergir e é o mapa que
+        // determina quantos ingressos existem pra vender.
+        List<Assento> assentos = assentoRepository.findBySalaId(sala.getId());
+        if (assentos.isEmpty()) {
+            throw new SalaSemAssentosException();
+        }
+        int capacidade = assentos.size();
 
-        LocalDate dataEstreia = request.dataEstreia() != null ? LocalDate.parse(request.dataEstreia()) : null;
         Sessao sessao = Sessao.builder()
                 .organizadorId(organizador.getId())
                 .salaId(sala.getId())
@@ -80,12 +97,9 @@ public class SessaoService {
                 .build();
         Sessao sessaoSalva = sessaoRepository.save(sessao);
 
-        List<Assento> assentos = assentoRepository.findBySalaId(sala.getId());
         List<AssentoSessao> assentoSessoes = assentos.stream()
-                .map(assento -> AssentoSessao.builder()
-                        .id(new AssentoSessaoId(sessaoSalva.getId(), assento.getId()))
-                        .status("LIVRE")
-                        .build())
+                .map(assento -> new AssentoSessao(
+                        new AssentoSessaoId(sessaoSalva.getId(), assento.getId()), STATUS_LIVRE, null, null))
                 .toList();
         assentoSessaoRepository.saveAll(assentoSessoes);
 
@@ -93,5 +107,16 @@ public class SessaoService {
                 sessaoSalva.getId(), sala.getId(), sala.getNome(), sessaoSalva.getTmdbId(), sessaoSalva.getTitulo(),
                 sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(), request.dataEstreia(),
                 sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
+    }
+
+    private LocalDate parseDataEstreia(String dataEstreia) {
+        if (dataEstreia == null || dataEstreia.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(dataEstreia);
+        } catch (DateTimeParseException e) {
+            throw new DataEstreiaInvalidaException();
+        }
     }
 }

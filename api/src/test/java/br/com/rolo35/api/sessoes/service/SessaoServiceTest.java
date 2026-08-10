@@ -11,9 +11,12 @@ import static org.mockito.Mockito.verify;
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.sessoes.Assento;
+import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
+import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
@@ -27,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -94,19 +98,29 @@ class SessaoServiceTest {
         return assento;
     }
 
+    private List<Assento> mapaDeAssentos(int linhas, int colunas) {
+        return IntStream.range(0, linhas * colunas)
+                .mapToObj(i -> assentoCom(
+                        (long) i + 1, 1L, String.valueOf((char) ('A' + i / colunas)), i % colunas + 1))
+                .toList();
+    }
+
     private CriarSessaoRequest requestValido() {
         return new CriarSessaoRequest(
                 1L, 550L, "Clube da Luta", "http://poster", "sinopse", "1999-10-15",
                 LocalDateTime.now().plusDays(30), new BigDecimal("25.00"));
     }
 
-    @Test
-    void criaSessaoComCapacidadeDerivadaDaSalaQuandoNaoHaConflito() {
-        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
-        Sala sala = salaCom(1L, "Sala 1", 5, 8);
-        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(sala));
+    private void stubOrganizador() {
         given(usuarioRepository.findByEmail("organizador@rolo35.com.br"))
                 .willReturn(Optional.of(organizadorCom(10L, "organizador@rolo35.com.br")));
+    }
+
+    @Test
+    void criaSessaoComCapacidadeDerivadaDoMapaDeAssentosQuandoNaoHaConflito() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        stubOrganizador();
         given(sessaoRepository.existeConflitante(anyLong(), any(LocalDateTime.class), any(Integer.class)))
                 .willReturn(false);
         given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> {
@@ -114,11 +128,7 @@ class SessaoServiceTest {
             ReflectionTestUtils.setField(sessao, "id", 100L);
             return sessao;
         });
-        List<Assento> assentos = List.of(
-                assentoCom(1L, 1L, "A", 1), assentoCom(2L, 1L, "A", 2), assentoCom(3L, 1L, "A", 3),
-                assentoCom(4L, 1L, "A", 4), assentoCom(5L, 1L, "A", 5), assentoCom(6L, 1L, "A", 6),
-                assentoCom(7L, 1L, "A", 7), assentoCom(8L, 1L, "A", 8));
-        given(assentoRepository.findBySalaId(1L)).willReturn(assentos);
+        given(assentoRepository.findBySalaId(1L)).willReturn(mapaDeAssentos(5, 8));
 
         var resposta = sessaoService.criar(requestValido(), "organizador@rolo35.com.br");
 
@@ -129,8 +139,45 @@ class SessaoServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<br.com.rolo35.api.sessoes.AssentoSessao>> captor = ArgumentCaptor.forClass(List.class);
         verify(assentoSessaoRepository).saveAll(captor.capture());
-        assertThat(captor.getValue()).hasSize(8);
+        assertThat(captor.getValue()).hasSize(40);
         assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo("LIVRE"));
+    }
+
+    // A capacidade anunciada tem que sair do mapa de assentos de fato cadastrado (AC1), não do
+    // retângulo linhas x colunas declarado na sala — se as duas fontes divergirem, é o mapa que
+    // determina quantos ingressos existem pra vender.
+    @Test
+    void capacidadeVemDoMapaDeAssentosENaoDeLinhasVezesColunas() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        stubOrganizador();
+        given(sessaoRepository.existeConflitante(anyLong(), any(LocalDateTime.class), any(Integer.class)))
+                .willReturn(false);
+        given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> {
+            Sessao sessao = invocation.getArgument(0);
+            ReflectionTestUtils.setField(sessao, "id", 100L);
+            return sessao;
+        });
+        given(assentoRepository.findBySalaId(1L)).willReturn(mapaDeAssentos(1, 8));
+
+        var resposta = sessaoService.criar(requestValido(), "organizador@rolo35.com.br");
+
+        assertThat(resposta.capacidade()).isEqualTo(8);
+    }
+
+    @Test
+    void rejeitaSalaSemMapaDeAssentos() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        stubOrganizador();
+        given(sessaoRepository.existeConflitante(anyLong(), any(LocalDateTime.class), any(Integer.class)))
+                .willReturn(false);
+        given(assentoRepository.findBySalaId(1L)).willReturn(List.of());
+
+        assertThatThrownBy(() -> sessaoService.criar(requestValido(), "organizador@rolo35.com.br"))
+                .isInstanceOf(SalaSemAssentosException.class);
+
+        verify(sessaoRepository, never()).save(any());
     }
 
     @Test
@@ -145,13 +192,48 @@ class SessaoServiceTest {
         verify(salaRepository, never()).findByIdForUpdate(any());
     }
 
+    // Guarda de regressão do fuso: a comparação de "está no futuro?" é wall-clock contra
+    // wall-clock. O front manda a hora local do organizador sem zona, então trocar o
+    // LocalDateTime.now() por qualquer referência em UTC volta a rejeitar as próximas horas.
+    @Test
+    void aceitaDataHoraPoucasHorasAFrenteDoRelogioLocal() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        stubOrganizador();
+        given(sessaoRepository.existeConflitante(anyLong(), any(LocalDateTime.class), any(Integer.class)))
+                .willReturn(false);
+        given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> {
+            Sessao sessao = invocation.getArgument(0);
+            ReflectionTestUtils.setField(sessao, "id", 100L);
+            return sessao;
+        });
+        given(assentoRepository.findBySalaId(1L)).willReturn(mapaDeAssentos(5, 8));
+        CriarSessaoRequest request = new CriarSessaoRequest(
+                1L, 550L, "Clube da Luta", null, null, null, LocalDateTime.now().plusHours(2),
+                new BigDecimal("25.00"));
+
+        var resposta = sessaoService.criar(request, "organizador@rolo35.com.br");
+
+        assertThat(resposta.id()).isEqualTo(100L);
+    }
+
+    @Test
+    void rejeitaDataEstreiaMalformadaSemTravarSala() {
+        CriarSessaoRequest request = new CriarSessaoRequest(
+                1L, 550L, "Clube da Luta", null, null, "15/10/1999", LocalDateTime.now().plusDays(30),
+                new BigDecimal("25.00"));
+
+        assertThatThrownBy(() -> sessaoService.criar(request, "organizador@rolo35.com.br"))
+                .isInstanceOf(DataEstreiaInvalidaException.class);
+
+        verify(salaRepository, never()).findByIdForUpdate(any());
+    }
+
     @Test
     void rejeitaSessaoConflitanteAposTravarSala() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
-        Sala sala = salaCom(1L, "Sala 1", 5, 8);
-        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(sala));
-        given(usuarioRepository.findByEmail("organizador@rolo35.com.br"))
-                .willReturn(Optional.of(organizadorCom(10L, "organizador@rolo35.com.br")));
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        stubOrganizador();
         given(sessaoRepository.existeConflitante(anyLong(), any(LocalDateTime.class), any(Integer.class)))
                 .willReturn(true);
 
@@ -166,10 +248,20 @@ class SessaoServiceTest {
     void rejeitaSalaInexistente() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.empty());
-        given(usuarioRepository.findByEmail("organizador@rolo35.com.br"))
-                .willReturn(Optional.of(organizadorCom(10L, "organizador@rolo35.com.br")));
+        stubOrganizador();
 
         assertThatThrownBy(() -> sessaoService.criar(requestValido(), "organizador@rolo35.com.br"))
                 .isInstanceOf(SalaNaoEncontradaException.class);
+    }
+
+    // Token assinado e não expirado cujo usuário sumiu do banco não pode virar 500.
+    @Test
+    void rejeitaOrganizadorInexistenteSemTravarSala() {
+        given(usuarioRepository.findByEmail("fantasma@rolo35.com.br")).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sessaoService.criar(requestValido(), "fantasma@rolo35.com.br"))
+                .isInstanceOf(OrganizadorNaoEncontradoException.class);
+
+        verify(salaRepository, never()).findByIdForUpdate(any());
     }
 }

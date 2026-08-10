@@ -1,5 +1,6 @@
 package br.com.rolo35.api.sessoes.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -14,5 +15,7 @@ public record CriarSessaoRequest(
         String sinopse,
         String dataEstreia,
         @NotNull LocalDateTime dataHora,
-        @NotNull @Positive BigDecimal preco) {
+        // Espelha a coluna preco NUMERIC(10,2): sem isso, escala maior é arredondada em
+        // silêncio pelo Postgres e magnitude maior estoura o INSERT como erro interno.
+        @NotNull @Positive @Digits(integer = 8, fraction = 2) BigDecimal preco) {
 }

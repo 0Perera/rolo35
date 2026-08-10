@@ -86,4 +86,27 @@ class SessaoSecurityTest {
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"))
                 .andExpect(jsonPath("$.mensagem").exists());
     }
+
+    // Sem authenticationEntryPoint próprio, o default do Spring Security responde 403 de corpo
+    // vazio — o front não consegue distinguir "sessão expirou" de "erro de rede".
+    @Test
+    void returns401WithNaoAutenticadoEnvelopeWithoutToken() throws Exception {
+        mockMvc.perform(post("/api/sessoes")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTENTICADO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    @Test
+    void returns401WithNaoAutenticadoEnvelopeForMalformedToken() throws Exception {
+        mockMvc.perform(post("/api/sessoes")
+                        .header("Authorization", "Bearer nao-e-um-jwt")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTENTICADO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
 }
