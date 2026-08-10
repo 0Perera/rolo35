@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router';
 import { buscarFilmes, type Filme } from '../api/filmes';
 
 type EstadoBusca = 'idle' | 'loading' | 'error';
@@ -8,6 +9,7 @@ export function BuscaFilmesPage() {
   const [estado, setEstado] = useState<EstadoBusca>('idle');
   const [mensagemErro, setMensagemErro] = useState('');
   const [resultados, setResultados] = useState<Filme[] | null>(null);
+  const navigate = useNavigate();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,10 +73,17 @@ export function BuscaFilmesPage() {
                 {filme.posterUrl && (
                   <img src={filme.posterUrl} alt={filme.titulo} className="h-32 w-auto rounded" />
                 )}
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-1 flex-col gap-1">
                   <h2 className="font-display text-xl tracking-wide text-amber-300">{filme.titulo}</h2>
                   {filme.dataEstreia && <span className="text-sm text-cream-300">{filme.dataEstreia}</span>}
                   <p className="text-sm text-cream-100">{filme.sinopse}</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/organizador/sessoes/nova', { state: filme })}
+                    className="mt-auto self-start rounded bg-velvet-600 px-4 py-2 font-display tracking-wide text-cream-100 transition hover:bg-velvet-700"
+                  >
+                    Criar sessão
+                  </button>
                 </div>
               </li>
             ))}

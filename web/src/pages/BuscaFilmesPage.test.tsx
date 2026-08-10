@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { BuscaFilmesPage } from './BuscaFilmesPage';
 import * as filmesApi from '../api/filmes';
@@ -9,6 +9,22 @@ function renderPage() {
   return render(
     <MemoryRouter>
       <BuscaFilmesPage />
+    </MemoryRouter>,
+  );
+}
+
+function SentinelaFilmeRecebido() {
+  const location = useLocation();
+  return <div data-testid="filme-recebido">{JSON.stringify(location.state)}</div>;
+}
+
+function renderPageComRotaDeCriarSessao() {
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<BuscaFilmesPage />} />
+        <Route path="/organizador/sessoes/nova" element={<SentinelaFilmeRecebido />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -139,5 +155,28 @@ describe('BuscaFilmesPage', () => {
       expect(screen.getByRole('button', { name: /buscar/i })).toBeEnabled();
     });
     expect(buscarFilmesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('navigates to the new-session page with the selected movie in route state when "Criar sessão" is clicked', async () => {
+    vi.spyOn(filmesApi, 'buscarFilmes').mockResolvedValue([
+      {
+        tmdbId: 550,
+        titulo: 'Clube da Luta',
+        posterUrl: 'https://image.tmdb.org/t/p/w500/poster.jpg',
+        sinopse: 'Sinopse do filme',
+        dataEstreia: '1999-10-15',
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderPageComRotaDeCriarSessao();
+
+    await user.type(screen.getByPlaceholderText(/título do filme/i), 'clube');
+    await user.click(screen.getByRole('button', { name: /buscar/i }));
+    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /criar sessão/i }));
+
+    expect(await screen.findByTestId('filme-recebido')).toHaveTextContent('Clube da Luta');
   });
 });
