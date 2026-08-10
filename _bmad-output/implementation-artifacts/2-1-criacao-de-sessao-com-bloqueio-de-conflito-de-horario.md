@@ -42,12 +42,12 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
   - [x] Criar `api/src/main/resources/db/migration/V3__indice_sessoes_sala_data_hora.sql`: `CREATE INDEX idx_sessoes_sala_id_data_hora ON sessoes (sala_id, data_hora);`. Motivo: a query de conflito de horário (AD-3) filtra por igualdade em `sala_id` e faz range em `data_hora` — os dois índices simples já existentes (`idx_sessoes_sala_id`, `idx_sessoes_data_hora`) só suportam bitmap-AND, pior que um composto no caminho crítico que roda com a linha da `sala` travada (AD-5 quer a transação de lock a mais curta possível). Manter os dois índices simples (a Story 2.3 de listagem pública provavelmente quer `data_hora` sozinho).
   - [x] Commit: `feat(sessoes): índice composto sala_id+data_hora pra checagem de conflito (V3)`
 
-- [ ] **Task 2 — Entidades e repositories de Sala, Assento, Sessão e AssentoSessao**
-  - [ ] **[RED]** Escrever `api/src/test/java/br/com/rolo35/api/sessoes/SalaAssentoRepositorySmokeTest.java` (mesmo padrão de `UsuarioRepositorySmokeTest`: `@Import(TestcontainersConfiguration.class) @SpringBootTest`) cobrindo: `SalaRepository.findAll()` retorna a sala seed "Sala 1" (`linhas=5, colunas=8`); `AssentoRepository.findBySalaId(salaId)` retorna 40 assentos. Rodar e confirmar que falha por `Sala`/`Assento`/os repositories ainda não existirem.
-  - [ ] **[GREEN]** Criar as entidades em `br.com.rolo35.api.sessoes` (raiz do pacote, mesmo nível de `Usuario.java` em `auth`): `Sala` (`id, nome, linhas, colunas`), `Assento` (`id, salaId, fileira, numero` — campo FK simples `Long`, sem `@ManyToOne`, mesmo estilo de `Usuario`), `Sessao` (`id, organizadorId, salaId, tmdbId, titulo, posterUrl, sinopse, dataEstreia, dataHora, preco, createdAt` — **sem** campo `capacidade`, ela é sempre derivada de `sala.linhas * sala.colunas`, nunca persistida, porque o schema não tem essa coluna e a AC1 exige que não seja "um número digitado livremente"), `AssentoSessaoId` (`@Embeddable`, `sessaoId + assentoId`) e `AssentoSessao` (`@EmbeddedId AssentoSessaoId id`, `status, reservaId, expiresAt`). Todas com `@Getter @NoArgsConstructor` (Lombok, padrão já usado); `Sessao` ganha também `@Builder` (é a primeira entidade do projeto de fato construída por código de aplicação em vez de só lida de seed/SQL — não existe outro precedente de construtor mutável pra copiar, então builder é a escolha mais limpa aqui).
-  - [ ] Criar `repository/SalaRepository.java` com `findByIdForUpdate`: `@Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select s from Sala s where s.id = :id") Optional<Sala> findByIdForUpdate(@Param("id") Long id)` — é o `SELECT ... FOR UPDATE` na linha da sala que serializa criações concorrentes pra ela (AD-3).
-  - [ ] Criar `repository/AssentoRepository.java` com `findBySalaId(Long salaId)`.
-  - [ ] Criar `repository/SessaoRepository.java` com uma query nativa `existeConflitante(salaId, dataHora, bufferMinutos)` usando aritmética de `INTERVAL` do Postgres (JPQL não expressa isso de forma portável):
+- [x] **Task 2 — Entidades e repositories de Sala, Assento, Sessão e AssentoSessao**
+  - [x] **[RED]** Escrever `api/src/test/java/br/com/rolo35/api/sessoes/SalaAssentoRepositorySmokeTest.java` (mesmo padrão de `UsuarioRepositorySmokeTest`: `@Import(TestcontainersConfiguration.class) @SpringBootTest`) cobrindo: `SalaRepository.findAll()` retorna a sala seed "Sala 1" (`linhas=5, colunas=8`); `AssentoRepository.findBySalaId(salaId)` retorna 40 assentos. Rodar e confirmar que falha por `Sala`/`Assento`/os repositories ainda não existirem.
+  - [x] **[GREEN]** Criar as entidades em `br.com.rolo35.api.sessoes` (raiz do pacote, mesmo nível de `Usuario.java` em `auth`): `Sala` (`id, nome, linhas, colunas`), `Assento` (`id, salaId, fileira, numero` — campo FK simples `Long`, sem `@ManyToOne`, mesmo estilo de `Usuario`), `Sessao` (`id, organizadorId, salaId, tmdbId, titulo, posterUrl, sinopse, dataEstreia, dataHora, preco, createdAt` — **sem** campo `capacidade`, ela é sempre derivada de `sala.linhas * sala.colunas`, nunca persistida, porque o schema não tem essa coluna e a AC1 exige que não seja "um número digitado livremente"), `AssentoSessaoId` (`@Embeddable`, `sessaoId + assentoId`) e `AssentoSessao` (`@EmbeddedId AssentoSessaoId id`, `status, reservaId, expiresAt`). Todas com `@Getter @NoArgsConstructor` (Lombok, padrão já usado); `Sessao` ganha também `@Builder` (é a primeira entidade do projeto de fato construída por código de aplicação em vez de só lida de seed/SQL — não existe outro precedente de construtor mutável pra copiar, então builder é a escolha mais limpa aqui).
+  - [x] Criar `repository/SalaRepository.java` com `findByIdForUpdate`: `@Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select s from Sala s where s.id = :id") Optional<Sala> findByIdForUpdate(@Param("id") Long id)` — é o `SELECT ... FOR UPDATE` na linha da sala que serializa criações concorrentes pra ela (AD-3).
+  - [x] Criar `repository/AssentoRepository.java` com `findBySalaId(Long salaId)`.
+  - [x] Criar `repository/SessaoRepository.java` com uma query nativa `existeConflitante(salaId, dataHora, bufferMinutos)` usando aritmética de `INTERVAL` do Postgres (JPQL não expressa isso de forma portável):
     ```java
     @Query(value = """
         SELECT EXISTS (
@@ -59,9 +59,9 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
     boolean existeConflitante(@Param("salaId") Long salaId, @Param("dataHora") LocalDateTime dataHora, @Param("bufferMinutos") int bufferMinutos);
     ```
     `bufferMinutos` (240 = 4h) é passado pelo `SessaoService` a partir de UMA constante só no código — não hardcoded na query.
-  - [ ] Criar `repository/AssentoSessaoRepository.java`, `JpaRepository<AssentoSessao, AssentoSessaoId>` — `saveAll(...)` cobre o insert em lote (só 40 linhas pra "Sala 1", sem necessidade de insert nativo em batch nessa escala).
-  - [ ] Rodar o smoke test até passar.
-  - [ ] Commit: `feat(sessoes): entidades e repositories de Sala, Assento, Sessão e AssentoSessao`
+  - [x] Criar `repository/AssentoSessaoRepository.java`, `JpaRepository<AssentoSessao, AssentoSessaoId>` — `saveAll(...)` cobre o insert em lote (só 40 linhas pra "Sala 1", sem necessidade de insert nativo em batch nessa escala).
+  - [x] Rodar o smoke test até passar.
+  - [x] Commit: `feat(sessoes): entidades e repositories de Sala, Assento, Sessão e AssentoSessao`
 
   **Deviation documentada (registrar em `docs/decisions.md` na Task 10, decidir aqui)**: `AssentoSessao`/`AssentoSessaoRepository` ficam no pacote `sessoes`, não em `reservas` como o Structural Seed da Architecture Spine sugere literalmente. Motivo: AD-3 exige popular `assento_sessao` na mesma transação do insert de `sessoes` — isso é código do domínio `sessoes`. AD-1 fixa a direção de dependência como `reservas → sessoes` (nunca o inverso); se `AssentoSessaoRepository` vivesse em `reservas`, `sessoes` teria que depender de `reservas` pra popular a tabela na criação da sessão, violando o grafo. Colocar a entidade onde ela é escrita primeiro (não onde parece "pertencer" conceitualmente) é a única ordem que não viola AD-1 — `reservas` (Epic 3) vai poder chamar esse repository livremente sem quebrar nada, porque já depende de `sessoes`. Mesmo tratamento já dado ao pacote `sessoes.catalogo` na Story 1.2 (desvio documentado, não silencioso).
 
@@ -165,7 +165,18 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
 ### Completion Notes List
 
 - Task 1: criado índice composto `idx_sessoes_sala_id_data_hora` em `sessoes(sala_id, data_hora)` via V3. Índices simples existentes (`idx_sessoes_sala_id`, `idx_sessoes_data_hora`) mantidos intactos.
+- Task 2: entidades `Sala`, `Assento`, `Sessao` (com `@Builder`, primeira do projeto), `AssentoSessaoId`/`AssentoSessao` criadas na raiz de `br.com.rolo35.api.sessoes`. Repositories em `sessoes/repository`: `SalaRepository.findByIdForUpdate` (lock pessimista), `AssentoRepository.findBySalaId`, `SessaoRepository.existeConflitante` (query nativa com aritmética de `INTERVAL`), `AssentoSessaoRepository`. `Sessao` precisou de `@AllArgsConstructor` explícito além de `@NoArgsConstructor`/`@Builder` — Lombok não gera o all-args automaticamente quando já existe outro construtor declarado na classe. Smoke test `SalaAssentoRepositorySmokeTest` verde (Flyway aplica V1-V3, seed da Sala 1 com 40 assentos confirmado).
 
 ### File List
 
 - `api/src/main/resources/db/migration/V3__indice_sessoes_sala_data_hora.sql` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/Sala.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/Assento.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/Sessao.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/AssentoSessaoId.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/AssentoSessao.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/repository/SalaRepository.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/repository/AssentoRepository.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/repository/AssentoSessaoRepository.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/sessoes/SalaAssentoRepositorySmokeTest.java` (novo)
