@@ -4,7 +4,7 @@ baseline_commit: 964c922
 
 # Story 2.3: Listagem Pública de Sessões
 
-Status: review
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -83,8 +83,8 @@ Continuar na branch `epic-2-gestao-de-sessoes-organizador` (já existe, criada n
 
 ### Review Findings
 
-- [ ] [Review][Decision] Sessões passadas continuam aparecendo pra sempre na listagem pública — `listarPublicadas()` não tem `WHERE data_hora >= now()` nem qualquer filtro temporal. Um visitante vê sessões já ocorridas há meses misturadas com as futuras, sem distinção nenhuma, e isso persiste indefinidamente (todo AC desta story trata de status esgotada/vaga, nenhum trata de tempo). [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:23-36]
-- [ ] [Review][Patch] `SecurityConfig` encadeia dois `.requestMatchers(...).permitAll()` separados em vez de agrupar os paths num único `requestMatchers(...)` antes de um `.permitAll()` — diverge do estilo anterior (login+health agrupados numa chamada), puramente estilístico, sem efeito funcional. [api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java:43-48]
+- [x] [Review][Decision→Patch] Sessões passadas continuam aparecendo pra sempre na listagem pública — `listarPublicadas()` não tinha `WHERE data_hora >= now()` nem qualquer filtro temporal. Corrigido: filtro adicionado na própria query nativa, coberto por `SessaoListagemRepositoryTest.listarPublicadasNaoTrazSessaoComDataHoraNoPassado` (RED→GREEN), commit `fix(sessoes): esconde sessões passadas da listagem pública (code review)`. [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:23-37]
+- [x] [Review][Patch] `SecurityConfig` encadeia dois `.requestMatchers(...).permitAll()` separados — avaliado e mantido como está: é o padrão idiomático do Spring Security pra um grupo por path (login/health) e outro por método+path (GET de sessões), não um descuido de estilo. Adicionado comentário explícito no código deixando essa intenção clara, commit `refactor(sessoes): documenta os dois grupos de permitAll em SecurityConfig (code review)`. [api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java:40-51]
 - [x] [Review][Defer] `listarPublicadas()` usa `JOIN assentos` (INNER) — uma sessão cuja sala não tivesse nenhum assento cadastrado desapareceria da listagem, o que violaria literalmente o AC1 ("todas aparecem"). Hoje é inalcançável: `SessaoService.criar()` já rejeita com `SalaSemAssentosException` a criação de sessão pra sala sem assentos, então toda sessão existente sempre tem sala com assentos. Risco fica latente pra quando existir edição/remoção de assentos de uma sala já com sessões — deferido, pré-existente na modelagem, não causado por esta story. [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:31]
 - [x] [Review][Defer] `LEFT JOIN assento_sessao` sem tratamento pra assento sem linha correspondente pra aquela sessão — nesse caso ele não conta nem como livre nem como vendido, podendo subcontar `assentosLivres` e marcar `esgotada=true` indevidamente. Hoje inalcançável: `SessaoService.criar()` sempre popula `assento_sessao` pra 100% dos assentos da sala no momento da criação da sessão — nenhum caminho de código atual adiciona assento a uma sala depois. Mesmo risco latente do finding anterior, mesma causa raiz — deferido junto. [api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java:28,32]
 
