@@ -1,15 +1,18 @@
 package br.com.rolo35.api.sessoes.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record CriarSessaoRequest(
-        Long salaId,
-        Long tmdbId,
-        String titulo,
+        @NotNull Long salaId,
+        @NotNull Long tmdbId,
+        @NotBlank String titulo,
         String posterUrl,
         String sinopse,
         String dataEstreia,
-        LocalDateTime dataHora,
-        BigDecimal preco) {
+        @NotNull LocalDateTime dataHora,
+        @NotNull @Positive BigDecimal preco) {
 }
