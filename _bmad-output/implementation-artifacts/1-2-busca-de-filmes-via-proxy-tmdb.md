@@ -4,7 +4,7 @@ baseline_commit: 3c33fcf
 
 # Story 1.2: Busca de Filmes via Proxy TMDb
 
-Status: ready-for-dev
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -54,9 +54,9 @@ so that eu escolho qual filme vincular a uma sessão sem nunca falar direto com 
   - [x] Trocar a rota `/organizador` em `web/src/App.tsx`: de `<PapelPlaceholderPage titulo="Área do Organizador" />` pra `<BuscaFilmesPage />` — é o papel que a story associa à busca; `/cliente` e `/portaria` continuam com o placeholder (fora de escopo desta story).
   - [x] **Depois** do componente pronto: teste de contrato `BuscaFilmesPage.test.tsx` (vitest + testing-library, mesmo padrão de `LoginPage.test.tsx`) — submit chama `api/filmes.ts` com o termo digitado; mostra estado de carregamento enquanto a promise não resolve; mostra lista vazia (não erro) quando a resposta é `[]`; mostra estado de erro distinto quando a chamada rejeita. Foco em contrato de comportamento, não em detalhe de renderização/CSS.
 
-- [ ] **Task 5 — Confirmação final (sem código, checklist de saída)**
-  - [ ] Rodar a suíte completa (back-end `mvn test`, front `npm test`) e confirmar tudo verde
-  - [ ] Sem cenário de Testcontainers nesta story — não há escrita no banco nem concorrência aqui (tabela do projeto: Testcontainers reservado pros dois cenários de concorrência + smoke test de repository, nenhum dos dois se aplica à busca de filme)
+- [x] **Task 5 — Confirmação final (sem código, checklist de saída)**
+  - [x] Rodar a suíte completa (back-end `mvn test`, front `npm test`) e confirmar tudo verde
+  - [x] Sem cenário de Testcontainers nesta story — não há escrita no banco nem concorrência aqui (tabela do projeto: Testcontainers reservado pros dois cenários de concorrência + smoke test de repository, nenhum dos dois se aplica à busca de filme)
 
 ## Dev Notes
 
@@ -108,10 +108,44 @@ so that eu escolho qual filme vincular a uma sessão sem nunca falar direto com 
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5)
 
 ### Debug Log References
 
+- Investigação de compatibilidade Spring Boot 4.1/Jackson 3 antes de codar `TmdbClient`: confirmado via inspeção de jars em `~/.m2` que `jackson-core`/`jackson-databind` migraram pro namespace `tools.jackson.*` (Jackson 3), mas `jackson-annotations` permanece em `com.fasterxml.jackson.annotation` (2.x) — `@JsonProperty` usa o pacote antigo.
+- `mvn dependency:tree` confirmou que `spring-boot-starter-webmvc` **não** traz `spring-boot-restclient`/`spring-boot-starter-restclient` transitivamente — não existe bean `RestClient.Builder` autoconfigurado no contexto. Decisão: `TmdbClient` constrói seu próprio `RestClient.Builder` internamente (construtor `@Autowired` de um argumento, `@Value("${tmdb.api.token}")`), com um segundo construtor package-private `(RestClient.Builder, String)` usado só pelo teste unitário pra permitir bind de `MockRestServiceServer` sem depender de contexto Spring nem quebrar a resolução de construtor do Spring (o construtor de produção é o único anotado `@Autowired`).
+- Timeout configurado via `SimpleClientHttpRequestFactory.setConnectTimeout/setReadTimeout(Duration)` (classe confirmada disponível em `spring-web`), não via `ClientHttpRequestFactorySettings` (essa classe não existe nesta versão do Boot/Spring — busca em todos os jars do repositório local não encontrou nenhum candidato).
+- `TMDB_API_TOKEN` adicionado ao bloco `<environmentVariables>` do Surefire (`pom.xml`), mesmo padrão do `JWT_SECRET` — necessário pro smoke test com Testcontainers (contexto Spring completo) não quebrar com a property sem fallback. Confirmado rodando a suíte completa após a mudança: sem regressão.
+
 ### Completion Notes List
 
+- **Back-end**: proxy TMDb implementado em `br.com.rolo35.api.sessoes.catalogo` (`TmdbClient`, `FilmeDto`, `FilmeController`, `CatalogoIndisponivelException`) seguindo TDD RED→GREEN em cada subtask. 9 testes novos (6 unitários de `TmdbClient` com `MockRestServiceServer`, 3 de `@WebMvcTest` de `FilmeController`), todos verdes. `GlobalExceptionHandler` ganhou o handler de `CatalogoIndisponivelException` → `502 CATALOGO_INDISPONIVEL`. Autorização confirmada por inspeção (Task 2): nenhuma mudança em `SecurityConfig` necessária.
+- **Front-end**: `apiFetch` (`client.ts`) passou a anexar `Authorization: Bearer <token>` condicionalmente a partir do `localStorage` (2 testes novos em `client.test.ts`, RED→GREEN). `filmes.ts` criado (sem teste dedicado, por design — exercitado via `BuscaFilmesPage.test.tsx`). `BuscaFilmesPage.tsx` implementada com estados idle/loading/resultado(lista ou vazio)/error, reusando os design tokens da Story 1.1; rota `/organizador` trocada em `App.tsx`. Teste de contrato (`BuscaFilmesPage.test.tsx`, 4 casos) escrito depois do componente, por decisão já documentada no CLAUDE.md — todos verdes.
+- **Confirmação final (Task 5)**: suíte completa verde — back-end 24/24 testes (`mvn test`, incluindo smoke test com Testcontainers e `ApiApplicationTests`, sem regressão), front-end 8/8 testes (`npm test`). `npm run build` (TypeScript estrito) e `npm run lint` (oxlint) também passam sem erro novo. Verificado manualmente que o bundle de produção não contém a chave TMDb (só a string `tmdbId`, nome de campo do DTO, o que é esperado e não é a AC 2 objetada).
+
 ### File List
+
+**Back-end (novo)**
+- `api/src/main/java/br/com/rolo35/api/sessoes/catalogo/FilmeDto.java`
+- `api/src/main/java/br/com/rolo35/api/sessoes/catalogo/CatalogoIndisponivelException.java`
+- `api/src/main/java/br/com/rolo35/api/sessoes/catalogo/TmdbClient.java`
+- `api/src/main/java/br/com/rolo35/api/sessoes/catalogo/FilmeController.java`
+- `api/src/test/java/br/com/rolo35/api/sessoes/catalogo/TmdbClientTest.java`
+- `api/src/test/java/br/com/rolo35/api/sessoes/catalogo/FilmeControllerTest.java`
+
+**Back-end (update)**
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java`
+- `api/src/main/resources/application.properties`
+- `api/pom.xml`
+- `.env.example`
+- `docker-compose.yml`
+
+**Front-end (novo)**
+- `web/src/api/filmes.ts`
+- `web/src/api/client.test.ts`
+- `web/src/pages/BuscaFilmesPage.tsx`
+- `web/src/pages/BuscaFilmesPage.test.tsx`
+
+**Front-end (update)**
+- `web/src/api/client.ts`
+- `web/src/App.tsx`
