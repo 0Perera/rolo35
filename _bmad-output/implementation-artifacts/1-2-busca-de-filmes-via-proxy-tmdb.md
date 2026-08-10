@@ -1,0 +1,117 @@
+---
+baseline_commit: 3c33fcf
+---
+
+# Story 1.2: Busca de Filmes via Proxy TMDb
+
+Status: ready-for-dev
+
+<!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
+
+## Story
+
+As a usuário autenticado (tipicamente organizador, na hora de criar sessão),
+I want buscar filmes em cartaz por título,
+so that eu escolho qual filme vincular a uma sessão sem nunca falar direto com o TMDb.
+
+## Acceptance Criteria
+
+1. **Given** uma chave TMDb válida configurada via variável de ambiente no back-end **When** `GET /api/filmes/buscar?query={termo}` é chamado com um termo válido **Then** o back-end faz proxy pro TMDb e retorna só os campos que a tela precisa (título, pôster, sinopse, data de estreia) — a chave TMDb nunca aparece na resposta nem em nenhum header exposto ao client.
+
+2. **Given** o bundle do front-end **When** inspecionado (build de produção) **Then** a chave TMDb não existe em nenhum arquivo servido ao client — a chamada ao TMDb é responsabilidade exclusiva do back-end.
+
+3. **Given** uma busca sem resultados **When** a tela de busca recebe a resposta **Then** mostra estado de lista vazia, não um erro.
+
+4. **Given** o TMDb fora do ar ou respondendo com timeout **When** a busca é feita **Then** a tela mostra estado de erro claramente distinto do estado de lista vazia, sem travar em carregamento.
+
+5. **Given** a busca em andamento **When** a requisição ainda não retornou **Then** a tela mostra estado de carregamento.
+
+6. **Given** a chave TMDb ausente ou inválida na configuração do back-end **When** o endpoint de busca é chamado **Then** retorna erro controlado via envelope `{codigo, mensagem}`, sem vazar detalhe da resposta bruta do TMDb.
+
+## TDD — regra obrigatória desta story
+
+> Regra única do projeto (CLAUDE.md § Metodologia XP + TDD): **todo teste nasce antes do código**, sempre. Não existe "implementar tudo e testar no final" — cada subtask de código abaixo é precedida da sua subtask de teste, marcada **[RED]**. O ciclo dentro de cada par é: escrever o teste, rodar e ver falhar por ausência do código (RED) → escrever o código mínimo que faz passar (**[GREEN]**) → refactor se necessário, mantendo os testes verdes. Não pule o RED — se o código já existir antes do teste, o teste deixou de validar alguma coisa. A única exceção documentada no projeto é a UI de interação visual (Task 4 abaixo), cujo teste de contrato nasce **depois** do componente, por decisão explícita já registrada no CLAUDE.md (cobertura leve, focada em contrato, não em renderização) — todo o resto segue RED→GREEN sem exceção.
+
+## Tasks / Subtasks
+
+- [x] **Task 1 — Proxy TMDb no back-end (AC: 1, 2, 6)**
+  - [x] Config (sem teste, é infraestrutura): adicionar `TMDB_API_KEY` ao `.env.example` (comentário explicando que é o **API Read Access Token** v4 do TMDb, não a `api_key` v3 legada — ver Dev Notes) e ao `docker-compose.yml` (`environment` do serviço `api`); `application.properties`: `tmdb.api.token=${TMDB_API_KEY:}` — **sem fallback de dev-conveniência** (mesmo padrão já adotado pra `JWT_SECRET` após a revisão de código da Story 1.1: segredo real, sem valor fake que finja funcionar)
+  - [x] **[RED]** Escrever teste unitário de `TmdbClient` (JUnit/Mockito, sem contexto Spring — usar `MockRestServiceServer` ou mock do `RestClient`) cobrindo: mapeia resposta do TMDb pra `FilmeDto` (`poster_path` null → `posterUrl` null; `release_date` vazio → `dataEstreia` null); lança `CatalogoIndisponivelException` quando `tmdb.api.token` está em branco; lança `CatalogoIndisponivelException` quando o TMDb responde erro HTTP (401/5xx) ou timeout. Rodar e confirmar que falha por `TmdbClient`/`FilmeDto`/`CatalogoIndisponivelException` ainda não existirem.
+  - [x] **[GREEN]** Criar pacote `br.com.rolo35.api.sessoes.catalogo` (Capability Map da Architecture Spine: `sessoes/catalogo/`, AD-14) com `FilmeDto` (record: `tmdbId` Long, `titulo`, `posterUrl` nullable, `sinopse`, `dataEstreia` nullable — inclui `tmdbId` mesmo fora da lista literal da AC 1, porque sem ele o organizador não referencia o filme escolhido na criação de sessão da Story 2.1/FR-5/AD-14) e `CatalogoIndisponivelException`. Implementar `TmdbClient` com `RestClient` do Spring (já disponível via `spring-boot-starter-webmvc`, sem dependência nova — ver Dev Notes/Latest Tech): base URL `https://api.themoviedb.org/3`, timeout curto (`connectTimeout` ~5s, `readTimeout` ~8s via `ClientHttpRequestFactorySettings`), autentica com `Authorization: Bearer {token}` (header, nunca `api_key` na query string). Método `buscarPorTitulo(query)` chama `GET /search/movie?query={query}&language=pt-BR`, mapeia `results` pra `List<FilmeDto>` (`id`→`tmdbId`, `title`→`titulo`, `poster_path`→`https://image.tmdb.org/t/p/w500{poster_path}` ou `null`, `overview`→`sinopse`, `release_date`→`dataEstreia`). Rodar o teste até passar.
+  - [x] **[RED]** Escrever teste `@WebMvcTest` de `FilmeController` com `TmdbClient` mockado: `GET /api/filmes/buscar?query=...` → `200` + lista de filmes pra busca válida (AC 1); `200` + lista vazia pra busca sem resultado (AC 3, o controller só repassa o array vazio); `502` + envelope `{codigo: "CATALOGO_INDISPONIVEL", ...}` quando `TmdbClient` lança a exceção (AC 4, AC 6); resposta serializada nunca inclui `tmdb.api.token` nem qualquer campo de chave (AC 1). Rodar e confirmar que falha por `FilmeController` e o handler novo ainda não existirem.
+  - [x] **[GREEN]** Implementar `FilmeController` (`GET /api/filmes/buscar`) e adicionar `@ExceptionHandler(CatalogoIndisponivelException.class)` no `GlobalExceptionHandler` existente → `502` + `ApiError("CATALOGO_INDISPONIVEL", "Catálogo de filmes indisponível no momento")`. Rodar o teste até passar.
+
+- [x] **Task 2 — Autorização do endpoint (sem código, sem teste novo — documentar a decisão)**
+  - [x] Confirmar (por inspeção, não por teste novo) que `SecurityConfig` não precisa de alteração: `/api/filmes/buscar` não está na allow-list (`/api/auth/login`, `/actuator/health`), então já cai em `anyRequest().authenticated()` — qualquer papel autenticado acessa. Isso já é coberto pelos testes de segurança existentes da Story 1.1 (`JwtAuthenticationFilterTest`) — nenhum teste novo é necessário porque nenhum comportamento novo foi introduzido nesta camada.
+
+- [ ] **Task 3 — Camada `api/` no front: Authorization automático + módulo de filmes (AC: 1)**
+  - [ ] **[RED]** Escrever teste unitário de `apiFetch` (vitest, `web/src/api/client.test.ts` — arquivo novo, não existe teste pra `client.ts` ainda) cobrindo: anexa `Authorization: Bearer <token>` no header quando existe `rolo35.token` no `localStorage`; **não** anexa o header quando não existe token (login segue funcionando sem header). Mockar `fetch` global. Rodar e confirmar que falha (comportamento ainda não implementado).
+  - [ ] **[GREEN]** Atualizar `web/src/api/client.ts` (arquivo existente): `apiFetch` passa a ler `rolo35.token` do `localStorage` e anexar `Authorization: Bearer <token>` condicionalmente — é a implementação real da promessa da AD-2 ("anexa Authorization condicionalmente... num único lugar") que a Story 1.1 documentou mas não chegou a exercitar (login é a única chamada até aqui, e é pública). Rodar o teste até passar.
+  - [ ] Criar `web/src/api/filmes.ts`: `buscarFilmes(query: string)` tipado, `GET /api/filmes/buscar?query=${encodeURIComponent(query)}`, retorna `Filme[]` (mesmos campos do `FilmeDto`, em camelCase — Jackson já serializa assim). Wrapper simples sem lógica própria (mesmo padrão de `auth.ts`) — sem teste unitário dedicado; é exercitado indiretamente pelo teste de contrato de `BuscaFilmesPage` (Task 4).
+
+- [ ] **Task 4 — Tela de busca de filmes (AC: 3, 4, 5) — exceção documentada: teste nasce depois do componente**
+  - [ ] Implementar `web/src/pages/BuscaFilmesPage.tsx`: campo de busca (submit) + lista de resultados (pôster, título, sinopse, data de estreia). Estados via `useState` (mesmo padrão de `LoginPage.tsx`): `idle` (nada buscado ainda) → `loading` → resultado (lista com itens, ou mensagem de "nenhum filme encontrado" se vazia — não é erro) → `error` (mensagem distinta, ex. "não foi possível buscar filmes agora"). Usa os design tokens já definidos na Story 1.1 (`bg-sepia-950`, `font-display`, `text-amber-300`, `border-gold-500`, etc.) — sem inventar cor nova.
+  - [ ] Trocar a rota `/organizador` em `web/src/App.tsx`: de `<PapelPlaceholderPage titulo="Área do Organizador" />` pra `<BuscaFilmesPage />` — é o papel que a story associa à busca; `/cliente` e `/portaria` continuam com o placeholder (fora de escopo desta story).
+  - [ ] **Depois** do componente pronto: teste de contrato `BuscaFilmesPage.test.tsx` (vitest + testing-library, mesmo padrão de `LoginPage.test.tsx`) — submit chama `api/filmes.ts` com o termo digitado; mostra estado de carregamento enquanto a promise não resolve; mostra lista vazia (não erro) quando a resposta é `[]`; mostra estado de erro distinto quando a chamada rejeita. Foco em contrato de comportamento, não em detalhe de renderização/CSS.
+
+- [ ] **Task 5 — Confirmação final (sem código, checklist de saída)**
+  - [ ] Rodar a suíte completa (back-end `mvn test`, front `npm test`) e confirmar tudo verde
+  - [ ] Sem cenário de Testcontainers nesta story — não há escrita no banco nem concorrência aqui (tabela do projeto: Testcontainers reservado pros dois cenários de concorrência + smoke test de repository, nenhum dos dois se aplica à busca de filme)
+
+## Dev Notes
+
+- **Por que `sessoes/catalogo/` e não um pacote `filmes/` novo:** a Architecture Spine já reserva esse caminho explicitamente na Capability Map (`§4.2 Catálogo de Filmes (FR-4) | sessoes/catalogo/ | AD-14`) e no Structural Seed (`sessoes/catalogo/ # TmdbClient — proxy exclusivo TMDb`). O domínio `sessoes` em si (entidade `Sessao`, `SessaoController/Service/Repository`) só nasce na Story 2.1 — esta story cria só o subpacote `catalogo/` dentro dele, o que é esperado (o pacote de domínio vai crescendo por story, não tudo de uma vez).
+
+- **Autenticação TMDb — Bearer token, não `api_key` na query string:** pesquisa na doc oficial do TMDb (2026-08-10) confirma que o método recomendado hoje é o **API Read Access Token** (v4) enviado via header `Authorization: Bearer <token>`, em vez do parâmetro legado `?api_key=`. Motivo prático além de "é o recomendado": query params tendem a acabar em log de acesso (proxy, load balancer, APM) — header evita esse vetor de vazamento acidental da chave, reforçando a AC 1 de "a chave nunca aparece em nenhum header exposto ao client" (aqui é o inverso: nunca vazar no lado do back-end que fala com o TMDb).
+
+- **`RestClient` do Spring, sem dependência nova:** o projeto já tem `spring-boot-starter-webmvc` no `pom.xml` (Story 1.1), que traz `spring-web` — `RestClient` (desde Spring Framework 6.1, presente no Spring Boot 4.1 usado aqui) já está disponível. Não é necessário adicionar WebClient/webflux nem nenhum cliente HTTP externo (RestTemplate, OkHttp) só pra isso.
+
+- **Endpoint TMDb usado — busca geral por título, não "now playing":** a FR-4 do PRD (fonte de verdade da AC) pede "busca filmes por título", não filtro de cartaz atual. O TMDb não tem um endpoint único que combine busca textual + filtro "em cartaz" — `/search/movie` é o único que aceita `query`. Por isso o proxy usa `/search/movie` puro; "filmes em cartaz" no README/CLAUDE.md é o contexto de domínio geral do projeto, não uma AC testável desta story especificamente.
+
+- **`language=pt-BR` na chamada ao TMDb:** decisão pragmática, não uma AC — o produto e a comunicação do projeto são em português brasileiro, então localizar título/sinopse na resposta do TMDb (quando disponível) evita retrabalho de tradução manual. Não quebra a AC 3 (lista vazia continua vazia independente do idioma).
+
+- **`CatalogoIndisponivelException` cobre dois cenários com um mecanismo só (AC 4 + AC 6):** token ausente/em branco E erro/timeout do TMDb viram o mesmo tipo de exceção, mapeada pro mesmo código de erro (`CATALOGO_INDISPONIVEL`, `502`). Do ponto de vista do cliente da API, "não consigo te dar dados de filme agora" é o mesmo problema nos dois casos — não há motivo prático pra distinguir com dois códigos, e simplifica o `GlobalExceptionHandler` (que já tem o precedente de um handler por tipo de exceção, criado na Story 1.1).
+
+- **`GET /api/filmes/buscar` cai no `anyRequest().authenticated()` já existente:** nenhuma mudança em `SecurityConfig.java` é necessária — a allow-list (`/api/auth/login`, `/actuator/health`) já é a exceção explícita à regra "autenticado por padrão" fixada na Story 1.1 (AD-10, non-negotiable "toda rota valida papel no back-end"). Esta story não introduz restrição de papel (`hasRole`) porque a AC não pede isso — "tipicamente organizador" no texto da story é contexto de uso, não uma regra de autorização a testar.
+
+- **`client.ts` ganha o Authorization automático nesta story, não na 1.1:** a Story 1.1 já documentava a promessa da AD-2 ("anexa Authorization condicionalmente... num único lugar") mas não tinha nenhum endpoint autenticado pra exercitar isso (login é público). Esta é a primeira chamada autenticada do front — implementar o anexo automático de `Authorization: Bearer <token>` a partir do `localStorage` dentro do próprio `apiFetch` (não como parâmetro opcional por chamada) é o que cumpre literalmente "num único lugar": toda chamada futura de qualquer domínio (`sessoes`, `reservas`, `pagamentos`, `ingressos`) herda o comportamento de graça, sem repetir lógica de header em cada módulo `api/*.ts`.
+
+- **Envelope de erro (AD-11):** `CATALOGO_INDISPONIVEL` é um código novo, consistente com a lista "não exaustiva" já prevista na Architecture Spine (`ASSENTO_INDISPONIVEL`, `RESERVA_EXPIRADA`, ... "cada story pode adicionar o seu"). Sem mudança na estrutura do `GlobalExceptionHandler`/`ApiError`, só um `@ExceptionHandler` novo.
+
+- **Consumo futuro do `tmdbId`:** a Story 2.1 (Criação de Sessão) vai precisar do `tmdbId` retornado aqui pra montar o snapshot de `sessoes` (`tmdb_id, titulo, poster_url, sinopse, data_estreia` — AD-14). Incluir `tmdbId` no `FilmeDto` agora evita ter que voltar nesta story depois.
+
+- **AC 2 (chave nunca no bundle do front) não tem task própria porque é garantida por design, não por um mecanismo a implementar:** a chave TMDb só é lida em `application.properties`/`TmdbClient`, do lado do back-end; `web/src/api/filmes.ts` só fala com `/api/filmes/buscar` (o próprio back-end), nunca com `api.themoviedb.org`. Não existe nenhuma variável `VITE_*` de chave TMDb pra vazar no bundle (variáveis `VITE_*` são as únicas que o Vite injeta no client). Se, ao implementar, surgir qualquer necessidade de referenciar a chave no front, isso é um sinal de desvio da arquitetura — pare e reavalie antes de prosseguir.
+
+- **Estado atual confirmado do que esta story vai tocar (relido no momento da criação desta story, já refletindo a revisão de código da Story 1.1):** `application.properties` já tem `security.jwt.secret=${JWT_SECRET}` sem fallback e `cors.allowed-origins=${CORS_ALLOWED_ORIGINS:http://localhost:5173}`; `SecurityConfig.java` já lê `corsAllowedOrigins` via `@Value("${cors.allowed-origins}")` em vez de lista hardcoded — nenhum dos dois muda nesta story, só reafirma o padrão de "segredo real sem fallback" que `tmdb.api.token` replica. `client.ts`, `GlobalExceptionHandler.java`, `ApiError.java` e `App.tsx` estão no estado descrito nas subtasks acima (conteúdo integral relido antes de escrever esta story).
+
+### Project Structure Notes
+
+- Segue a estrutura já fixada na Architecture Spine (§ Structural Seed, § Capability → Architecture Map) — sem variância detectada.
+- Back-end (novo): `api/src/main/java/br/com/rolo35/api/sessoes/catalogo/{TmdbClient.java, FilmeDto.java, FilmeController.java, CatalogoIndisponivelException.java}`. Pacote raiz continua `br.com.rolo35.api.*` (mesma observação já registrada na Story 1.1).
+- Back-end (update): `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` ganha um handler novo; `api/src/main/resources/application.properties` ganha `tmdb.api.token`.
+- Front-end (novo): `web/src/api/filmes.ts`, `web/src/api/client.test.ts`, `web/src/pages/BuscaFilmesPage.tsx`, `web/src/pages/BuscaFilmesPage.test.tsx`.
+- Front-end (update): `web/src/api/client.ts` (Authorization automático), `web/src/App.tsx` (rota `/organizador` passa a renderizar `BuscaFilmesPage`).
+- Config (update): `.env.example` e `docker-compose.yml` ganham `TMDB_API_KEY`.
+- **Leitura obrigatória antes de codar** (arquivos UPDATE, não criar do zero): `web/src/api/client.ts`, `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` e `ApiError.java`, `web/src/App.tsx`, `api/src/main/resources/application.properties`, `.env.example` e `docker-compose.yml` — todos já lidos por completo durante a criação desta story (estado pós-revisão de código da Story 1.1), conteúdo atual descrito em Dev Notes acima.
+
+### References
+
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 1.2: Busca de Filmes via Proxy TMDb]
+- [Source: _bmad-output/planning-artifacts/architecture/architecture-rolo35-2026-08-10/ARCHITECTURE-SPINE.md#AD-1, AD-2, AD-11, AD-12, AD-14, Capability → Architecture Map §4.2, Structural Seed]
+- [Source: _bmad-output/planning-artifacts/prds/prd-rolo35-2026-08-09/prd.md#FR-4]
+- [Source: CLAUDE.md — Metodologia XP + TDD, Regra da API externa (TMDb), Non-negotiables de Segurança e Interface]
+- [Source: docs/decisions.md — "Camada api/ dedicada no front, sem fetch direto em componente", "Envelope de erro único via GlobalExceptionHandler"]
+- [Source: _bmad-output/implementation-artifacts/1-1-fundacao-e-login-com-papel-fixo.md — padrões de `client.ts`, `GlobalExceptionHandler`, `SecurityConfig`, design tokens, estrutura de teste de página (`LoginPage.test.tsx`), commits de revisão de código (JWT_SECRET sem fallback, CORS configurável)]
+- Pesquisa web (2026-08-10): TMDb API — autenticação recomendada via `Authorization: Bearer <API Read Access Token>` (v4) em vez de `?api_key=` (v3 legado) — [Application Level Authentication](https://developer.themoviedb.org/docs/authentication-application), [Search & Query For Details](https://developer.themoviedb.org/docs/search-and-query-for-details).
+
+## Dev Agent Record
+
+### Agent Model Used
+
+{{agent_model_name_version}}
+
+### Debug Log References
+
+### Completion Notes List
+
+### File List

@@ -1,6 +1,7 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,6 +14,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleCredenciaisInvalidas() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiError("CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos"));
+    }
+
+    @ExceptionHandler(CatalogoIndisponivelException.class)
+    public ResponseEntity<ApiError> handleCatalogoIndisponivel() {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ApiError("CATALOGO_INDISPONIVEL", "Catálogo de filmes indisponível no momento"));
     }
 
     @ExceptionHandler(Exception.class)
