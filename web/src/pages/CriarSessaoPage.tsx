@@ -19,6 +19,7 @@ export function CriarSessaoPage() {
   const [estadoSubmit, setEstadoSubmit] = useState<EstadoSubmit>('idle');
   const [mensagemErro, setMensagemErro] = useState('');
   const [sessaoCriada, setSessaoCriada] = useState<Sessao | null>(null);
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     if (!filme) {
@@ -42,7 +43,7 @@ export function CriarSessaoPage() {
     return () => {
       ativo = false;
     };
-  }, [filme]);
+  }, [filme, tentativa]);
 
   if (!filme) {
     return (
@@ -58,11 +59,35 @@ export function CriarSessaoPage() {
     );
   }
 
+  // O form usa noValidate (mesmo padrão de LoginPage, pra manter a mensagem de erro no mesmo
+  // lugar da tela), então required/min/step não valem nada — a checagem precisa existir aqui.
+  // Sem ela, campo em branco vira salaId: 0 e o usuário recebe "Sala não encontrada".
+  function primeiroErroDeValidacao(): string | null {
+    if (!salaId) {
+      return 'Selecione uma sala.';
+    }
+    if (!dataHora) {
+      return 'Informe a data e a hora da sessão.';
+    }
+    if (!preco || Number(preco) <= 0) {
+      return 'Informe um preço maior que zero.';
+    }
+    return null;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!filme) {
       return;
     }
+
+    const erroDeValidacao = primeiroErroDeValidacao();
+    if (erroDeValidacao) {
+      setMensagemErro(erroDeValidacao);
+      setEstadoSubmit('erro');
+      return;
+    }
+
     setEstadoSubmit('loading');
     setMensagemErro('');
 
@@ -112,8 +137,18 @@ export function CriarSessaoPage() {
         {estadoSalas === 'vazio' && <p className="text-sm text-cream-300">Nenhuma sala cadastrada.</p>}
         {estadoSalas === 'erro' && (
           <p role="alert" className="text-sm text-velvet-600">
-            Não foi possível carregar as salas agora. Tente novamente.
+            Não foi possível carregar as salas agora.
           </p>
+        )}
+
+        {(estadoSalas === 'erro' || estadoSalas === 'vazio') && (
+          <button
+            type="button"
+            onClick={() => setTentativa((atual) => atual + 1)}
+            className="self-start rounded border border-gold-500/60 px-4 py-2 font-display tracking-wide text-amber-300 transition hover:bg-sepia-900"
+          >
+            Tentar novamente
+          </button>
         )}
 
         {estadoSalas === 'pronto' && (

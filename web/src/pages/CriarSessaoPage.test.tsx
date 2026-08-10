@@ -135,4 +135,54 @@ describe('CriarSessaoPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Sessão conflitante');
     expect(screen.getByRole('button', { name: /criar sessão/i })).toBeEnabled();
   });
+
+  // O form usa noValidate, então required/min/step não bloqueiam nada — sem checagem própria,
+  // submeter em branco viraria salaId: 0 e o usuário receberia "Sala não encontrada" do servidor.
+  it('blocks an empty submit with a field-level message instead of calling the API', async () => {
+    vi.spyOn(sessoesApi, 'listarSalas').mockResolvedValue([{ id: 1, nome: 'Sala 1', capacidade: 40 }]);
+    const criarSessaoSpy = vi.spyOn(sessoesApi, 'criarSessao');
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByRole('combobox');
+    await user.click(screen.getByRole('button', { name: /criar sessão/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/selecione uma sala/i);
+    expect(criarSessaoSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks a submit with a non-positive price', async () => {
+    vi.spyOn(sessoesApi, 'listarSalas').mockResolvedValue([{ id: 1, nome: 'Sala 1', capacidade: 40 }]);
+    const criarSessaoSpy = vi.spyOn(sessoesApi, 'criarSessao');
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByRole('combobox');
+    await user.selectOptions(screen.getByRole('combobox'), '1');
+    const [dataHoraInput, precoInput] = screen.getAllByLabelText(/data e hora|preço/i);
+    await user.type(dataHoraInput, '2030-01-01T20:00');
+    await user.type(precoInput, '0');
+    await user.click(screen.getByRole('button', { name: /criar sessão/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/preço maior que zero/i);
+    expect(criarSessaoSpy).not.toHaveBeenCalled();
+  });
+
+  it('retries loading the salas when the retry button is clicked', async () => {
+    const listarSalasSpy = vi
+      .spyOn(sessoesApi, 'listarSalas')
+      .mockRejectedValueOnce(new Error('falha de rede'))
+      .mockResolvedValueOnce([{ id: 1, nome: 'Sala 1', capacidade: 40 }]);
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await screen.findByRole('alert');
+    await user.click(screen.getByRole('button', { name: /tentar novamente/i }));
+
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+    expect(listarSalasSpy).toHaveBeenCalledTimes(2);
+  });
 });
