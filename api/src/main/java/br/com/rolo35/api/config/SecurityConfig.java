@@ -4,6 +4,7 @@ import br.com.rolo35.api.auth.JwtAuthenticationFilter;
 import br.com.rolo35.api.auth.JwtService;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -40,6 +41,8 @@ public class SecurityConfig {
                 // controller, pra que uma rota nova não herde permissão por esquecimento de
                 // matcher — sem anotação, ela simplesmente não passa.
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/auth/login", "/actuator/health")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/sessoes")
                         .permitAll()
                         .anyRequest()
                         .authenticated())

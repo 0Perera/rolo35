@@ -1,13 +1,16 @@
 package br.com.rolo35.api.sessoes.controller;
 
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.service.SessaoService;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,5 +32,10 @@ public class SessaoController {
             @Valid @RequestBody CriarSessaoRequest request, Authentication authentication) {
         SessaoResponse resposta = sessaoService.criar(request, authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(resposta);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<SessaoListagemDto>> listar() {
+        return ResponseEntity.ok(sessaoService.listarPublicadas());
     }
 }

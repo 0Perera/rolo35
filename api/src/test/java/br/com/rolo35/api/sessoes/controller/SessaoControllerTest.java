@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,10 +13,13 @@ import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.service.SessaoService;
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -181,5 +185,30 @@ class SessaoControllerTest {
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.codigo").value("SALA_OCUPADA"))
                 .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    @Test
+    void returns200WithSessaoListagemArrayForGetSessoes() throws Exception {
+        SessaoListagemDto dto = new SessaoListagemDto(
+                100L, "Sala 1", 550L, "Clube da Luta", "http://poster", "sinopse", Date.valueOf("1999-10-15"),
+                LocalDateTime.now().plusDays(7), new BigDecimal("25.00"), 40, false);
+        given(sessaoService.listarPublicadas()).willReturn(List.of(dto));
+
+        mockMvc.perform(get("/api/sessoes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(100))
+                .andExpect(jsonPath("$[0].salaNome").value("Sala 1"))
+                .andExpect(jsonPath("$[0].titulo").value("Clube da Luta"))
+                .andExpect(jsonPath("$[0].esgotada").value(false));
+    }
+
+    @Test
+    void returns200WithEmptyArrayForGetSessoesWhenNoneExist() throws Exception {
+        given(sessaoService.listarPublicadas()).willReturn(List.of());
+
+        mockMvc.perform(get("/api/sessoes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
     }
 }
