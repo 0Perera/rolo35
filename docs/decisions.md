@@ -256,3 +256,17 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: com `@EmbeddedId` atribuído em código, o `isNew()` padrão do Spring Data olha só pro id não-nulo e conclui "já existe" — o `saveAll` vira `merge()`, que dispara um `SELECT` por linha antes de cada `INSERT`. Pra "Sala 1" isso são 40 selects + 40 inserts **dentro da transação que segura o lock pessimista da sala**, exatamente o oposto do que AD-5 pede (transação de lock a mais curta possível) e o padrão N+1 que os non-negotiables proíbem. Escala linear com o tamanho da sala: uma sala de 300 lugares seriam 600 statements sob lock, aumentando a chance de o `lock_timeout` de 3s estourar em quem está na fila.
 
 ---
+
+## Sem coluna `publicada`/estado de rascunho em `sessoes` (Story 2.3)
+
+- **Decisão**: `listarPublicadas()` lista todas as linhas de `sessoes`, sem filtro de status — não existe (nem foi adicionada) coluna de publicação/rascunho na tabela.
+- **Por quê**: `V1__schema.sql` nunca teve esse campo, e nenhuma AC de nenhuma story até aqui pediu um fluxo de rascunho — toda sessão criada pela Story 2.1 já é, por definição, listável publicamente. Inventar uma coluna/flag nova pra esta story seria escopo não solicitado; se um fluxo de rascunho vier a ser pedido depois, é decisão de uma story futura, não uma antecipação silenciosa agora.
+
+---
+
+## Listagem pública: uma query nativa com `JOIN`+`GROUP BY`, não duas consultas (Story 2.3)
+
+- **Decisão**: `SessaoRepository.listarPublicadas()` é uma única `@Query(nativeQuery = true)` que junta `sessoes`+`salas`+`assentos`+`assento_sessao` via `JOIN`/`LEFT JOIN` e agrega `capacidade` (`COUNT(DISTINCT a.id)`) e `assentosLivres` (`COUNT(DISTINCT CASE WHEN status='LIVRE' ...)`) num `GROUP BY s.id, sa.nome`. O booleano `esgotada` é calculado no `SessaoService` (`assentosLivres == 0`), não na query nem persistido — o DTO público (`SessaoListagemDto`) não expõe a contagem crua de assentos livres, só o booleano derivado.
+- **Por quê**: a AC2 desta story exige "uma única consulta (projection/fetch join)", mesmo padrão de estilo já usado em `SessaoRepository.existeConflitante` (Story 2.1) — `@Query` nativa com agregação em SQL, não fetch join JPQL, porque o `CASE WHEN` + `COUNT DISTINCT` correlacionado não é natural em JPQL sem subquery, o que reintroduziria risco de N+1 dependendo de como o Hibernate traduz. Não expor `assentosLivres` bruto evita que um visitante estime quantos ingressos já foram vendidos de uma sessão — informação sem valor pro caso de uso e desnecessária de vazar.
+
+---
