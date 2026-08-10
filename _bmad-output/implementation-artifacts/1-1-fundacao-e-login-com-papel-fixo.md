@@ -55,12 +55,12 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
   - [x] `LoginRequest`/`LoginResponse` como DTOs explícitos — nunca serializar `Usuario`/`senha_hash` (AC 6, AD-12); `LoginRequest` com Bean Validation (`@NotBlank` em email/senha), mesmo padrão que AD-7 já fixa pra DTOs de entrada
   - [x] `common/GlobalExceptionHandler` (`@RestControllerAdvice`) + `common/ApiError` — envelope `{codigo, mensagem}` (AD-11); credenciais inválidas mapeiam pra `401` com mensagem genérica idêntica pra "senha errada" e "e-mail inexistente" (AC 5); fallback genérico pra exceção não mapeada (`500`, `ERRO_INTERNO`)
 
-- [ ] **Task 4 — Re-scaffold do front-end pra Vite+React (AC: 3)**
-  - [ ] Remover artefatos Next.js: `web/src/app/`, `web/next.config.ts`, `web/next-env.d.ts`, `web/.next/`, `web/node_modules/`, `web/package-lock.json`, `web/AGENTS.md` e `web/CLAUDE.md` (gerados automaticamente pelo `next dev` — não são arquivo de projeto)
-  - [ ] Scaffold Vite + React 19.2.8 + TypeScript 6.x (`strict: true`) + Tailwind CSS 4.x via plugin `@tailwindcss/vite` (CSS-first, sem `tailwind.config.js`)
-  - [ ] Adicionar `react-router` (pacote único, v8.x — substituiu `react-router-dom` a partir da v7/v8) pras rotas da SPA
-  - [ ] `web/src/api/client.ts`: wrapper de `fetch` com timeout com folga (~90s) pro cold start documentado do Render (AD-2); `web/src/api/auth.ts`: função tipada de login
-  - [ ] **Design tokens do tema cinema 35mm** — definir agora, no CSS-first `@theme` do Tailwind (`web/src/index.css`), pra toda tela futura herdar sem retrabalho de retrofit. Só tokens (cor/tipografia), nenhum componente construído em cima ainda — ver paleta e fontes exatas em Dev Notes
+- [x] **Task 4 — Re-scaffold do front-end pra Vite+React (AC: 3)**
+  - [x] Remover artefatos Next.js: `web/src/app/`, `web/next.config.ts`, `web/next-env.d.ts`, `web/.next/`, `web/node_modules/`, `web/package-lock.json`, `web/AGENTS.md` e `web/CLAUDE.md` (gerados automaticamente pelo `next dev` — não são arquivo de projeto)
+  - [x] Scaffold Vite + React 19.2.8 + TypeScript 6.x (`strict: true`) + Tailwind CSS 4.x via plugin `@tailwindcss/vite` (CSS-first, sem `tailwind.config.js`)
+  - [x] Adicionar `react-router` (pacote único, v8.x — substituiu `react-router-dom` a partir da v7/v8) pras rotas da SPA
+  - [x] `web/src/api/client.ts`: wrapper de `fetch` com timeout com folga (~90s) pro cold start documentado do Render (AD-2); `web/src/api/auth.ts`: função tipada de login
+  - [x] **Design tokens do tema cinema 35mm** — definir agora, no CSS-first `@theme` do Tailwind (`web/src/index.css`), pra toda tela futura herdar sem retrabalho de retrofit. Só tokens (cor/tipografia), nenhum componente construído em cima ainda — ver paleta e fontes exatas em Dev Notes
 
 - [ ] **Task 5 — Tela de login (AC: 7)**
   - [ ] Formulário de login com estados de carregando/erro/sucesso

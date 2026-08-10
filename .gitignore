@@ -13,8 +13,9 @@ HELP.md
 *.jar
 !.mvn/wrapper/*.jar
 
-# --- Node / Next.js (web) ---
+# --- Node / Vite (web) ---
 node_modules/
+dist/
 .next/
 out/
 .turbo/

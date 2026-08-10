@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  /* base sépia/âmbar — fundo e superfícies */
+  --color-sepia-950: #14100d;
+  --color-sepia-900: #1f1810;
+  --color-sepia-800: #2c2016;
+  --color-sepia-700: #3b2a1a;
+
+  /* âmbar — destaque secundário */
+  --color-amber-400: #d99a44;
+  --color-amber-300: #e6b567;
+
+  /* vermelho veludo — ação primária/CTA */
+  --color-velvet-700: #7a1220;
+  --color-velvet-600: #8c1c2c;
+
+  /* dourado — borda, foco, acento de moldura */
+  --color-gold-500: #c9a227;
+
+  /* texto sobre fundo escuro */
+  --color-cream-100: #f2e8d5;
+  --color-cream-300: #b8a692;
+
+  /* tipografia: marquise robusta pra título, serifada legível pro corpo — evita sans-serif genérica de SaaS */
+  --font-display: "Bebas Neue", sans-serif;
+  --font-body: "Lora", serif;
+}
