@@ -17,12 +17,15 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+  const token = localStorage.getItem('rolo35.token');
+
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init?.headers,
       },
     });
