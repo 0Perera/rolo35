@@ -4,7 +4,7 @@ baseline_commit: 4fc6b7d9c8058f4710d127cfa7f1ae5eccc9d807
 
 # Story 1.1: Fundação e Login com Papel Fixo
 
-Status: review
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -73,6 +73,28 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
   - [x] Smoke test de repository com Testcontainers (`.withReuse(true)`): contexto Spring sobe com Postgres real, Flyway aplica `V1__schema.sql` + `V2__seed.sql` sem erro, `UsuarioRepository.findByEmail` encontra os 4 perfis seed
   - [x] **Corrigir `api/src/test/java/br/com/rolo35/api/TestcontainersConfiguration.java` existente:** hoje usa `DockerImageName.parse("postgres:latest")` sem `.withReuse(true)` — trocar pra `postgres:16-alpine` (mesma versão pinada no `docker-compose.yml` e na Architecture Spine) e adicionar `.withReuse(true)` (prática XP explícita do projeto, evita subir Postgres do zero a cada rodada de teste)
   - [x] Front: teste leve de contrato do formulário de login (submit chama `api/auth.ts`, trata sucesso e erro), escrito depois do componente pronto — não é teste de renderização
+
+### Review Findings
+
+- [x] [Review][Patch] CORS com allow-list fixa em `localhost:5173` — tornar `allowedOrigins` configurável via env var (`CORS_ALLOWED_ORIGINS`, default `http://localhost:5173`), decidido em code review em vez de deixar fixo até uma story de deploy [api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java:39-46] — **resolvido**: `@Value("${cors.allowed-origins}")` lido de `CORS_ALLOWED_ORIGINS`, documentado em `.env.example`/`docker-compose.yml`
+- [x] [Review][Patch] JWT secret tem fallback commitado, sem fail-fast em produção, e não está documentado no `.env.example`/`docker-compose.yml` [api/src/main/resources/application.properties:15] — **resolvido**: `security.jwt.secret=${JWT_SECRET}` sem default (falha no boot se ausente, validado via `docker compose run` com `JWT_SECRET` vazio → `WeakKeyException`), documentado em `.env.example`/`docker-compose.yml`, secret real gerado localmente
+- [ ] [Review][Patch] Submissão de login com campo vazio retorna `500` genérico em vez de `400`/mensagem de validação — front desabilita a validação nativa (`noValidate` + `required` contraditórios) e o back não mapeia `MethodArgumentNotValidException` [api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java:19; web/src/pages/LoginPage.tsx:47]
+- [ ] [Review][Patch] Handler genérico de exceção (`500`) não loga nada — qualquer erro inesperado fica invisível em produção (Render free só tem log de request) [api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java:19]
+- [x] [Review][Patch] `AuthService` sem teste unitário dedicado — a garantia da AC5 (senha errada e e-mail inexistente convergem pra mesma exceção) nunca é testada contra o serviço real, só contra o mock no `@WebMvcTest` [api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java] — **resolvido**: `AuthServiceTest` (Mockito puro), efeito colateral de testar o fix do timing side-channel abaixo
+- [ ] [Review][Patch] `common` depende de volta pra `auth` (`GlobalExceptionHandler` importa `CredenciaisInvalidasException` diretamente) — inverte a direção de dependência pretendida; cada domínio futuro (sessões, reservas, pagamentos, ingressos) vai forçar `common` a importar dele também [api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java:3]
+- [ ] [Review][Patch] Sem `AuthenticationEntryPoint`/`AccessDeniedHandler` — rejeição de rota protegida sem token usa o `403`/`401` padrão do Spring Security, não o envelope `{codigo, mensagem}` do resto da API; e nenhum teste cobre esse caminho [api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java:31]
+- [x] [Review][Patch] Timing side-channel no login: e-mail inexistente responde mais rápido que senha errada (só o segundo roda BCrypt), vazando a existência do e-mail por tempo de resposta apesar do corpo/status idênticos (fere o espírito da AC5) [api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java:27-30] — **resolvido**: `AuthService.login` sempre roda `passwordEncoder.matches` (contra um hash dummy quando o e-mail não existe), coberto por `AuthServiceTest.runsPasswordComparisonEvenWhenEmailDoesNotExist`
+- [ ] [Review][Patch] Verificação do esquema `Bearer` é case-sensitive (`startsWith("Bearer ")`), rejeitando clientes que mandem `bearer`/`BEARER` [api/src/main/java/br/com/rolo35/api/auth/JwtAuthenticationFilter.java:30]
+- [x] [Review][Patch] Claim `papel` ausente autentica como `ROLE_null` em vez de falhar fechado [api/src/main/java/br/com/rolo35/api/auth/JwtAuthenticationFilter.java:33-35] — **resolvido**: filtro só autentica quando `papel != null`, coberto por `JwtAuthenticationFilterTest.doesNotAuthenticateWhenPapelClaimIsMissing`
+- [ ] [Review][Patch] Lookup e unicidade de e-mail são case-sensitive — usuário que digita e-mail com caixa diferente da cadastrada recebe "credenciais inválidas" mesmo com senha certa [api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java:27; api/src/main/resources/db/migration/V1__schema.sql]
+- [ ] [Review][Patch] Colunas de timestamp sem timezone (`TIMESTAMP`) enquanto o JPA mapeia `Instant` — `sessoes.data_hora` (horário de sessão de cinema) é exatamente o campo onde isso vira horário errado se o timezone do servidor divergir do dev [api/src/main/resources/db/migration/V1__schema.sql:37]
+- [ ] [Review][Patch] Timeout/cold-start do Render sem mensagem específica — `AbortError` cai na mensagem genérica de erro, perdendo a chance de avisar "servidor iniciando, tente de novo" (o motivo documentado do timeout de 90s existir, AD-2) [web/src/api/client.ts:18]
+- [ ] [Review][Patch] Parse do JSON de sucesso sem tratamento de erro — corpo `200` vazio/malformado gera `SyntaxError` não capturado como `ApiRequestError`, perdendo o status/diagnóstico real [web/src/api/client.ts:39]
+- [ ] [Review][Patch] Falha ao gravar no `localStorage` após login bem-sucedido é reportada como falha de login — navegador restritivo (ex.: modo privado do Safari) faz o usuário já autenticado ver "não foi possível entrar" [web/src/pages/LoginPage.tsx:33-36]
+- [ ] [Review][Patch] `rotaPorPapel` co-exportado no mesmo arquivo do componente `LoginPage` quebra o Fast Refresh (aviso do `oxlint`, `only-export-components`) [web/src/pages/LoginPage.tsx:8]
+
+- [x] [Review][Defer] Sem comportamento `ON DELETE` declarado nas FKs [api/src/main/resources/db/migration/V1__schema.sql] — deferred, pre-existing (nenhuma feature de exclusão existe ainda; default `NO ACTION` do Postgres é seguro por ora)
+- [x] [Review][Defer] `papel` é `String` solta no back (sem enum) e o front confia num cast não validado (`as T` em `client.ts:39`) sem `default` no switch de `rotaPorPapel` [api/src/main/java/br/com/rolo35/api/auth/Usuario.java; web/src/pages/LoginPage.tsx:8] — deferred, pre-existing (endurecimento de type-safety maior que o escopo desta story; nada quebra hoje porque front e back nascem da mesma fonte de verdade)
 
 ## Dev Notes
 
@@ -154,10 +176,89 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 5 (claude-sonnet-5), via Claude Code — persona Amelia (bmad-dev-story)
 
 ### Debug Log References
 
+- `docker compose up` (validação Task 1): Postgres saudável, Flyway aplica `V1__schema.sql`, `GET /actuator/health` → `200`.
+- `docker compose down -v && docker compose up --build` (validação Task 2): Flyway aplica `V1` + `V2` sem erro (`Successfully applied 2 migrations`).
+- `./mvnw test` (back-end completo): 9 testes, 0 falhas — `JwtServiceTest` (3), `AuthControllerTest` (3), `UsuarioRepositorySmokeTest` (1, Testcontainers), `ApiApplicationTests` (1), scratch de geração de hash já removido do código-fonte antes do commit.
+- `curl -X POST /api/auth/login`: credencial válida → `200` + JWT com claim `papel`; senha errada e e-mail inexistente → `401` com envelope `{codigo:"CREDENCIAIS_INVALIDAS", mensagem:"..."}` idêntico nos dois casos; resposta nunca inclui `senhaHash`.
+- `curl -X OPTIONS /api/auth/login -H "Origin: http://localhost:5173"`: preflight CORS responde `200` com `Access-Control-Allow-Origin: http://localhost:5173` e sem `Access-Control-Allow-Credentials`.
+- `npx tsc -b`, `npm run build`, `npm test` (front): typecheck estrito, build de produção e os 2 testes de contrato do `LoginPage` passam.
+- Sem acesso a browser interativo nesta sessão (ferramenta indisponível) — fluxo de login foi validado via testes de contrato (Vitest + Testing Library) e via chamadas HTTP diretas à API, não visualmente num navegador real.
+- **Pós code review** — `docker compose run --rm -e JWT_SECRET= api`: confirma fail-fast (`WeakKeyException`, app não sobe sem `JWT_SECRET`). `docker compose down -v && docker compose up --build` com `.env` real (JWT_SECRET gerado via `openssl rand -base64 48`): sobe normalmente, `/actuator/health` → `200`. `curl` login válido/inválido + preflight CORS repetidos após os fixes: mesmo comportamento de antes, sem regressão. `./mvnw test`: 14 testes, 0 falhas (6 novos desde a última rodada: `JwtAuthenticationFilterTest` com 2 casos, `AuthServiceTest` com 4 casos — ver File List).
+
 ### Completion Notes List
 
+- Corrigido bug pré-existente em `application.properties` (`ddl-auto` sem prefixo `spring.jpa.hibernate.`).
+- Corrigido `TestcontainersConfiguration` pré-existente (`postgres:latest` → `postgres:16-alpine` + `.withReuse(true)`); precisou virar `public` pra ser reaproveitado fora do pacote `br.com.rolo35.api`.
+- Spring Boot 4.1 / Spring Security 7.1 / Spring Framework 7 trouxeram mudanças de pacote não documentadas nos Dev Notes originais, resolvidas durante a implementação: `@WebMvcTest`/`@AutoConfigureMockMvc` migraram pra `org.springframework.boot.webmvc.test.autoconfigure`; `@MockBean` foi substituído por `@MockitoBean` (`org.springframework.test.context.bean.override.mockito`); `UsernamePasswordAuthenticationFilter` vive em `org.springframework.security.web.authentication`; o `ObjectMapper` autoconfigurado pelo Spring MVC é `tools.jackson.databind.ObjectMapper` (Jackson 3), não mais `com.fasterxml.jackson.databind` (esse continua existindo só como dependência transitiva do `jjwt-jackson`).
+- Hashes BCrypt do seed gerados com `BCryptPasswordEncoder` num teste-scratch (`ScratchBCryptHashGeneratorTest`), executado e removido do código-fonte antes de qualquer commit — só o hash resultante ficou em `V2__seed.sql`.
+- `LoginPage` usa o campo `papel` já retornado no corpo do `LoginResponse` pra decidir a rota de redirecionamento, em vez de decodificar o JWT no client — mais simples e evita adicionar uma lib de decode só pra isso nesta story.
+- Front re-scaffoldado via `npm create vite@latest -- --template react-ts` (React 19.2.8, TypeScript ~6.0.2 com `strict: true`, Vite 8); Tailwind 4 configurado via `@tailwindcss/vite` sem `tailwind.config.js`; `react-router` v8 (pacote único).
+- `NODE_OPTIONS=--no-experimental-webstorage` adicionado ao script `test` do front — Node 26 expõe um `localStorage` experimental global que conflita com o do ambiente `jsdom` do Vitest; sem a flag, `localStorage.clear()` falhava nos testes.
+
+**Pós code review (2026-08-10)** — revisão adversarial com 3 camadas paralelas (Blind Hunter, Edge Case Hunter, Acceptance Auditor) achou 23 findings reais (após deduplicação) + 5 falsos positivos descartados. 1 decision-needed (CORS) resolvido com o usuário. 5 dos 15 patches aplicados nesta sessão (críticos, escolhidos pelo usuário — os outros 10 ficaram como action items na story pra tratar depois):
+- JWT secret agora exige `JWT_SECRET` sem fallback (`security.jwt.secret=${JWT_SECRET}`, sem default) — falha no boot se ausente; secret de dev real gerado com `openssl rand -base64 48`, documentado em `.env.example`/`docker-compose.yml`.
+- CORS `allowedOrigins` virou `@Value("${cors.allowed-origins}")`, lido de `CORS_ALLOWED_ORIGINS` (default `http://localhost:5173`).
+- `AuthService.login` sempre roda `passwordEncoder.matches` (contra hash dummy quando o e-mail não existe) — fecha o timing side-channel que deixava e-mail inexistente responder mais rápido que senha errada, o que vazava existência de e-mail por tempo de resposta (feria o espírito da AC5).
+- `JwtAuthenticationFilter` só autentica quando o claim `papel` não é nulo — antes, um token sem esse claim autenticava com `ROLE_null` em vez de falhar fechado.
+- `AuthServiceTest` criado como efeito colateral de testar o fix do timing side-channel — também fecha a lacuna "sem teste unitário dedicado" apontada separadamente na revisão.
+- `maven-surefire-plugin` ganhou `JWT_SECRET` de teste via `environmentVariables` (pom.xml) — necessário porque o `application.properties` principal não tem mais fallback e `@SpringBootTest`s sobem o contexto completo.
+- Detalhe dos 15 patches (5 resolvidos + 10 pendentes) e dos 2 itens deferred está na seção **Review Findings**, acima; os 10 pendentes continuam desmarcados como `- [ ] [Review][Patch]` pra virar trabalho futuro.
+
 ### File List
+
+**Back-end (novo):**
+- `api/src/main/resources/db/migration/V1__schema.sql`
+- `api/src/main/resources/db/migration/V2__seed.sql`
+- `api/src/main/java/br/com/rolo35/api/auth/Usuario.java`
+- `api/src/main/java/br/com/rolo35/api/auth/JwtService.java`
+- `api/src/main/java/br/com/rolo35/api/auth/JwtAuthenticationFilter.java`
+- `api/src/main/java/br/com/rolo35/api/auth/CredenciaisInvalidasException.java`
+- `api/src/main/java/br/com/rolo35/api/auth/repository/UsuarioRepository.java`
+- `api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java`
+- `api/src/main/java/br/com/rolo35/api/auth/controller/AuthController.java`
+- `api/src/main/java/br/com/rolo35/api/auth/dto/LoginRequest.java`
+- `api/src/main/java/br/com/rolo35/api/auth/dto/LoginResponse.java`
+- `api/src/main/java/br/com/rolo35/api/common/ApiError.java`
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java`
+- `api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java`
+- `api/src/test/java/br/com/rolo35/api/auth/JwtServiceTest.java`
+- `api/src/test/java/br/com/rolo35/api/auth/AuthControllerTest.java`
+- `api/src/test/java/br/com/rolo35/api/auth/UsuarioRepositorySmokeTest.java`
+- `api/src/test/java/br/com/rolo35/api/auth/JwtAuthenticationFilterTest.java` (code review — claim `papel` ausente)
+- `api/src/test/java/br/com/rolo35/api/auth/service/AuthServiceTest.java` (code review — timing side-channel + cobertura da AC5)
+
+**Back-end (modificado):**
+- `api/pom.xml` (actuator, JJWT 0.13.0; code review — `maven-surefire-plugin` com `JWT_SECRET` de teste)
+- `api/src/main/resources/application.properties` (fix `ddl-auto`, actuator, JWT secret/expiração; code review — `JWT_SECRET` sem fallback, `CORS_ALLOWED_ORIGINS`)
+- `api/src/test/java/br/com/rolo35/api/TestcontainersConfiguration.java` (`postgres:16-alpine` + `.withReuse(true)` + `public`)
+- `api/src/main/java/br/com/rolo35/api/auth/JwtAuthenticationFilter.java` (code review — não autentica sem claim `papel`)
+- `api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java` (code review — comparação de senha sempre roda, mesmo pra e-mail inexistente)
+- `api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java` (code review — CORS via `@Value`)
+
+**Front-end (removido — re-scaffold Next.js → Vite):**
+- `web/src/app/**`, `web/next.config.ts`, `web/next-env.d.ts`, `web/.next/`, `web/node_modules/`, `web/package-lock.json`, `web/AGENTS.md`, `web/CLAUDE.md`, `web/postcss.config.mjs`, `web/eslint.config.mjs`, `web/public/{file,globe,next,vercel,window}.svg`
+
+**Front-end (novo — scaffold Vite):**
+- `web/index.html`, `web/vite.config.ts`, `web/tsconfig.json`, `web/tsconfig.app.json`, `web/tsconfig.node.json`, `web/.oxlintrc.json`, `web/.gitignore`, `web/.env.example`, `web/public/favicon.svg`
+- `web/src/main.tsx`, `web/src/App.tsx`, `web/src/index.css`
+- `web/src/api/client.ts`, `web/src/api/auth.ts`
+- `web/src/pages/LoginPage.tsx`, `web/src/pages/LoginPage.test.tsx`, `web/src/pages/PapelPlaceholderPage.tsx`
+- `web/src/test/setup.ts`
+
+**Front-end (modificado):**
+- `web/package.json` (dependências: react-router, tailwindcss, @tailwindcss/vite, @fontsource/*, vitest, testing-library, jsdom)
+- `web/tsconfig.app.json` (`strict: true` explícito)
+
+**Outros:**
+- `.gitignore` (adiciona `dist/` na seção Node)
+- `README.md` (comandos de setup, dados de teste, limitação Render)
+- `_bmad-output/implementation-artifacts/1-1-fundacao-e-login-com-papel-fixo.md` (frontmatter `baseline_commit`, tasks marcadas, Review Findings, Dev Agent Record)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (status da story)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (novo — 2 itens deferred da code review)
+- `.env.example` (code review — `JWT_SECRET`, `CORS_ALLOWED_ORIGINS`)
+- `.env` (não versionado — code review — `JWT_SECRET` real gerado, `CORS_ALLOWED_ORIGINS`)
+- `docker-compose.yml` (code review — `JWT_SECRET`/`CORS_ALLOWED_ORIGINS` repassados pro serviço `api`)
