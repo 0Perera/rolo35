@@ -28,6 +28,12 @@ assentos, pagamento simulado e ingresso com QR assinado.
 > tráfego e leva ~1 min pra acordar no próximo request. O banco Postgres free
 > também expira depois de um tempo — conferir prazo no dashboard do Render.
 
+> ⚠️ **`TZ` é obrigatória no deploy.** O horário da sessão é wall-clock sem fuso: o
+> organizador escolhe "20:00" e é isso que vai pro banco. API, banco e navegador
+> precisam concordar sobre que "20:00" é esse. O `Dockerfile` e o compose já fixam
+> `TZ=America/Sao_Paulo`; no Render, configure a mesma variável no serviço. Sem ela o
+> container roda em UTC e rejeita como "no passado" qualquer horário nas próximas 3h.
+
 ## Dados de teste
 
 4 perfis semeados via `V2__seed.sql`, senha em texto plano abaixo (hash BCrypt no
