@@ -211,7 +211,7 @@ seções de Uso de IA e Decisões técnicas do README final.
 ## `lock_timeout` por transação via `SET LOCAL` nativo, não hint JPA (Story 2.1)
 
 - **Decisão**: `SessaoService.criar` emite `SET LOCAL lock_timeout = '3s'` via `EntityManager.createNativeQuery(...).executeUpdate()`, dentro da mesma transação `@Transactional` que faz o `SELECT ... FOR UPDATE` da sala — não usa o hint JPA `jakarta.persistence.lock.timeout`.
-- **Por quê**: AD-5 pede um timeout próprio e curto pra essa transação de lock, sem depender de configuração global de `lock_timeout` do Postgres (que afetaria toda conexão do pool). `SET LOCAL` escopado à transação é a forma direta e sem ambiguidade de tradução Hibernate/driver — evita apostar que o hint JPA se traduz certo pra essa combinação de Hibernate 7.4/Spring Boot 4.1/Postgres sem verificação prévia. Validado via teste de concorrência real com Testcontainers (Story 2.1, Task 7): sem o `SELECT ... FOR UPDATE`, o teste falha de forma determinística (2 sessões criadas em vez de 1) — confirma que a proteção é lock de banco real, não checagem isolada de aplicação.
+- **Por quê**: AD-5 pede um timeout próprio e curto pra essa transação de lock, sem depender de configuração global de `lock_timeout` do Postgres (que afetaria toda conexão do pool). `SET LOCAL` escopado à transação é a forma direta e sem ambiguidade de tradução Hibernate/driver — evita apostar que o hint JPA se traduz certo pra essa combinação de Hibernate 7.4/Spring Boot 4.1/Postgres sem verificação prévia. O que o teste de concorrência com Testcontainers (Story 2.1, Task 7) valida é o `SELECT ... FOR UPDATE`: trocando-o por um `findById` sem lock, o teste falha de forma determinística (2 sessões criadas em vez de 1), confirmando que a proteção é lock de banco real e não checagem isolada de aplicação. **O estouro do `lock_timeout` em si não é exercitado por teste** — com duas threads e transação de dezenas de ms, os 3s nunca são atingidos. O que o code review acrescentou foi o tratamento do desfecho: `PessimisticLockingFailureException` passou a ter handler dedicado (`503 SALA_OCUPADA`), porque antes ele caía no handler genérico e virava `500 ERRO_INTERNO` — um 500 opaco pra uma requisição válida que só perdeu a vez na fila.
 
 ---
 
@@ -226,5 +226,33 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 - **Decisão**: `GlobalExceptionHandler` passou a agrupar `MethodArgumentNotValidException` no mesmo handler de `PARAMETRO_INVALIDO` (`400`), junto com `ParametroInvalidoException` e `MissingServletRequestParameterException`.
 - **Por quê**: antes da Story 2.1, qualquer falha de `@Valid` em qualquer DTO do projeto (inclusive `LoginRequest`, já existente desde a Story 1.1) caía no handler genérico `Exception.class` e virava `500 ERRO_INTERNO` em vez de `400` — um bug latente que nunca tinha sido exercitado porque nenhum DTO anterior tinha validação de campo capaz de falhar via `@Valid` de um jeito que chegasse até esse ponto. `CriarSessaoRequest` é o primeiro DTO da Story 2.1 com validação de verdade (`@NotNull`/`@NotBlank`/`@Positive`), então o gap ficou visível durante o RED da Task 4 — o handler novo corrige os dois casos de uma vez. Mudança puramente aditiva, sem regressão, registrada aqui porque o blast radius toca o domínio `auth` de raspão.
+
+---
+
+## Fuso horário fixado por variável de ambiente, não por conversão no código (Story 2.1, code review)
+
+- **Decisão**: `TZ=America/Sao_Paulo` no `Dockerfile` da API, nos dois serviços do `docker-compose.yml` e documentado no `.env.example` pra ser configurado também no Render. `sessoes.data_hora` continua `LocalDateTime`/`TIMESTAMP` sem zona, e o front continua enviando a string local do `<input type="datetime-local">` sem conversão.
+- **Por quê**: o back-end comparava `request.dataHora()` (wall-clock do navegador do organizador) com `LocalDateTime.now()` (fuso default do JVM). Em dev os dois coincidem; em produção o container roda em UTC, então uma sessão marcada para hoje às 20:00 em BRT era comparada com 23:00 e rejeitada como `DATA_HORA_NO_PASSADO` — toda a janela das próximas ~3h ficava inacessível, e o mesmo desvio deslocava o buffer de 4h. Alinhar os três relógios por configuração é uma linha; a alternativa correta em multi-timezone (front converte pra UTC, entidade vira `Instant`, coluna vira `TIMESTAMPTZ`) mexeria em schema, DTO, front e toda a suíte, sem ganho real pra um produto de cinema que opera num fuso só. A premissa aceita — operação single-timezone — fica registrada aqui em vez de implícita. `SessaoServiceTest.aceitaDataHoraPoucasHorasAFrenteDoRelogioLocal` é a guarda de regressão: quem trocar a comparação por uma referência em UTC quebra o teste.
+
+---
+
+## Papel checado por `@PreAuthorize` no método, não por matcher de path (Story 2.1, code review)
+
+- **Decisão**: `@EnableMethodSecurity` em `SecurityConfig` e `@PreAuthorize("hasRole('ORGANIZADOR')")` em `SessaoController.criar`. O `requestMatchers(POST, "/api/sessoes").hasRole("ORGANIZADOR")` foi removido; `SecurityConfig` decide só autenticação (`permitAll` no login/health, `authenticated` no resto).
+- **Por quê**: a regra presa à string exata `POST /api/sessoes` deixava todo o resto de `/api/sessoes/**` caindo no `anyRequest().authenticated()`. Na prática, o `PUT /api/sessoes/{id}` da Story 2.2 e o `GET` de listagem da 2.3 nasceriam abertos a CLIENTE e PORTARIA sem nenhum teste falhar — a proteção dependia de alguém lembrar de editar `SecurityConfig` a cada rota nova. Com a regra ao lado do endpoint, rota sem anotação não herda permissão por acidente. Efeito colateral que precisou de tratamento: `@PreAuthorize` nega **dentro** do `DispatcherServlet`, então a `AccessDeniedException` chega no `@RestControllerAdvice` em vez de passar pelo `RestAccessDeniedHandler` — sem um handler dedicado viraria `500`. Os dois caminhos (negação na filter chain e negação no método) agora devolvem o mesmo envelope `403 NAO_AUTORIZADO`.
+
+---
+
+## Capacidade derivada do mapa de assentos, não de `linhas × colunas` (Story 2.1, code review)
+
+- **Decisão**: `SessaoService` calcula `capacidade = assentos.size()` a partir de `assentoRepository.findBySalaId(...)`, e rejeita com `SalaSemAssentosException` (`409 SALA_SEM_ASSENTOS`) uma sala sem mapa cadastrado.
+- **Por quê**: a versão anterior usava `sala.getLinhas() * sala.getColunas()` enquanto as linhas de `assento_sessao` vinham de `findBySalaId` — duas fontes independentes, sem constraint no schema ligando as dimensões da sala à contagem em `assentos`. Uma sala com dimensões declaradas mas mapa incompleto criaria a sessão anunciando "capacidade 40" com menos (ou zero) assentos vendáveis, e o defeito só apareceria no mapa de assentos da Epic 3. A AC1 pede literalmente capacidade "derivada do mapa de assentos da sala" — é o mapa que determina quantos ingressos existem pra vender.
+
+---
+
+## `AssentoSessao` implementa `Persistable` (Story 2.1, code review)
+
+- **Decisão**: `AssentoSessao` implementa `Persistable<AssentoSessaoId>` com flag `@Transient novo`, marcada `false` em `@PostPersist`/`@PostLoad`. O `@Builder` do Lombok saiu; o service usa o construtor explícito.
+- **Por quê**: com `@EmbeddedId` atribuído em código, o `isNew()` padrão do Spring Data olha só pro id não-nulo e conclui "já existe" — o `saveAll` vira `merge()`, que dispara um `SELECT` por linha antes de cada `INSERT`. Pra "Sala 1" isso são 40 selects + 40 inserts **dentro da transação que segura o lock pessimista da sala**, exatamente o oposto do que AD-5 pede (transação de lock a mais curta possível) e o padrão N+1 que os non-negotiables proíbem. Escala linear com o tamanho da sala: uma sala de 300 lugares seriam 600 statements sob lock, aumentando a chance de o `lock_timeout` de 3s estourar em quem está na fila.
 
 ---
