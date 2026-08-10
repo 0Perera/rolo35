@@ -1,12 +1,9 @@
 package br.com.rolo35.api.sessoes.catalogo;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.time.Duration;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,21 +17,9 @@ public class TmdbClient {
     private final RestClient restClient;
     private final String apiToken;
 
-    @Autowired
-    public TmdbClient(@Value("${tmdb.api.token}") String apiToken) {
-        this(defaultBuilder(), apiToken);
-    }
-
-    TmdbClient(RestClient.Builder builder, String apiToken) {
+    public TmdbClient(RestClient.Builder builder, @Value("${tmdb.api.token}") String apiToken) {
         this.apiToken = apiToken;
         this.restClient = builder.baseUrl(BASE_URL).build();
-    }
-
-    private static RestClient.Builder defaultBuilder() {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofSeconds(5));
-        requestFactory.setReadTimeout(Duration.ofSeconds(8));
-        return RestClient.builder().requestFactory(requestFactory);
     }
 
     public List<FilmeDto> buscarPorTitulo(String query) {
