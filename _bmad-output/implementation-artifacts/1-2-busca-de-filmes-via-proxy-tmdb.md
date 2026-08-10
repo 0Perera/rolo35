@@ -4,7 +4,7 @@ baseline_commit: 3c33fcf
 
 # Story 1.2: Busca de Filmes via Proxy TMDb
 
-Status: review
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
