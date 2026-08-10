@@ -4,7 +4,7 @@ baseline_commit: 56d31d0
 
 # Story 2.1: Criação de Sessão com Bloqueio de Conflito de Horário
 
-Status: ready-for-dev
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -102,11 +102,11 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
   - [x] Depois do componente pronto: `CriarSessaoPage.test.tsx` (vitest + testing-library) — mocka `api/sessoes.ts`, cobre estados idle/loading/vazio/erro da busca de salas, formato do payload de submit, estados sucesso/erro pós-submit, guarda de state ausente.
   - [x] Commit: `feat(sessoes): tela de criação de sessão (sala, data/hora, preço)`
 
-- [ ] **Task 10 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa (back-end `mvn test`, incluindo os testes com Testcontainers; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
-  - [ ] Registrar em `docs/decisions.md`: posição de `AssentoSessao` em `sessoes` (não `reservas`) e por quê; mecanismo de `lock_timeout` via `SET LOCAL` dentro da transação; justificativa de `GET /api/salas`; o fix incidental de `MethodArgumentNotValidException` no `GlobalExceptionHandler`.
-  - [ ] Atualizar o Status desta story pra `done` (ou `review`, se o fluxo do projeto passar por `code-review` antes — seguir o mesmo ciclo já usado nas Stories 1.1/1.2).
-  - [ ] Commit: `docs(sessoes): confirmação final e fecha Story 2.1 pra review`
+- [x] **Task 10 — Confirmação final (sem código novo, checklist de saída)**
+  - [x] Rodar a suíte completa (back-end `mvn test`, incluindo os testes com Testcontainers; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
+  - [x] Registrar em `docs/decisions.md`: posição de `AssentoSessao` em `sessoes` (não `reservas`) e por quê; mecanismo de `lock_timeout` via `SET LOCAL` dentro da transação; justificativa de `GET /api/salas`; o fix incidental de `MethodArgumentNotValidException` no `GlobalExceptionHandler`.
+  - [x] Atualizar o Status desta story pra `done` (ou `review`, se o fluxo do projeto passar por `code-review` antes — seguir o mesmo ciclo já usado nas Stories 1.1/1.2).
+  - [x] Commit: `docs(sessoes): confirmação final e fecha Story 2.1 pra review`
 
 ## Dev Notes
 
@@ -160,6 +160,8 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
 
 ### Agent Model Used
 
+Claude Sonnet 5 (bmad-dev-story, persona Amelia)
+
 ### Debug Log References
 
 ### Completion Notes List
@@ -173,6 +175,7 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
 - Task 7: `SessaoConcorrenciaConflitoTest` (Testcontainers, `SessaoService` real) dispara duas threads via `ExecutorService`+`CyclicBarrier(2)` pro mesmo `salaId` (Sala 1, lida via `salaRepository.findAll()` em vez de hardcodar id) com `dataHora` idêntico em `now()+30 dias` (longe do seed em `+7 dias`). Verificação de força do teste feita manualmente: trocado temporariamente `findByIdForUpdate` por `findById` (sem lock) — o teste falhou como esperado (2 sessões criadas em vez de 1), confirmando que ele só passa por causa do lock de banco real, não por sorte de timing; revertido antes do commit. Nenhum ajuste em `SessaoService`/repositories foi necessário — o `lock_timeout` de 3s da Task 3 nunca é atingido nesse cenário porque a segunda thread espera só o tempo da primeira transação completar (~dezenas de ms). Consulta direta ao banco ao final confirma exatamente 1 linha em `sessoes` pra essa sala+horário.
 - Task 8: `BuscaFilmesPage.tsx` ganhou `useNavigate` e um botão "Criar sessão" por card, navegando pra `/organizador/sessoes/nova` com `navigate(path, { state: filme })`. Teste novo em `BuscaFilmesPage.test.tsx` renderiza a página dentro de `<Routes>` com uma rota sentinela em `/organizador/sessoes/nova` que expõe `useLocation().state` via `data-testid`, confirmando o filme certo chega no state — sem mockar `react-router`.
 - Task 9: `web/src/api/sessoes.ts` (`Sala`, `Sessao`, `CriarSessaoRequest`, `listarSalas`, `criarSessao`) segue o padrão fino de `filmes.ts`/`auth.ts`. `CriarSessaoPage.tsx`: guarda de `useLocation().state` ausente (mensagem + link de volta, sem quebrar); busca de salas com estados `loading/vazio/erro/pronto`; submit combina snapshot do filme (route state) + campos do form (`salaId` como number, `dataHora` do `<input type="datetime-local">` enviado como string local com segundos anexados — sem conversão de timezone via `Date`, porque o back-end espera `LocalDateTime` sem zona) numa máquina `idle/loading/sucesso/erro`; sucesso mostra confirmação inline com link "voltar à busca". Precisou de um re-check de `if (!filme) return` **dentro** de `handleSubmit` — o TypeScript não propaga o narrowing do guard externo pra dentro de uma function declaration definida depois, mesmo sendo `const`; sem o re-check, `tsc -b` falhava com "filme is possibly null" nos campos do payload. Só usa tokens Tailwind já existentes, nenhum novo. `npm run build` e `npx oxlint` confirmados limpos (nenhum warning novo além do pré-existente em `LoginPage.tsx`).
+- Task 10: suíte completa verde — back-end `mvn test` (40 testes, incluindo os 2 cenários Testcontainers: smoke test de repository e concorrência de conflito de horário), front-end `npm test`/vitest (18 testes), `npm run build` e `npx oxlint` sem warning novo. 4 decisões registradas em `docs/decisions.md` (posição de `AssentoSessao`, `lock_timeout` via `SET LOCAL`, `GET /api/salas`, fix incidental de `MethodArgumentNotValidException`). Status da story movida pra `review` — segue o mesmo ciclo das Stories 1.1/1.2 (code-review antes de `done`).
 
 ### File List
 
@@ -212,3 +215,4 @@ Cada task abaixo termina em **um commit próprio**, só com o que foi feito naqu
 - `web/src/pages/CriarSessaoPage.tsx` (novo)
 - `web/src/pages/CriarSessaoPage.test.tsx` (novo)
 - `web/src/App.tsx` (update: rota /organizador/sessoes/nova)
+- `docs/decisions.md` (update: 4 novas decisões da Story 2.1)

@@ -200,3 +200,31 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: `spring-boot-starter-webmvc` traz a *classe* `RestClient` (via `spring-web`), mas não autoconfigura o *bean* `RestClient.Builder` — isso só vem do módulo `spring-boot-restclient`. A primeira tentativa evitou essa dependência, mas o custo disso foi maior que o benefício: código não-idiomático (dois construtores, um deles existindo só pra contornar teste), timeout hard-coded em vez de configurável por ambiente, e — o motivo decisivo — esse padrão de "construir `RestClient` na mão" teria que ser **reaprendido e reaplicado** em qualquer story futura que precise falar com uma segunda API externa, herdando a mesma gambiarra em vez de reusar um caminho padrão já resolvido pelo framework. `spring-boot-starter-restclient` é um módulo oficial do próprio Spring Boot (não uma lib terceira) — o custo real de adicioná-lo (uma linha no `pom.xml`, baixo risco de CVE/manutenção) é pequeno perto do ganho.
 
 ---
+
+## `AssentoSessao` no pacote `sessoes`, não em `reservas` (Story 2.1)
+
+- **Decisão**: `AssentoSessao`/`AssentoSessaoId`/`AssentoSessaoRepository` vivem em `br.com.rolo35.api.sessoes` (e `sessoes/repository`), não em `reservas` como o Structural Seed da Architecture Spine sugere pelo nome da tabela (`assento_sessao`).
+- **Por quê**: AD-3 exige popular `assento_sessao` na mesma transação do insert de `sessoes` — isso é código do domínio `sessoes`. AD-1 fixa a direção de dependência como `reservas → sessoes` (nunca o inverso); se o repository vivesse em `reservas`, `sessoes` teria que depender de `reservas` só pra popular a tabela na criação da sessão, violando o grafo de dependência. Colocar a entidade onde ela é escrita primeiro — não onde parece "pertencer" conceitualmente pelo nome — é a única ordem que não viola AD-1; `reservas` (Epic 3) poderá chamar esse repository livremente depois, porque já depende de `sessoes`. Mesmo tratamento já dado ao pacote `sessoes.catalogo` na Story 1.2.
+
+---
+
+## `lock_timeout` por transação via `SET LOCAL` nativo, não hint JPA (Story 2.1)
+
+- **Decisão**: `SessaoService.criar` emite `SET LOCAL lock_timeout = '3s'` via `EntityManager.createNativeQuery(...).executeUpdate()`, dentro da mesma transação `@Transactional` que faz o `SELECT ... FOR UPDATE` da sala — não usa o hint JPA `jakarta.persistence.lock.timeout`.
+- **Por quê**: AD-5 pede um timeout próprio e curto pra essa transação de lock, sem depender de configuração global de `lock_timeout` do Postgres (que afetaria toda conexão do pool). `SET LOCAL` escopado à transação é a forma direta e sem ambiguidade de tradução Hibernate/driver — evita apostar que o hint JPA se traduz certo pra essa combinação de Hibernate 7.4/Spring Boot 4.1/Postgres sem verificação prévia. Validado via teste de concorrência real com Testcontainers (Story 2.1, Task 7): sem o `SELECT ... FOR UPDATE`, o teste falha de forma determinística (2 sessões criadas em vez de 1) — confirma que a proteção é lock de banco real, não checagem isolada de aplicação.
+
+---
+
+## `GET /api/salas` sem FR própria — infraestrutura mínima pra AC1 funcionar ponta a ponta (Story 2.1)
+
+- **Decisão**: endpoint `GET /api/salas` (autenticado, sem restrição de papel, sem CRUD) foi criado mesmo sem nenhuma FR do PRD pedir gestão de salas.
+- **Por quê**: sem ele, a tela de criação de sessão do organizador teria que hardcodar `salaId=1` — código morto/fake que quebraria silenciosamente no dia em que uma segunda sala fosse semeada. É só a infraestrutura mínima real pra AC1 (Story 2.1) funcionar de ponta a ponta pela UI, não abre escopo novo de gestão de salas.
+
+---
+
+## Fix incidental: `MethodArgumentNotValidException` sem handler dedicado (Story 2.1)
+
+- **Decisão**: `GlobalExceptionHandler` passou a agrupar `MethodArgumentNotValidException` no mesmo handler de `PARAMETRO_INVALIDO` (`400`), junto com `ParametroInvalidoException` e `MissingServletRequestParameterException`.
+- **Por quê**: antes da Story 2.1, qualquer falha de `@Valid` em qualquer DTO do projeto (inclusive `LoginRequest`, já existente desde a Story 1.1) caía no handler genérico `Exception.class` e virava `500 ERRO_INTERNO` em vez de `400` — um bug latente que nunca tinha sido exercitado porque nenhum DTO anterior tinha validação de campo capaz de falhar via `@Valid` de um jeito que chegasse até esse ponto. `CriarSessaoRequest` é o primeiro DTO da Story 2.1 com validação de verdade (`@NotNull`/`@NotBlank`/`@Positive`), então o gap ficou visível durante o RED da Task 4 — o handler novo corrige os dois casos de uma vez. Mudança puramente aditiva, sem regressão, registrada aqui porque o blast radius toca o domínio `auth` de raspão.
+
+---
