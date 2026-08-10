@@ -1,7 +1,7 @@
 # Rolo 35
 
-Plataforma de eventos e ingressos. Desafio Elite Dev 2026
-(Verzel).
+Plataforma de eventos e ingressos com foco em cinema: catálogo de filmes, mapa de
+assentos, pagamento simulado e ingresso com QR assinado.
 
 ## Status
 
@@ -10,7 +10,7 @@ Plataforma de eventos e ingressos. Desafio Elite Dev 2026
 ## Stack
 
 - Back-end: Java + Spring Boot, PostgreSQL, Flyway
-- Front-end: Next.js (App Router)
+- Front-end: Vite + React, TypeScript, Tailwind CSS
 - Metodologia: XP / TDD
 
 ## Como rodar

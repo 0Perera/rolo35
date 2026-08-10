@@ -36,6 +36,14 @@ coverage/
 CLAUDE.md
 .claude/
 
+# --- Artefatos de processo do BMad (rastro de trabalho, não entregável) ---
+_bmad-output/**/reconcile-*.md
+_bmad-output/**/review-*.md
+
+# --- BMad: tooling/instalador (não é entregável do projeto) ---
+_bmad/
+*.user.toml
+
 # --- IDEs e editores ---
 .idea/
 *.iml
