@@ -63,9 +63,17 @@ class SessaoListagemRepositoryTest {
         return new CriarSessaoRequest(salaId, 550L, titulo, null, null, null, dataHora, new BigDecimal("25.00"));
     }
 
+    private Long salaUmId() {
+        return salaRepository.findAll().stream()
+                .filter(sala -> "Sala 1".equals(sala.getNome()))
+                .findFirst()
+                .orElseThrow()
+                .getId();
+    }
+
     @Test
     void listarPublicadasTrazSessaoComVagaESessaoEsgotadaSemN1() {
-        Long salaId = salaRepository.findAll().get(0).getId();
+        Long salaId = salaUmId();
         LocalDateTime base = LocalDateTime.now().plusDays(120).withNano(0);
 
         var sessaoComVaga = sessaoService.criar(requestCom(salaId, TITULO_LIVRE, base), ORGANIZADOR);
@@ -82,15 +90,15 @@ class SessaoListagemRepositoryTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(projecaoComVaga.getSalaNome()).isEqualTo("Sala 1");
-        assertThat(projecaoComVaga.getCapacidade()).isEqualTo(40);
-        assertThat(projecaoComVaga.getAssentosLivres()).isEqualTo(40);
+        assertThat(projecaoComVaga.getCapacidade()).isEqualTo(80);
+        assertThat(projecaoComVaga.getAssentosLivres()).isEqualTo(80);
 
         var projecaoEsgotada = listagem.stream()
                 .filter(p -> TITULO_ESGOTADA.equals(p.getTitulo()))
                 .findFirst()
                 .orElseThrow();
         assertThat(projecaoEsgotada.getSalaNome()).isEqualTo("Sala 1");
-        assertThat(projecaoEsgotada.getCapacidade()).isEqualTo(40);
+        assertThat(projecaoEsgotada.getCapacidade()).isEqualTo(80);
         assertThat(projecaoEsgotada.getAssentosLivres()).isEqualTo(0);
     }
 
@@ -99,7 +107,7 @@ class SessaoListagemRepositoryTest {
     // já que o service não permite criar uma sessão com data passada.
     @Test
     void listarPublicadasNaoTrazSessaoComDataHoraNoPassado() {
-        Long salaId = salaRepository.findAll().get(0).getId();
+        Long salaId = salaUmId();
         Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
         Sessao sessaoPassada = Sessao.builder()
                 .organizadorId(organizadorId)
