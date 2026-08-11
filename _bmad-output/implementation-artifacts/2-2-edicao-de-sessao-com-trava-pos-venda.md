@@ -102,6 +102,34 @@ Claude Sonnet 5 (bmad-agent-dev, persona Amelia)
 - Front-end: 38 testes verdes (`npm test`), `npm run build` e `npx oxlint` limpos (só o warning pré-existente de `LoginPage.tsx`).
 - Decisões registradas em `docs/decisions.md`: reescrita de `assento_sessao` na troca de sala; ausência de teste de concorrência edição-vs-venda por falta de par real do lado de Epic 4.
 
+### Review Findings
+
+Code review de 2026-08-10 — 3 camadas (adversarial geral, edge cases, auditoria de aceite) sobre `git diff 7bb65d2..HEAD`. 13 achados após deduplicação, 1 descartado como ruído.
+
+- [ ] [Review][Decision] Ordem `dataHora` vs ownership em `editar()` pode devolver `400` em vez do `403` da AC2 — `SessaoService.java:450-452` valida `dataHora` no futuro **antes** de checar dono da sessão (mesma ordem fail-fast-antes-do-lock da Story 2.1, AD-5). Uma edição malformada (data no passado) mirando o ID de outro organizador recebe `400 DATA_HORA_NO_PASSADO`, não `403`, porque a checagem de ownership só roda depois do lock. Decisão: reordenar (checa dono antes de validar `dataHora`, exige buscar/travar a sessão antes de qualquer validação de corpo) vs. manter a ordem atual documentando como desvio deliberado (mesmo padrão do Dev Note "ordem lock → validação, invertida deliberadamente" da Story 2.1)?
+
+- [ ] [Review][Patch] Sem índice em `sessoes.organizador_id` pra `findByOrganizadorId` [`api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java`] — viola o non-negotiable de índice em coluna de filtro/join de tela (CLAUDE.md). Adicionar migration com `CREATE INDEX idx_sessoes_organizador_id ON sessoes (organizador_id)`.
+
+- [ ] [Review][Patch] `buscarPorId` calcula `capacidade` via `assentoSessaoRepository.findByIdSessaoId(id).size()`, enquanto `listarMinhas`/`criar` derivam do mapa de assentos da sala (`assentoRepository.findBySalaId`) — duas fontes pra um mesmo conceito, sem nada garantindo que fiquem iguais [`api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java`]. Unificar `buscarPorId` pra usar a mesma fonte (mapa de assentos da sala).
+
+- [ ] [Review][Patch] `editar()` trava a sala com `findByIdForUpdate` e roda `existeConflitanteExcluindo` mesmo quando nem `salaId` nem `dataHora` mudam — lock desnecessário na sala pra uma edição só de `preco`/`titulo`/`sinopse`, contrariando o texto da Task 2 ("se sala mudou...") e o princípio de transação de lock mais curta possível (AD-5) [`api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java`]. Só travar+checar conflito quando `salaId` ou `dataHora` mudarem.
+
+- [ ] [Review][Patch] `listarMinhas`/`buscarPorId` sem teste unitário direto em `SessaoServiceTest` (só cobertos indiretamente via controller com o service mockado) — a regra de ownership de `buscarPorId` (AC2/AC5) nunca é de fato executada por nenhum teste. `SessaoGestaoRepositoryTest.findByOrganizadorIdTrazSoAsProprias` também não prova a exclusão de sessão de outro organizador (só prova a presença da própria) [`api/src/test/java/br/com/rolo35/api/sessoes/service/SessaoServiceTest.java`, `api/src/test/java/br/com/rolo35/api/sessoes/repository/SessaoGestaoRepositoryTest.java`]. Adicionar testes diretos de `listarMinhas`/`buscarPorId` no service e o caso negativo no repository test.
+
+- [ ] [Review][Patch] `EditarSessaoPage` não checa `sessao.editavel` antes de renderizar o form — quem chega numa sessão travada (link antigo, back-button, favorito) vê o formulário inteiro liberado e só descobre a trava depois de submeter e tomar `409` [`web/src/pages/EditarSessaoPage.tsx`]. Checar `sessao.editavel` após o load e mostrar mensagem de trava sem formulário quando `false`.
+
+- [x] [Review][Defer] Troca de sala em `editar()` apaga `assento_sessao` sem checar hold ativo (`RESERVADO`/`reservas` não confirmada) [`api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java`] — deferred, pre-existing (hoje inalcançável: Epic 3, que cria reservas/holds, ainda não existe em código). **Ação obrigatória pra Epic 3**: quando reserva com hold temporário existir, `editar()` precisa checar hold ativo além de `existeIngressoConfirmado` antes de reescrever `assento_sessao`.
+
+- [x] [Review][Defer] `findByOrganizadorId` usa `INNER JOIN assentos` — uma sessão cuja sala não tenha assento cadastrado some da listagem de gestão em vez de aparecer com `capacidade=0` [`api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java`] — deferred, pre-existing (mesma classe de achado já registrada no deferred-work da Story 2.3 pra `listarPublicadas`; hoje inalcançável porque `criar()` rejeita sala sem assentos).
+
+- [x] [Review][Defer] Ordem de lock assimétrica entre `criar()` (só sala) e `editar()` (sessão, depois sala) [`api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java`] — deferred, pre-existing risk pattern, nenhum cenário concreto de deadlock identificado hoje (não há caminho que trave sala antes de sessão em nenhum outro lugar do código).
+
+- [x] [Review][Defer] `findByOrganizadorId` ordena só por `s.data_hora`, sem critério de desempate (`s.id`) — duas sessões no mesmo horário podem reordenar entre requisições [`api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java`] — deferred, cosmético.
+
+- [x] [Review][Defer] Matriz de testes de segurança não cobre toda combinação papel×endpoint (falta `PORTARIA` em `/minhas` e `PUT`, `CLIENTE` em `GET /{id}`) [`api/src/test/java/br/com/rolo35/api/sessoes/SessaoSecurityTest.java`] — deferred, valor marginal baixo já que a mesma anotação `@PreAuthorize("hasRole('ORGANIZADOR')")` já está provada em pelo menos uma combinação por endpoint.
+
+- [x] [Review][Defer] `EditarSessaoPage` não espelha a restrição `@Digits(integer=8, fraction=2)` do back no campo preço — só descobre no round-trip da API [`web/src/pages/EditarSessaoPage.tsx`] — deferred, cosmético, back já rejeita com segurança.
+
 ### File List
 
 - `api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoGestaoProjection.java` (novo)
