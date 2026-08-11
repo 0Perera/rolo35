@@ -277,3 +277,17 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: nenhuma AC original da Story 2.3 pedia filtro temporal (só status esgotada/vaga), mas sem ele a listagem acumularia toda sessão já ocorrida pra sempre — "Sessões em cartaz" misturaria filmes de meses atrás com os futuros, indefinidamente, sem nenhuma forma de esconder o que já passou. Levantado no code review adversarial da story (Blind Hunter + Edge Case Hunter, achado independente pelos dois); usuário decidiu corrigir na hora em vez de deferir. Filtro na própria query nativa mantém a garantia de uma única consulta (AC2), sem segunda chamada nem filtro em memória.
 
 ---
+
+## Edição de sessão reescreve `assento_sessao` inteiro quando a sala muda (Story 2.2)
+
+- **Decisão**: `SessaoService.editar` apaga todas as linhas de `AssentoSessao` da sessão e insere uma linha `LIVRE` por assento da sala nova sempre que `salaId` muda. A checagem de trava pós-venda (`existeIngressoConfirmado`) roda antes desse passo, na mesma transação, e bloqueia a edição inteira caso exista qualquer ingresso.
+- **Por quê**: `capacidade` e a listagem pública (Story 2.3) dependem de `assento_sessao` bater com a sala atual da sessão. Como a trava já garante que nenhum assento está `VENDIDO` nem existe reserva confirmada nesse ponto, apagar e recriar o mapa de assentos pra sala nova é seguro — não existe estado de venda pra perder.
+
+---
+
+## Sem teste de concorrência edição-vs-venda dedicado (Story 2.2)
+
+- **Decisão**: `SessaoService.editar` replica o mesmo par lock+checagem (`findByIdForUpdate` + `existeConflitanteExcluindo`) que `criar` usa pra conflito de horário — ação obrigatória registrada no deferred-work do code review da Story 2.1 — mas não ganhou um teste de concorrência Testcontainers dedicado pra provar a trava pós-venda contra uma confirmação de ingresso disparada em paralelo.
+- **Por quê**: não existe ainda código de confirmação de pagamento/emissão de ingresso (Epic 4) rodando em paralelo pra esse teste correr contra de verdade — fabricar um teste hoje só provaria a checagem isolada de `existeIngressoConfirmado` em memória, não uma garantia real de concorrência. Revisitar quando a Epic 4 existir: nesse ponto, editar uma sessão e confirmar um pagamento pra ela ao mesmo tempo passam a ser um cenário real de corrida, e aí sim vale um teste Testcontainers nos moldes de `SessaoConcorrenciaConflitoTest`.
+
+---
