@@ -2,6 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { login, type Papel } from '../api/auth';
 import { ApiRequestError } from '../api/client';
+import { Alert } from '../components/Alert';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { PageShell } from '../components/PageShell';
+import { TextField } from '../components/TextField';
 
 type EstadoLogin = 'idle' | 'loading' | 'error';
 
@@ -40,52 +45,54 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-sepia-950 px-4 font-body text-cream-100">
-      <div className="w-full max-w-sm rounded border border-gold-500/40 bg-sepia-900 p-8">
-        <h1 className="mb-6 font-display text-3xl tracking-wide text-amber-300">Rolo 35</h1>
+    <PageShell variant="auth">
+      <div className="w-full max-w-[440px]">
+        <div className="mb-7 text-center">
+          <div
+            className="font-display text-6xl leading-none text-flame-400 [text-shadow:4px_4px_0_var(--color-flame-600),8px_8px_0_rgba(0,0,0,0.5)]"
+          >
+            ROLO&nbsp;35
+          </div>
+          <div className="mt-3 font-mono text-xl tracking-[6px] text-cyan-400">BILHETERIA · 35MM</div>
+        </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">E-mail</span>
-            <input
+        <Card className="p-8 shadow-[10px_10px_0_var(--color-flame-400),10px_10px_0_3px_var(--color-ink-950)]">
+          <div className="font-display text-2xl">ENTRE NA SESSÃO</div>
+          <div className="my-4 h-1 bg-gradient-to-r from-flame-600 via-flame-500 to-flame-400" />
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+            <TextField
+              id="email"
+              label="E-MAIL"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
             />
-          </label>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">Senha</span>
-            <input
+            <TextField
+              id="senha"
+              label="SENHA"
               type="password"
               value={senha}
               onChange={(event) => setSenha(event.target.value)}
               required
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
             />
-          </label>
 
-          {estado === 'error' && (
-            <p role="alert" className="text-sm text-velvet-600">
-              {mensagemErro}
-            </p>
-          )}
+            {estado === 'error' && <Alert>{mensagemErro}</Alert>}
 
-          <button
-            type="submit"
-            disabled={estado === 'loading'}
-            className="mt-2 rounded bg-velvet-600 px-4 py-2 font-display tracking-wide text-cream-100 transition hover:bg-velvet-700 disabled:opacity-60"
-          >
-            {estado === 'loading' ? 'Entrando…' : 'Entrar'}
-          </button>
-        </form>
+            <Button type="submit" disabled={estado === 'loading'} className="mt-2 w-full">
+              {estado === 'loading' ? 'ENTRANDO…' : 'ENTRAR'}
+            </Button>
+          </form>
+        </Card>
 
-        <Link to="/" className="mt-4 block text-center text-sm text-amber-300 underline">
-          só quero ver a programação
+        <Link
+          to="/"
+          className="mt-5 block text-center font-mono text-xl tracking-wide text-paper-100/40 hover:text-flame-400"
+        >
+          só quero ver a programação ▸
         </Link>
       </div>
-    </main>
+    </PageShell>
   );
 }
