@@ -1,10 +1,12 @@
 package br.com.rolo35.api.sessoes;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +15,8 @@ import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.config.SecurityConfig;
 import br.com.rolo35.api.sessoes.controller.SessaoController;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.service.SessaoService;
 import java.math.BigDecimal;
@@ -120,5 +124,77 @@ class SessaoSecurityTest {
         given(sessaoService.listarPublicadas()).willReturn(List.of());
 
         mockMvc.perform(get("/api/sessoes")).andExpect(status().isOk());
+    }
+
+    private EditarSessaoRequest editarRequestValido() {
+        return new EditarSessaoRequest(
+                1L, "Clube da Luta (editado)", "sinopse editada", LocalDateTime.now().plusDays(30),
+                new BigDecimal("30.00"));
+    }
+
+    @Test
+    void returns200ForGetMinhasWithOrganizadorToken() throws Exception {
+        given(sessaoService.listarMinhas(anyString())).willReturn(List.of());
+        String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
+
+        mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void returns403WithNaoAutorizadoEnvelopeForGetMinhasWithClienteToken() throws Exception {
+        String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
+
+        mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void returns200ForGetByIdWithOrganizadorToken() throws Exception {
+        SessaoGestaoDto dto = new SessaoGestaoDto(
+                100L, 1L, "Sala 1", "Clube da Luta", "sinopse", LocalDateTime.now().plusDays(7),
+                new BigDecimal("25.00"), 40, true);
+        given(sessaoService.buscarPorId(anyLong(), anyString())).willReturn(dto);
+        String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
+
+        mockMvc.perform(get("/api/sessoes/100").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void returns403WithNaoAutorizadoEnvelopeForGetByIdWithPortariaToken() throws Exception {
+        String token = jwtService.generateToken("portaria@rolo35.com.br", "PORTARIA");
+
+        mockMvc.perform(get("/api/sessoes/100").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void returns200ForPutWithOrganizadorToken() throws Exception {
+        SessaoResponse resposta = new SessaoResponse(
+                100L, 1L, "Sala 1", 550L, "Clube da Luta (editado)", "http://poster", "sinopse editada",
+                "1999-10-15", LocalDateTime.now().plusDays(30), new BigDecimal("30.00"), 40, 10L);
+        given(sessaoService.editar(anyLong(), any(EditarSessaoRequest.class), anyString())).willReturn(resposta);
+        String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
+
+        mockMvc.perform(put("/api/sessoes/100")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(editarRequestValido())))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void returns403WithNaoAutorizadoEnvelopeForPutWithClienteToken() throws Exception {
+        String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
+
+        mockMvc.perform(put("/api/sessoes/100")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(editarRequestValido())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }
 }
