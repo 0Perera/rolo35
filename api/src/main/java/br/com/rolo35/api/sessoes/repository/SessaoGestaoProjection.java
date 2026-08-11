@@ -13,6 +13,8 @@ public interface SessaoGestaoProjection {
 
     String getTitulo();
 
+    String getSinopse();
+
     LocalDateTime getDataHora();
 
     BigDecimal getPreco();

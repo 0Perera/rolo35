@@ -44,7 +44,7 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
 
     @Query(value = """
         SELECT s.id AS id, s.sala_id AS salaId, sa.nome AS salaNome, s.titulo AS titulo,
-               s.data_hora AS dataHora, s.preco AS preco,
+               s.sinopse AS sinopse, s.data_hora AS dataHora, s.preco AS preco,
                COUNT(DISTINCT a.id) AS capacidade,
                NOT EXISTS (SELECT 1 FROM ingressos i WHERE i.sessao_id = s.id) AS editavel
         FROM sessoes s

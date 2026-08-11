@@ -18,6 +18,7 @@ import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -174,6 +175,34 @@ public class SessaoService {
                 sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(),
                 sessaoSalva.getDataEstreia() == null ? null : sessaoSalva.getDataEstreia().toString(),
                 sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
+    }
+
+    public List<SessaoGestaoDto> listarMinhas(String organizadorEmail) {
+        Usuario organizador = usuarioRepository
+                .findByEmail(organizadorEmail)
+                .orElseThrow(OrganizadorNaoEncontradoException::new);
+        return sessaoRepository.findByOrganizadorId(organizador.getId()).stream()
+                .map(projecao -> new SessaoGestaoDto(
+                        projecao.getId(), projecao.getSalaId(), projecao.getSalaNome(), projecao.getTitulo(),
+                        projecao.getSinopse(), projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
+                        projecao.getEditavel()))
+                .toList();
+    }
+
+    public SessaoGestaoDto buscarPorId(Long id, String organizadorEmail) {
+        Usuario organizador = usuarioRepository
+                .findByEmail(organizadorEmail)
+                .orElseThrow(OrganizadorNaoEncontradoException::new);
+        Sessao sessao = sessaoRepository.findById(id).orElseThrow(SessaoNaoEncontradaException::new);
+        if (!sessao.getOrganizadorId().equals(organizador.getId())) {
+            throw new SessaoNaoPertenceAoOrganizadorException();
+        }
+        Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
+        int capacidade = assentoSessaoRepository.findByIdSessaoId(id).size();
+        boolean editavel = !sessaoRepository.existeIngressoConfirmado(id);
+        return new SessaoGestaoDto(
+                sessao.getId(), sala.getId(), sala.getNome(), sessao.getTitulo(), sessao.getSinopse(),
+                sessao.getDataHora(), sessao.getPreco(), capacidade, editavel);
     }
 
     public List<SessaoListagemDto> listarPublicadas() {

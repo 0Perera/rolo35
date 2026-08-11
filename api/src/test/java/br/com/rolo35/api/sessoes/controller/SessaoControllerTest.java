@@ -2,17 +2,24 @@ package br.com.rolo35.api.sessoes.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
+import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
+import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.service.SessaoService;
@@ -210,5 +217,100 @@ class SessaoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    private EditarSessaoRequest editarRequestValido() {
+        return new EditarSessaoRequest(
+                1L, "Clube da Luta (editado)", "sinopse editada", LocalDateTime.now().plusDays(30),
+                new BigDecimal("30.00"));
+    }
+
+    @Test
+    void returns200WithSessaoGestaoArrayForGetMinhas() throws Exception {
+        SessaoGestaoDto dto = new SessaoGestaoDto(
+                100L, 1L, "Sala 1", "Clube da Luta", "sinopse", LocalDateTime.now().plusDays(7),
+                new BigDecimal("25.00"), 40, true);
+        given(sessaoService.listarMinhas(anyString())).willReturn(List.of(dto));
+
+        mockMvc.perform(get("/api/sessoes/minhas")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(100))
+                .andExpect(jsonPath("$[0].editavel").value(true));
+    }
+
+    @Test
+    void returns200WithSessaoGestaoDetailForGetById() throws Exception {
+        SessaoGestaoDto dto = new SessaoGestaoDto(
+                100L, 1L, "Sala 1", "Clube da Luta", "sinopse", LocalDateTime.now().plusDays(7),
+                new BigDecimal("25.00"), 40, true);
+        given(sessaoService.buscarPorId(100L, "organizador@rolo35.com.br")).willReturn(dto);
+
+        mockMvc.perform(get("/api/sessoes/100")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.salaNome").value("Sala 1"));
+    }
+
+    @Test
+    void returns404WithSessaoNaoEncontradaEnvelopeForGetById() throws Exception {
+        given(sessaoService.buscarPorId(anyLong(), anyString())).willThrow(new SessaoNaoEncontradaException());
+
+        mockMvc.perform(get("/api/sessoes/999")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("SESSAO_NAO_ENCONTRADA"));
+    }
+
+    @Test
+    void returns403WithNaoAutorizadoEnvelopeForGetByIdOfAnotherOrganizador() throws Exception {
+        given(sessaoService.buscarPorId(anyLong(), anyString())).willThrow(new SessaoNaoPertenceAoOrganizadorException());
+
+        mockMvc.perform(get("/api/sessoes/100")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void returns200WithSessaoResponseForValidPut() throws Exception {
+        SessaoResponse resposta = new SessaoResponse(
+                100L, 1L, "Sala 1", 550L, "Clube da Luta (editado)", "http://poster", "sinopse editada",
+                "1999-10-15", LocalDateTime.now().plusDays(30), new BigDecimal("30.00"), 40, 10L);
+        given(sessaoService.editar(anyLong(), any(EditarSessaoRequest.class), anyString())).willReturn(resposta);
+
+        mockMvc.perform(put("/api/sessoes/100")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(editarRequestValido())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.titulo").value("Clube da Luta (editado)"));
+    }
+
+    @Test
+    void returns409WithSessaoComIngressoConfirmadoEnvelopeForPut() throws Exception {
+        given(sessaoService.editar(anyLong(), any(EditarSessaoRequest.class), anyString()))
+                .willThrow(new SessaoComIngressoConfirmadoException());
+
+        mockMvc.perform(put("/api/sessoes/100")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(editarRequestValido())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("SESSAO_COM_INGRESSO_CONFIRMADO"));
+    }
+
+    @Test
+    void returns400WithParametroInvalidoForPutWithNegativePreco() throws Exception {
+        EditarSessaoRequest request = new EditarSessaoRequest(
+                1L, "Clube da Luta", "sinopse", LocalDateTime.now().plusDays(30), new BigDecimal("-1.00"));
+
+        mockMvc.perform(put("/api/sessoes/100")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"));
     }
 }

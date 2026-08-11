@@ -6,7 +6,10 @@ import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
 import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SalaSemAssentosException;
+import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
+import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
+import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import br.com.rolo35.api.sessoes.catalogo.ParametroInvalidoException;
 import org.slf4j.Logger;
@@ -130,6 +133,26 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleSalaSemAssentos() {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("SALA_SEM_ASSENTOS", "Sala não tem mapa de assentos cadastrado"));
+    }
+
+    @ExceptionHandler(SessaoNaoEncontradaException.class)
+    public ResponseEntity<ApiError> handleSessaoNaoEncontrada() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError("SESSAO_NAO_ENCONTRADA", "Sessão não encontrada"));
+    }
+
+    // Ownership: distinto do NAO_AUTORIZADO de papel errado (@PreAuthorize) — este é lançado pelo
+    // service quando o organizador autenticado não é dono da sessão, mesmo sabendo o ID.
+    @ExceptionHandler(SessaoNaoPertenceAoOrganizadorException.class)
+    public ResponseEntity<ApiError> handleSessaoNaoPertenceAoOrganizador() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError("NAO_AUTORIZADO", "Você não tem permissão para acessar este recurso"));
+    }
+
+    @ExceptionHandler(SessaoComIngressoConfirmadoException.class)
+    public ResponseEntity<ApiError> handleSessaoComIngressoConfirmado() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "SESSAO_COM_INGRESSO_CONFIRMADO", "Sessão já tem ingresso confirmado — nenhum campo pode ser editado"));
     }
 
     @ExceptionHandler(OrganizadorNaoEncontradoException.class)
