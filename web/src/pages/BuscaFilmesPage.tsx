@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { buscarFilmes, type Filme } from '../api/filmes';
 
 type EstadoBusca = 'idle' | 'loading' | 'error';
@@ -30,7 +30,12 @@ export function BuscaFilmesPage() {
   return (
     <main className="min-h-screen bg-sepia-950 px-4 py-10 font-body text-cream-100">
       <div className="mx-auto flex max-w-2xl flex-col gap-6">
-        <h1 className="font-display text-3xl tracking-wide text-amber-300">Buscar Filmes</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="font-display text-3xl tracking-wide text-amber-300">Buscar Filmes</h1>
+          <Link to="/organizador/sessoes" className="text-sm text-amber-300 underline">
+            Minhas sessões
+          </Link>
+        </div>
 
         <form onSubmit={handleSubmit} className="flex gap-2">
           <label className="flex flex-1 flex-col gap-1">

@@ -3,6 +3,8 @@ import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
 import { BuscaFilmesPage } from './pages/BuscaFilmesPage';
 import { CriarSessaoPage } from './pages/CriarSessaoPage';
+import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
+import { EditarSessaoPage } from './pages/EditarSessaoPage';
 import { ListagemSessoesPage } from './pages/ListagemSessoesPage';
 
 function App() {
@@ -12,6 +14,8 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/organizador" element={<BuscaFilmesPage />} />
         <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
+        <Route path="/organizador/sessoes" element={<GerenciarSessoesPage />} />
+        <Route path="/organizador/sessoes/:id/editar" element={<EditarSessaoPage />} />
         <Route path="/cliente" element={<ListagemSessoesPage />} />
         <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
       </Routes>
