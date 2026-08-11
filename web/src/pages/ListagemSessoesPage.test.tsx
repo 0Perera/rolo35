@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ListagemSessoesPage } from './ListagemSessoesPage';
 import * as sessoesApi from '../api/sessoes';
@@ -22,9 +23,18 @@ const sessaoComVaga: SessaoPublicada = {
 const sessaoEsgotada: SessaoPublicada = {
   ...sessaoComVaga,
   id: 2,
+  tmdbId: 603,
   titulo: 'Matrix',
   esgotada: true,
 };
+
+function renderPagina() {
+  return render(
+    <MemoryRouter>
+      <ListagemSessoesPage />
+    </MemoryRouter>,
+  );
+}
 
 describe('ListagemSessoesPage', () => {
   beforeEach(() => {
@@ -34,7 +44,7 @@ describe('ListagemSessoesPage', () => {
   it('shows a loading state while sessions are being fetched', async () => {
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockReturnValue(new Promise(() => {}));
 
-    render(<ListagemSessoesPage />);
+    renderPagina();
 
     expect(await screen.findByText(/carregando sessões/i)).toBeInTheDocument();
   });
@@ -42,7 +52,7 @@ describe('ListagemSessoesPage', () => {
   it('shows an empty-list message when there are no sessions', async () => {
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([]);
 
-    render(<ListagemSessoesPage />);
+    renderPagina();
 
     expect(await screen.findByText(/nenhuma sessão disponível/i)).toBeInTheDocument();
   });
@@ -50,25 +60,25 @@ describe('ListagemSessoesPage', () => {
   it('shows an error message when sessions fail to load', async () => {
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockRejectedValue(new Error('falha de rede'));
 
-    render(<ListagemSessoesPage />);
+    renderPagina();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar as sessões/i);
   });
 
-  it('lists sessions with vaga and esgotada, keeping the esgotada one visible', async () => {
+  it('lists movies with vaga and esgotada, keeping the esgotada one visible', async () => {
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoComVaga, sessaoEsgotada]);
 
-    render(<ListagemSessoesPage />);
+    renderPagina();
 
     expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
     expect(screen.getByText('Matrix')).toBeInTheDocument();
     expect(screen.getByText('Esgotada')).toBeInTheDocument();
   });
 
-  it('does not show the esgotada badge for a session with available seats', async () => {
+  it('does not show the esgotada badge for a movie with available seats', async () => {
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoComVaga]);
 
-    render(<ListagemSessoesPage />);
+    renderPagina();
 
     await screen.findByText('Clube da Luta');
     expect(screen.queryByText('Esgotada')).not.toBeInTheDocument();
@@ -81,7 +91,7 @@ describe('ListagemSessoesPage', () => {
       .mockResolvedValueOnce([sessaoComVaga]);
     const user = userEvent.setup();
 
-    render(<ListagemSessoesPage />);
+    renderPagina();
 
     await screen.findByRole('alert');
     await user.click(screen.getByRole('button', { name: /tentar novamente/i }));

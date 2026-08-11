@@ -1,7 +1,36 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
+import { buttonClass } from '../components/Button';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
+
+interface FilmeAgrupado {
+  tmdbId: number;
+  titulo: string;
+  posterUrl: string | null;
+  sessoes: SessaoPublicada[];
+}
+
+function agruparPorFilme(sessoes: SessaoPublicada[]): FilmeAgrupado[] {
+  const porFilme = new Map<number, FilmeAgrupado>();
+
+  for (const sessao of sessoes) {
+    const existente = porFilme.get(sessao.tmdbId);
+    if (existente) {
+      existente.sessoes.push(sessao);
+    } else {
+      porFilme.set(sessao.tmdbId, {
+        tmdbId: sessao.tmdbId,
+        titulo: sessao.titulo,
+        posterUrl: sessao.posterUrl,
+        sessoes: [sessao],
+      });
+    }
+  }
+
+  return Array.from(porFilme.values());
+}
 
 export function ListagemSessoesPage() {
   const [sessoes, setSessoes] = useState<SessaoPublicada[]>([]);
@@ -29,59 +58,64 @@ export function ListagemSessoesPage() {
     };
   }, [tentativa]);
 
+  const filmes = agruparPorFilme(sessoes);
+
   return (
-    <main className="min-h-screen bg-sepia-950 px-4 py-10 font-body text-cream-100">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
-        <h1 className="font-display text-3xl tracking-wide text-amber-300">Sessões em cartaz</h1>
+    <main className="mx-auto max-w-6xl px-6 py-10">
+      <div className="flex items-end justify-between gap-5">
+        <div>
+          <h1 className="font-display text-4xl text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
+            O QUE TÁ PASSANDO?
+          </h1>
+          <div className="mt-2.5 h-[5px] w-56 bg-gradient-to-r from-flame-600 to-flame-400" />
+        </div>
+      </div>
 
-        {estado === 'loading' && <p className="text-sm text-cream-300">Carregando sessões…</p>}
-        {estado === 'vazio' && <p className="text-sm text-cream-300">Nenhuma sessão disponível no momento.</p>}
-        {estado === 'erro' && (
-          <p role="alert" className="text-sm text-velvet-600">
-            Não foi possível carregar as sessões agora.
-          </p>
-        )}
+      {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
+      {estado === 'vazio' && (
+        <p className="mt-8 font-mono text-lg text-ink-950/60">Nenhuma sessão disponível no momento.</p>
+      )}
+      {estado === 'erro' && (
+        <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
+          Não foi possível carregar as sessões agora.
+        </p>
+      )}
 
-        {(estado === 'erro' || estado === 'vazio') && (
-          <button
-            type="button"
-            onClick={() => setTentativa((atual) => atual + 1)}
-            className="self-start rounded border border-gold-500/60 px-4 py-2 font-display tracking-wide text-amber-300 transition hover:bg-sepia-900"
-          >
-            Tentar novamente
-          </button>
-        )}
+      {(estado === 'erro' || estado === 'vazio') && (
+        <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary', 'mt-4')}>
+          TENTAR NOVAMENTE
+        </button>
+      )}
 
-        {estado === 'pronto' && (
-          <ul className="flex flex-col gap-4">
-            {sessoes.map((sessao) => (
-              <li
-                key={sessao.id}
-                className="flex gap-4 rounded border border-gold-500/40 bg-sepia-900 p-4"
-              >
-                {sessao.posterUrl && (
-                  <img src={sessao.posterUrl} alt={sessao.titulo} className="h-32 w-auto rounded" />
-                )}
-                <div className="flex flex-1 flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-display text-xl tracking-wide text-amber-300">{sessao.titulo}</h2>
-                    {sessao.esgotada && (
-                      <span className="rounded border border-velvet-600 px-2 py-0.5 text-xs tracking-wide text-velvet-600">
-                        Esgotada
-                      </span>
+      {estado === 'pronto' && (
+        <div className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-7">
+          {filmes.map((filme) => {
+            const esgotado = filme.sessoes.every((sessao) => sessao.esgotada);
+            return (
+              <Link key={filme.tmdbId} to={`/filmes/${filme.tmdbId}`} className="flex flex-col">
+                <div className="relative border-[3px] border-ink-950 bg-ink-950 shadow-[7px_7px_0_rgba(23,18,25,0.85)]">
+                  <div className="relative aspect-[2/3]">
+                    {filme.posterUrl ? (
+                      <img src={filme.posterUrl} alt={filme.titulo} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full bg-ink-900" />
                     )}
                   </div>
-                  <span className="text-sm text-cream-300">{sessao.salaNome}</span>
-                  <span className="text-sm text-cream-300">{new Date(sessao.dataHora).toLocaleString('pt-BR')}</span>
-                  <span className="text-sm text-cream-100">
-                    R$ {sessao.preco.toFixed(2).replace('.', ',')}
-                  </span>
+                  {esgotado && (
+                    <span className="absolute top-2 left-2 border-2 border-flame-600 bg-ink-950/80 px-2 py-0.5 text-xs tracking-wide text-flame-600">
+                      Esgotada
+                    </span>
+                  )}
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                <div className="mt-3.5 font-display text-sm leading-tight">{filme.titulo}</div>
+                <div className="mt-1.5 font-mono text-base tracking-wide text-ink-950/50">
+                  {filme.sessoes.length === 1 ? '1 sessão' : `${filme.sessoes.length} sessões`}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </main>
   );
 }
