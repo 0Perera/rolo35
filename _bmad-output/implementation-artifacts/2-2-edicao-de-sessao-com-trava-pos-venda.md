@@ -4,7 +4,7 @@ baseline_commit: 7bb65d2
 
 # Story 2.2: Edição de Sessão com Trava Pós-Venda
 
-Status: review
+Status: in-progress
 
 ## Story
 
@@ -106,7 +106,7 @@ Claude Sonnet 5 (bmad-agent-dev, persona Amelia)
 
 Code review de 2026-08-10 — 3 camadas (adversarial geral, edge cases, auditoria de aceite) sobre `git diff 7bb65d2..HEAD`. 13 achados após deduplicação, 1 descartado como ruído.
 
-- [ ] [Review][Decision] Ordem `dataHora` vs ownership em `editar()` pode devolver `400` em vez do `403` da AC2 — `SessaoService.java:450-452` valida `dataHora` no futuro **antes** de checar dono da sessão (mesma ordem fail-fast-antes-do-lock da Story 2.1, AD-5). Uma edição malformada (data no passado) mirando o ID de outro organizador recebe `400 DATA_HORA_NO_PASSADO`, não `403`, porque a checagem de ownership só roda depois do lock. Decisão: reordenar (checa dono antes de validar `dataHora`, exige buscar/travar a sessão antes de qualquer validação de corpo) vs. manter a ordem atual documentando como desvio deliberado (mesmo padrão do Dev Note "ordem lock → validação, invertida deliberadamente" da Story 2.1)?
+- [ ] [Review][Patch] Ordem `dataHora` vs ownership em `editar()` pode devolver `400` em vez do `403` da AC2 — `SessaoService.java:450-452` valida `dataHora` no futuro **antes** de checar dono da sessão (mesma ordem fail-fast-antes-do-lock da Story 2.1, AD-5). Uma edição malformada (data no passado) mirando o ID de outro organizador recebe `400 DATA_HORA_NO_PASSADO`, não `403`, porque a checagem de ownership só roda depois do lock. **Decisão do usuário**: reordenar — travar a sessão e checar ownership antes de validar `dataHora`.
 
 - [ ] [Review][Patch] Sem índice em `sessoes.organizador_id` pra `findByOrganizadorId` [`api/src/main/java/br/com/rolo35/api/sessoes/repository/SessaoRepository.java`] — viola o non-negotiable de índice em coluna de filtro/join de tela (CLAUDE.md). Adicionar migration com `CREATE INDEX idx_sessoes_organizador_id ON sessoes (organizador_id)`.
 
