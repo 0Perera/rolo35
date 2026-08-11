@@ -444,15 +444,39 @@ class SessaoServiceTest {
         verify(sessaoRepository, never()).save(any());
     }
 
+    // Ownership precisa ser checado antes de validar o corpo (AC2: tentativa de editar sessão de
+    // outro organizador é sempre 403, mesmo com corpo inválido) — então a sessão já foi carregada
+    // (e o dono conferido) quando o erro de data no passado é lançado; só o lock da *sala* segue
+    // evitado, porque nada até aqui depende dela.
     @Test
-    void rejeitaEdicaoComDataHoraNoPassadoSemTravarSessao() {
+    void rejeitaEdicaoComDataHoraNoPassadoAposConfirmarQueSessaoEDoOrganizador() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        stubOrganizador();
+        Sessao existente = sessaoCom(5L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
+        given(sessaoRepository.findByIdForUpdate(5L)).willReturn(Optional.of(existente));
         EditarSessaoRequest request = new EditarSessaoRequest(
                 1L, "Clube da Luta", "sinopse", LocalDateTime.now().minusDays(1), new BigDecimal("30.00"));
 
         assertThatThrownBy(() -> sessaoService.editar(5L, request, "organizador@rolo35.com.br"))
                 .isInstanceOf(DataHoraNoPassadoException.class);
 
-        verify(sessaoRepository, never()).findByIdForUpdate(any());
+        verify(salaRepository, never()).findByIdForUpdate(any());
+    }
+
+    // AC2: tentativa de editar sessão de outro organizador é rejeitada com 403 — "mesmo sabendo o
+    // ID" e independentemente do resto do corpo estar malformado. Prova o fix: sem essa ordem, um
+    // corpo com dataHora no passado mirando sessão alheia devolveria 400 em vez de 403.
+    @Test
+    void rejeitaEdicaoDeSessaoDeOutroOrganizadorMesmoComDataHoraNoPassado() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        stubOrganizador();
+        Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
+        given(sessaoRepository.findByIdForUpdate(5L)).willReturn(Optional.of(deOutroOrganizador));
+        EditarSessaoRequest request = new EditarSessaoRequest(
+                1L, "Clube da Luta", "sinopse", LocalDateTime.now().minusDays(1), new BigDecimal("30.00"));
+
+        assertThatThrownBy(() -> sessaoService.editar(5L, request, "organizador@rolo35.com.br"))
+                .isInstanceOf(SessaoNaoPertenceAoOrganizadorException.class);
     }
 
     @Test

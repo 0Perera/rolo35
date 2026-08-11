@@ -117,11 +117,6 @@ public class SessaoService {
 
     @Transactional
     public SessaoResponse editar(Long id, EditarSessaoRequest request, String organizadorEmail) {
-        // Mesma filosofia fail-fast do criar(): nada que dependa só do request toma o lock antes.
-        if (!request.dataHora().isAfter(LocalDateTime.now())) {
-            throw new DataHoraNoPassadoException();
-        }
-
         Usuario organizador = usuarioRepository
                 .findByEmail(organizadorEmail)
                 .orElseThrow(OrganizadorNaoEncontradoException::new);
@@ -129,8 +124,14 @@ public class SessaoService {
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         Sessao sessao = sessaoRepository.findByIdForUpdate(id).orElseThrow(SessaoNaoEncontradaException::new);
 
+        // Ownership vem antes de qualquer validação de corpo (AC2): tentar editar sessão de outro
+        // organizador é sempre 403, mesmo sabendo o ID e mesmo com corpo malformado — não pode
+        // vazar um 400 antes de confirmar o dono.
         if (!sessao.getOrganizadorId().equals(organizador.getId())) {
             throw new SessaoNaoPertenceAoOrganizadorException();
+        }
+        if (!request.dataHora().isAfter(LocalDateTime.now())) {
+            throw new DataHoraNoPassadoException();
         }
         if (sessaoRepository.existeIngressoConfirmado(id)) {
             throw new SessaoComIngressoConfirmadoException();
