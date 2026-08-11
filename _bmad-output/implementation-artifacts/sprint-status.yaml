@@ -54,7 +54,7 @@ development_status:
   epic-1-retrospective: optional
 
   epic-2: in-progress
-  2-1-criacao-de-sessao-com-bloqueio-de-conflito-de-horario: in-progress
+  2-1-criacao-de-sessao-com-bloqueio-de-conflito-de-horario: done
   2-2-edicao-de-sessao-com-trava-pos-venda: backlog
   2-3-listagem-publica-de-sessoes: done
   epic-2-retrospective: optional

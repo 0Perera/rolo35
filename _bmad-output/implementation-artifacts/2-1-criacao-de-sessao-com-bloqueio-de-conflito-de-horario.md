@@ -4,7 +4,7 @@ baseline_commit: 56d31d0
 
 # Story 2.1: Criação de Sessão com Bloqueio de Conflito de Horário
 
-Status: in-progress
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
