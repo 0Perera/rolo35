@@ -3,6 +3,11 @@ import { Link, useLocation } from 'react-router';
 import { ApiRequestError } from '../api/client';
 import type { Filme } from '../api/filmes';
 import { criarSessao, listarSalas, type Sala, type Sessao } from '../api/sessoes';
+import { Alert } from '../components/Alert';
+import { Button, buttonClass } from '../components/Button';
+import { Card } from '../components/Card';
+import { PageShell } from '../components/PageShell';
+import { SelectField, TextField } from '../components/TextField';
 
 type EstadoSalas = 'loading' | 'vazio' | 'erro' | 'pronto';
 type EstadoSubmit = 'idle' | 'loading' | 'sucesso' | 'erro';
@@ -47,15 +52,15 @@ export function CriarSessaoPage() {
 
   if (!filme) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-sepia-950 px-4 font-body text-cream-100">
-        <p className="text-sm text-cream-300">
+      <PageShell variant="auth">
+        <p className="font-mono text-lg text-paper-100/70">
           Nenhum filme selecionado. Volte pra{' '}
-          <Link to="/organizador" className="text-amber-300 underline">
+          <Link to="/organizador" className="text-flame-400 underline">
             busca de filmes
           </Link>{' '}
           e escolha um filme pra criar a sessão.
         </p>
-      </main>
+      </PageShell>
     );
   }
 
@@ -114,52 +119,50 @@ export function CriarSessaoPage() {
 
   if (estadoSubmit === 'sucesso' && sessaoCriada) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-sepia-950 px-4 font-body text-cream-100">
-        <div className="w-full max-w-sm rounded border border-gold-500/40 bg-sepia-900 p-8 text-center">
-          <h1 className="mb-4 font-display text-2xl tracking-wide text-amber-300">Sessão criada!</h1>
-          <p className="mb-6 text-sm text-cream-100">
+      <PageShell variant="auth">
+        <Card className="w-full max-w-sm text-center">
+          <h1 className="mb-4 font-display text-2xl text-flame-500">Sessão criada!</h1>
+          <p className="mb-6 text-sm">
             {sessaoCriada.titulo} — {sessaoCriada.salaNome} — capacidade {sessaoCriada.capacidade}
           </p>
-          <Link to="/organizador" className="text-amber-300 underline">
+          <Link to="/organizador" className="font-mono text-lg text-flame-600 underline">
             Voltar à busca
           </Link>
-        </div>
-      </main>
+        </Card>
+      </PageShell>
     );
   }
 
   return (
-    <main className="min-h-screen bg-sepia-950 px-4 py-10 font-body text-cream-100">
+    <PageShell>
       <div className="mx-auto flex max-w-md flex-col gap-6">
-        <h1 className="font-display text-3xl tracking-wide text-amber-300">Criar sessão — {filme.titulo}</h1>
+        <h1 className="font-display text-3xl text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
+          Criar sessão — {filme.titulo}
+        </h1>
 
-        {estadoSalas === 'loading' && <p className="text-sm text-cream-300">Carregando salas…</p>}
-        {estadoSalas === 'vazio' && <p className="text-sm text-cream-300">Nenhuma sala cadastrada.</p>}
+        {estadoSalas === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando salas…</p>}
+        {estadoSalas === 'vazio' && <p className="font-mono text-lg text-ink-950/60">Nenhuma sala cadastrada.</p>}
         {estadoSalas === 'erro' && (
-          <p role="alert" className="text-sm text-velvet-600">
+          <p role="alert" className="font-mono text-lg text-flame-600">
             Não foi possível carregar as salas agora.
           </p>
         )}
 
         {(estadoSalas === 'erro' || estadoSalas === 'vazio') && (
-          <button
-            type="button"
-            onClick={() => setTentativa((atual) => atual + 1)}
-            className="self-start rounded border border-gold-500/60 px-4 py-2 font-display tracking-wide text-amber-300 transition hover:bg-sepia-900"
-          >
-            Tentar novamente
+          <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary')}>
+            TENTAR NOVAMENTE
           </button>
         )}
 
         {estadoSalas === 'pronto' && (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-            <label className="flex flex-col gap-1">
-              <span className="text-sm text-cream-300">Sala</span>
-              <select
+          <Card>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+              <SelectField
+                id="sala"
+                label="SALA"
                 value={salaId}
                 onChange={(event) => setSalaId(event.target.value)}
                 required
-                className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
               >
                 <option value="" disabled>
                   Selecione uma sala
@@ -169,49 +172,37 @@ export function CriarSessaoPage() {
                     {sala.nome} ({sala.capacidade} assentos)
                   </option>
                 ))}
-              </select>
-            </label>
+              </SelectField>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-sm text-cream-300">Data e hora</span>
-              <input
+              <TextField
+                id="dataHora"
+                label="DATA E HORA"
                 type="datetime-local"
                 value={dataHora}
                 onChange={(event) => setDataHora(event.target.value)}
                 required
-                className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
               />
-            </label>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-sm text-cream-300">Preço</span>
-              <input
+              <TextField
+                id="preco"
+                label="PREÇO"
                 type="number"
                 min="0"
                 step="0.01"
                 value={preco}
                 onChange={(event) => setPreco(event.target.value)}
                 required
-                className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
               />
-            </label>
 
-            {estadoSubmit === 'erro' && (
-              <p role="alert" className="text-sm text-velvet-600">
-                {mensagemErro}
-              </p>
-            )}
+              {estadoSubmit === 'erro' && <Alert>{mensagemErro}</Alert>}
 
-            <button
-              type="submit"
-              disabled={estadoSubmit === 'loading'}
-              className="mt-2 rounded bg-velvet-600 px-4 py-2 font-display tracking-wide text-cream-100 transition hover:bg-velvet-700 disabled:opacity-60"
-            >
-              {estadoSubmit === 'loading' ? 'Criando…' : 'Criar sessão'}
-            </button>
-          </form>
+              <Button type="submit" disabled={estadoSubmit === 'loading'} className="mt-2 w-full">
+                {estadoSubmit === 'loading' ? 'CRIANDO…' : 'CRIAR SESSÃO'}
+              </Button>
+            </form>
+          </Card>
         )}
       </div>
-    </main>
+    </PageShell>
   );
 }

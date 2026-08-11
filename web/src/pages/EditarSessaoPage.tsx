@@ -2,6 +2,11 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { ApiRequestError } from '../api/client';
 import { buscarSessao, editarSessao, listarSalas, type Sala, type Sessao, type SessaoGestao } from '../api/sessoes';
+import { Alert } from '../components/Alert';
+import { Button, buttonClass } from '../components/Button';
+import { Card } from '../components/Card';
+import { PageShell } from '../components/PageShell';
+import { SelectField, TextAreaField, TextField } from '../components/TextField';
 
 type EstadoCarga = 'loading' | 'erro' | 'pronto';
 type EstadoSubmit = 'idle' | 'loading' | 'sucesso' | 'erro';
@@ -99,84 +104,70 @@ export function EditarSessaoPage() {
 
   if (estadoCarga === 'loading') {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-sepia-950 px-4 font-body text-cream-100">
-        <p className="text-sm text-cream-300">Carregando sessão…</p>
-      </main>
+      <PageShell variant="auth">
+        <p className="font-mono text-lg text-paper-100/70">Carregando sessão…</p>
+      </PageShell>
     );
   }
 
   if (estadoCarga === 'erro' || !sessao) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-sepia-950 px-4 font-body text-cream-100">
+      <PageShell variant="auth">
         <div className="flex flex-col items-center gap-4 text-center">
-          <p role="alert" className="text-sm text-velvet-600">
-            Não foi possível carregar esta sessão agora.
-          </p>
-          <button
-            type="button"
-            onClick={() => setTentativa((atual) => atual + 1)}
-            className="rounded border border-gold-500/60 px-4 py-2 font-display tracking-wide text-amber-300 transition hover:bg-sepia-900"
-          >
-            Tentar novamente
+          <Alert>Não foi possível carregar esta sessão agora.</Alert>
+          <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary')}>
+            TENTAR NOVAMENTE
           </button>
-          <Link to="/organizador/sessoes" className="text-amber-300 underline">
+          <Link to="/organizador/sessoes" className="font-mono text-lg text-flame-400 underline">
             Voltar pra minhas sessões
           </Link>
         </div>
-      </main>
+      </PageShell>
     );
   }
 
   if (estadoSubmit === 'sucesso' && sessaoEditada) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-sepia-950 px-4 font-body text-cream-100">
-        <div className="w-full max-w-sm rounded border border-gold-500/40 bg-sepia-900 p-8 text-center">
-          <h1 className="mb-4 font-display text-2xl tracking-wide text-amber-300">Sessão atualizada!</h1>
-          <p className="mb-6 text-sm text-cream-100">
+      <PageShell variant="auth">
+        <Card className="w-full max-w-sm text-center">
+          <h1 className="mb-4 font-display text-2xl text-flame-500">Sessão atualizada!</h1>
+          <p className="mb-6 text-sm">
             {sessaoEditada.titulo} — {sessaoEditada.salaNome}
           </p>
-          <Link to="/organizador/sessoes" className="text-amber-300 underline">
+          <Link to="/organizador/sessoes" className="font-mono text-lg text-flame-600 underline">
             Voltar pra minhas sessões
           </Link>
-        </div>
-      </main>
+        </Card>
+      </PageShell>
     );
   }
 
   return (
-    <main className="min-h-screen bg-sepia-950 px-4 py-10 font-body text-cream-100">
+    <PageShell>
       <div className="mx-auto flex max-w-md flex-col gap-6">
-        <h1 className="font-display text-3xl tracking-wide text-amber-300">Editar sessão</h1>
+        <h1 className="font-display text-3xl text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
+          EDITAR SESSÃO
+        </h1>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">Título</span>
-            <input
+        <Card>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+            <TextField
+              id="titulo"
+              label="TÍTULO"
               type="text"
               value={titulo}
               onChange={(event) => setTitulo(event.target.value)}
               required
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
             />
-          </label>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">Sinopse</span>
-            <textarea
+            <TextAreaField
+              id="sinopse"
+              label="SINOPSE"
               value={sinopse}
               onChange={(event) => setSinopse(event.target.value)}
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
             />
-          </label>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">Sala</span>
-            <select
-              value={salaId}
-              onChange={(event) => setSalaId(event.target.value)}
-              required
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
-            >
+            <SelectField id="sala" label="SALA" value={salaId} onChange={(event) => setSalaId(event.target.value)} required>
               <option value="" disabled>
                 Selecione uma sala
               </option>
@@ -185,48 +176,36 @@ export function EditarSessaoPage() {
                   {sala.nome} ({sala.capacidade} assentos)
                 </option>
               ))}
-            </select>
-          </label>
+            </SelectField>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">Data e hora</span>
-            <input
+            <TextField
+              id="dataHora"
+              label="DATA E HORA"
               type="datetime-local"
               value={dataHora}
               onChange={(event) => setDataHora(event.target.value)}
               required
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
             />
-          </label>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-sm text-cream-300">Preço</span>
-            <input
+            <TextField
+              id="preco"
+              label="PREÇO"
               type="number"
               min="0"
               step="0.01"
               value={preco}
               onChange={(event) => setPreco(event.target.value)}
               required
-              className="rounded border border-sepia-700 bg-sepia-950 px-3 py-2 text-cream-100 outline-none focus:border-gold-500"
             />
-          </label>
 
-          {estadoSubmit === 'erro' && (
-            <p role="alert" className="text-sm text-velvet-600">
-              {mensagemErro}
-            </p>
-          )}
+            {estadoSubmit === 'erro' && <Alert>{mensagemErro}</Alert>}
 
-          <button
-            type="submit"
-            disabled={estadoSubmit === 'loading'}
-            className="mt-2 rounded bg-velvet-600 px-4 py-2 font-display tracking-wide text-cream-100 transition hover:bg-velvet-700 disabled:opacity-60"
-          >
-            {estadoSubmit === 'loading' ? 'Salvando…' : 'Salvar alterações'}
-          </button>
-        </form>
+            <Button type="submit" disabled={estadoSubmit === 'loading'} className="mt-2 w-full">
+              {estadoSubmit === 'loading' ? 'SALVANDO…' : 'SALVAR ALTERAÇÕES'}
+            </Button>
+          </form>
+        </Card>
       </div>
-    </main>
+    </PageShell>
   );
 }
