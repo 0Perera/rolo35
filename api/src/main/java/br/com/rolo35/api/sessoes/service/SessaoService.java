@@ -12,8 +12,12 @@ import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.Sessao;
+import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
+import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
+import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -107,6 +111,68 @@ public class SessaoService {
         return new SessaoResponse(
                 sessaoSalva.getId(), sala.getId(), sala.getNome(), sessaoSalva.getTmdbId(), sessaoSalva.getTitulo(),
                 sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(), request.dataEstreia(),
+                sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
+    }
+
+    @Transactional
+    public SessaoResponse editar(Long id, EditarSessaoRequest request, String organizadorEmail) {
+        // Mesma filosofia fail-fast do criar(): nada que dependa só do request toma o lock antes.
+        if (!request.dataHora().isAfter(LocalDateTime.now())) {
+            throw new DataHoraNoPassadoException();
+        }
+
+        Usuario organizador = usuarioRepository
+                .findByEmail(organizadorEmail)
+                .orElseThrow(OrganizadorNaoEncontradoException::new);
+
+        entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
+        Sessao sessao = sessaoRepository.findByIdForUpdate(id).orElseThrow(SessaoNaoEncontradaException::new);
+
+        if (!sessao.getOrganizadorId().equals(organizador.getId())) {
+            throw new SessaoNaoPertenceAoOrganizadorException();
+        }
+        if (sessaoRepository.existeIngressoConfirmado(id)) {
+            throw new SessaoComIngressoConfirmadoException();
+        }
+
+        boolean trocouSala = !sessao.getSalaId().equals(request.salaId());
+        Sala sala = salaRepository.findByIdForUpdate(request.salaId()).orElseThrow(SalaNaoEncontradaException::new);
+
+        if (sessaoRepository.existeConflitanteExcluindo(sala.getId(), request.dataHora(), BUFFER_MINUTOS, id)) {
+            throw new SessaoConflitanteException();
+        }
+
+        int capacidade;
+        if (trocouSala) {
+            // Passo anterior já garantiu que não há ingresso confirmado — nenhum estado de venda
+            // se perde ao trocar o mapa de assentos pra sala nova.
+            assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(id));
+            List<Assento> assentos = assentoRepository.findBySalaId(sala.getId());
+            if (assentos.isEmpty()) {
+                throw new SalaSemAssentosException();
+            }
+            List<AssentoSessao> assentoSessoes = assentos.stream()
+                    .map(assento -> new AssentoSessao(new AssentoSessaoId(id, assento.getId()), STATUS_LIVRE, null, null))
+                    .toList();
+            assentoSessaoRepository.saveAll(assentoSessoes);
+            capacidade = assentos.size();
+        } else {
+            capacidade = assentoSessaoRepository.findByIdSessaoId(id).size();
+        }
+
+        Sessao sessaoEditada = sessao.toBuilder()
+                .salaId(sala.getId())
+                .titulo(request.titulo())
+                .sinopse(request.sinopse())
+                .dataHora(request.dataHora())
+                .preco(request.preco())
+                .build();
+        Sessao sessaoSalva = sessaoRepository.save(sessaoEditada);
+
+        return new SessaoResponse(
+                sessaoSalva.getId(), sala.getId(), sala.getNome(), sessaoSalva.getTmdbId(), sessaoSalva.getTitulo(),
+                sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(),
+                sessaoSalva.getDataEstreia() == null ? null : sessaoSalva.getDataEstreia().toString(),
                 sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
     }
 
