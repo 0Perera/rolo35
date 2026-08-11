@@ -320,3 +320,17 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: o comentário antigo do seed ("integração real com TMDb chega na Story 1.2") ficou desatualizado assim que a Story 1.2 foi implementada, e o dado do filme era inventado. Considerei mover a criação dessa sessão pra um `ApplicationRunner` que chamasse o TMDb de verdade a cada boot — descartado por complexidade desnecessária pra um dado estático que nunca muda: exigiria property nova, ajuste no `pom.xml` dos testes pra não chamar o TMDb real durante `mvn test`, e tratamento de falha de boot se o `TMDB_API_TOKEN` não estivesse configurado. Buscar o dado uma vez e congelar no SQL resolve o problema de fundo (não usar dado inventado) sem esse custo. Editar `V2` no lugar em vez de criar uma `V4` invalida o checksum de qualquer volume Postgres local já existente (`docker compose down -v` resolve — validado nesta sessão, sem CI nem deploy no Render ainda rodando essa migration, então o único ambiente afetado era esta máquina; não documentado no README porque não afeta quem sobe o projeto pela primeira vez). Salas 2 e 3 não recebem sessão seed (decisão explícita, escopo desta correção) — existem pra o organizador criar sessões manualmente com capacidades diferentes ao testar a Epic 3, não pra o seed já demonstrar um mapa de assentos de tamanho variado sozinho.
 
 ---
+
+## Hero da home usa o pôster como imagem de fundo, não um backdrop largo
+
+- **Decisão**: a seção de hero da home (`ListagemSessoesPage`) usa `posterUrl` (formato retrato, já persistido em `sessoes`) como imagem de fundo da moldura de TV de tubo, no lugar de uma imagem de backdrop widescreen dedicada.
+- **Por quê**: o protótipo de design assume um campo de backdrop largo (`image-slot`) que não existe no modelo de dados real — `sessoes` só grava `poster_url` (o campo que a busca por TMDb já retorna e que a Story 2.1 já persiste). Adicionar um segundo campo de imagem só pra essa seção exigiria nova chamada ao TMDb (`/movie/{id}/images` ou similar) e schema novo, fora do escopo desta correção visual. Usar o pôster com `object-cover` numa moldura larga é a adaptação mais barata que não inventa dado nem exige integração nova.
+
+---
+
+## Cor de acento por filme derivada de hash do `tmdbId`, não campo de dado
+
+- **Decisão**: a tarja colorida de 6px na base de cada pôster do grid da home usa uma cor escolhida deterministicamente de uma paleta fixa de 8 tons (`PALETA_ACENTO` em `ListagemSessoesPage.tsx`) via `tmdbId % paleta.length` — não é um campo vindo do back-end.
+- **Por quê**: no protótipo essa cor é dado estático de demonstração (`FILMES[i].cor`, hardcoded no array de exemplo da ferramenta de design), sem equivalente real no nosso modelo (`sessoes` não tem — e não tem por que ter — uma "cor do filme"). Derivar de forma determinística do `tmdbId` mantém o efeito visual (variedade de cor entre pôsteres) sem inventar uma coluna nova nem exigir curadoria manual por filme.
+
+---
