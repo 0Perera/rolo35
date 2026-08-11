@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
+import { PageShell } from '../components/PageShell';
 
 type Estado = 'loading' | 'erro' | 'pronto' | 'nao-encontrado';
 
@@ -63,7 +64,8 @@ export function FilmeDetalhePage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <PageShell>
+      <div className="mx-auto max-w-6xl px-6 py-10">
       <Link to="/" className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
         ◀ VOLTAR PRA PRATELEIRA
       </Link>
@@ -80,7 +82,7 @@ export function FilmeDetalhePage() {
 
       {estado === 'pronto' && (
         <div className="mt-6 flex flex-wrap items-start gap-9">
-          <div className="w-[300px] flex-none border-[3px] border-ink-950 bg-ink-950 shadow-[9px_9px_0_rgba(23,18,25,0.85)]">
+          <div className="w-full flex-[0_1_300px] border-[3px] border-ink-950 bg-ink-950 shadow-[9px_9px_0_rgba(23,18,25,0.85)]">
             <div className="relative aspect-[2/3]">
               {sessoesDoFilme[0].posterUrl ? (
                 <img
@@ -94,8 +96,8 @@ export function FilmeDetalhePage() {
             </div>
           </div>
 
-          <div className="min-w-[380px] flex-1">
-            <h1 className="font-display text-4xl leading-none text-flame-600 [text-shadow:4px_4px_0_var(--color-flame-400)]">
+          <div className="min-w-0 flex-[1_1_380px]">
+            <h1 className="font-display text-[clamp(28px,4.4cqw,52px)] leading-none text-flame-600 [text-shadow:4px_4px_0_var(--color-flame-400)]">
               {sessoesDoFilme[0].titulo}
             </h1>
             {sessoesDoFilme[0].sinopse && (
@@ -135,6 +137,7 @@ export function FilmeDetalhePage() {
           </div>
         </div>
       )}
-    </main>
+      </div>
+    </PageShell>
   );
 }
