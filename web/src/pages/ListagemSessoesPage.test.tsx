@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -36,6 +36,10 @@ function renderPagina() {
   );
 }
 
+function grade() {
+  return within(screen.getByTestId('grade-filmes'));
+}
+
 describe('ListagemSessoesPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -70,9 +74,10 @@ describe('ListagemSessoesPage', () => {
 
     renderPagina();
 
-    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
-    expect(screen.getByText('Matrix')).toBeInTheDocument();
-    expect(screen.getByText('Esgotada')).toBeInTheDocument();
+    await screen.findByTestId('grade-filmes');
+    expect(grade().getByText('Clube da Luta')).toBeInTheDocument();
+    expect(grade().getByText('Matrix')).toBeInTheDocument();
+    expect(grade().getByText('Esgotada')).toBeInTheDocument();
   });
 
   it('does not show the esgotada badge for a movie with available seats', async () => {
@@ -80,7 +85,7 @@ describe('ListagemSessoesPage', () => {
 
     renderPagina();
 
-    await screen.findByText('Clube da Luta');
+    await screen.findByTestId('grade-filmes');
     expect(screen.queryByText('Esgotada')).not.toBeInTheDocument();
   });
 
@@ -96,7 +101,8 @@ describe('ListagemSessoesPage', () => {
     await screen.findByRole('alert');
     await user.click(screen.getByRole('button', { name: /tentar novamente/i }));
 
-    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
+    await screen.findByTestId('grade-filmes');
+    expect(grade().getByText('Clube da Luta')).toBeInTheDocument();
     expect(listarSpy).toHaveBeenCalledTimes(2);
   });
 });
