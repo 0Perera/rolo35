@@ -11,6 +11,7 @@ export function Footer() {
           <p className="mt-3 max-w-[260px] font-mono text-lg tracking-wide text-paper-100/60">
             CINEMA DE RUA, PROJEÇÃO EM 35MM E FITAS QUE NINGUÉM MAIS TEM.
           </p>
+          <div className="mt-4 h-[5px] w-40 bg-gradient-to-r from-flame-600 via-flame-400 to-cyan-400" />
         </div>
         <div>
           <div className="font-mono text-base tracking-[2px] text-cyan-400">INGRESSOS</div>
@@ -33,6 +34,14 @@ export function Footer() {
             >
               Salas
             </Link>
+          </div>
+        </div>
+        <div>
+          <div className="font-mono text-base tracking-[2px] text-cyan-400">DESENVOLVEDOR</div>
+          <div className="mt-2 flex flex-col gap-2 text-sm text-paper-100/70">
+            <a href="https://github.com/0Perera/rolo35" target="_blank" rel="noreferrer">
+              GitHub
+            </a>
           </div>
         </div>
       </div>
