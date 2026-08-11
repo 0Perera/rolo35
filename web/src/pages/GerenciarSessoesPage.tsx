@@ -6,6 +6,8 @@ import { PageShell } from '../components/PageShell';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
+const COLUNAS = '1.6fr 1fr 0.9fr 0.9fr 0.7fr 0.9fr';
+
 export function GerenciarSessoesPage() {
   const [sessoes, setSessoes] = useState<SessaoGestao[]>([]);
   const [estado, setEstado] = useState<Estado>('loading');
@@ -34,58 +36,90 @@ export function GerenciarSessoesPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
-        <h1 className="font-display text-3xl text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
-          MINHAS SESSÕES
-        </h1>
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="font-mono text-xl tracking-[3px] text-navy-700">PAINEL DO ORGANIZADOR</div>
+            <h1 className="mt-1.5 font-display text-[clamp(26px,4cqw,40px)] text-ink-950">MINHAS SESSÕES</h1>
+          </div>
+          <div className="border-[3px] border-ink-950 bg-paper-50 px-[18px] py-3 shadow-[5px_5px_0_var(--color-ink-950)]">
+            <div className="font-mono text-base tracking-wide text-ink-950/60">SESSÕES ATIVAS</div>
+            <div className="font-display text-2xl">{sessoes.length}</div>
+          </div>
+        </div>
 
-        {estado === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
-        {estado === 'vazio' && (
-          <p className="font-mono text-lg text-ink-950/60">Você ainda não criou nenhuma sessão.</p>
-        )}
-        {estado === 'erro' && (
-          <p role="alert" className="font-mono text-lg text-flame-600">
-            Não foi possível carregar suas sessões agora.
-          </p>
-        )}
+        <div className="mt-9">
+          {estado === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
+          {estado === 'vazio' && (
+            <p className="font-mono text-lg text-ink-950/60">Você ainda não criou nenhuma sessão.</p>
+          )}
+          {estado === 'erro' && (
+            <p role="alert" className="font-mono text-lg text-flame-600">
+              Não foi possível carregar suas sessões agora.
+            </p>
+          )}
 
-        {(estado === 'erro' || estado === 'vazio') && (
-          <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary')}>
-            TENTAR NOVAMENTE
-          </button>
-        )}
+          {(estado === 'erro' || estado === 'vazio') && (
+            <button
+              type="button"
+              onClick={() => setTentativa((atual) => atual + 1)}
+              className={buttonClass('secondary', 'mt-4')}
+            >
+              TENTAR NOVAMENTE
+            </button>
+          )}
 
-        {estado === 'pronto' && (
-          <ul className="flex flex-col gap-4">
-            {sessoes.map((sessao) => (
-              <li
-                key={sessao.id}
-                className="flex items-center gap-4 border-[3px] border-ink-950 bg-paper-50 p-4 shadow-[6px_6px_0_var(--color-ink-950)]"
+          {estado === 'pronto' && (
+            <div className="overflow-x-auto border-[3px] border-ink-950 bg-paper-50 shadow-[9px_9px_0_var(--color-ink-950)]">
+              <div
+                className="grid min-w-[720px] gap-3 bg-ink-950 px-5 py-3.5 font-mono text-lg tracking-wide text-flame-400"
+                style={{ gridTemplateColumns: COLUNAS }}
               >
-                <div className="flex flex-1 flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-display text-xl">{sessao.titulo}</h2>
-                    {!sessao.editavel && (
-                      <span className="border-2 border-flame-600 px-2 py-0.5 text-xs tracking-wide text-flame-600">
-                        Travada
-                      </span>
-                    )}
+                <div>FILME</div>
+                <div>SALA</div>
+                <div>DATA</div>
+                <div>HORA</div>
+                <div>R$</div>
+                <div>AÇÃO</div>
+              </div>
+              {sessoes.map((sessao) => {
+                const data = new Date(sessao.dataHora);
+                return (
+                  <div
+                    key={sessao.id}
+                    className="grid min-w-[720px] items-center gap-3 border-b-2 border-paper-line px-5 py-4 text-sm font-semibold"
+                    style={{ gridTemplateColumns: COLUNAS }}
+                  >
+                    <div className="flex items-center gap-2 font-display text-sm leading-tight">
+                      {sessao.titulo}
+                      {!sessao.editavel && (
+                        <span className="border-2 border-flame-600 px-2 py-0.5 text-xs tracking-wide text-flame-600">
+                          Travada
+                        </span>
+                      )}
+                    </div>
+                    <div className="font-mono text-base text-ink-950/60">{sessao.salaNome}</div>
+                    <div className="font-mono text-base">{data.toLocaleDateString('pt-BR')}</div>
+                    <div className="font-mono text-base">
+                      {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div className="font-display text-flame-600">{sessao.preco.toFixed(2).replace('.', ',')}</div>
+                    <div>
+                      {sessao.editavel && (
+                        <Link
+                          to={`/organizador/sessoes/${sessao.id}/editar`}
+                          className={buttonClass('secondary', 'px-3 py-1.5 text-xs')}
+                        >
+                          EDITAR
+                        </Link>
+                      )}
+                    </div>
                   </div>
-                  <span className="font-mono text-base text-ink-950/60">{sessao.salaNome}</span>
-                  <span className="font-mono text-base text-ink-950/60">
-                    {new Date(sessao.dataHora).toLocaleString('pt-BR')}
-                  </span>
-                  <span className="text-sm font-semibold">R$ {sessao.preco.toFixed(2).replace('.', ',')}</span>
-                </div>
-                {sessao.editavel && (
-                  <Link to={`/organizador/sessoes/${sessao.id}/editar`} className={buttonClass('secondary', 'px-4 py-2')}>
-                    EDITAR
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </PageShell>
   );
