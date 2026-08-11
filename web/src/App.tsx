@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router';
+import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
 import { BuscaFilmesPage } from './pages/BuscaFilmesPage';
@@ -11,13 +12,16 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ListagemSessoesPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/organizador" element={<BuscaFilmesPage />} />
-        <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
-        <Route path="/organizador/sessoes" element={<GerenciarSessoesPage />} />
-        <Route path="/organizador/sessoes/:id/editar" element={<EditarSessaoPage />} />
-        <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
+        <Route element={<Layout />}>
+          <Route path="/" element={<ListagemSessoesPage />} />
+          <Route path="/organizador" element={<BuscaFilmesPage />} />
+          <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
+          <Route path="/organizador/sessoes" element={<GerenciarSessoesPage />} />
+          <Route path="/organizador/sessoes/:id/editar" element={<EditarSessaoPage />} />
+          <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
+          <Route path="/em-construcao" element={<PapelPlaceholderPage />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
