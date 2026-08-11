@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { login, type Papel } from '../api/auth';
 import { ApiRequestError } from '../api/client';
 
@@ -10,7 +10,7 @@ export function rotaPorPapel(papel: Papel): string {
     case 'ORGANIZADOR':
       return '/organizador';
     case 'CLIENTE':
-      return '/cliente';
+      return '/';
     case 'PORTARIA':
       return '/portaria';
   }
@@ -81,6 +81,10 @@ export function LoginPage() {
             {estado === 'loading' ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
+
+        <Link to="/" className="mt-4 block text-center text-sm text-amber-300 underline">
+          só quero ver a programação
+        </Link>
       </div>
     </main>
   );

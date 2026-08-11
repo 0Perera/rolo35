@@ -11,12 +11,12 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<ListagemSessoesPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/organizador" element={<BuscaFilmesPage />} />
         <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
         <Route path="/organizador/sessoes" element={<GerenciarSessoesPage />} />
         <Route path="/organizador/sessoes/:id/editar" element={<EditarSessaoPage />} />
-        <Route path="/cliente" element={<ListagemSessoesPage />} />
         <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
       </Routes>
     </BrowserRouter>
