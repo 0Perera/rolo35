@@ -292,6 +292,28 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
+## Nova direção visual via handoff do Claude Design — substitui os tokens da Story 1.1
+
+- **Decisão**: adotar a direção visual do protótipo `Rolo 35.dc.html` (bundle `design-experimental-handoff.zip`, gerado no Claude Design em 2026-08-11) como identidade oficial do projeto, substituindo os tokens sépia/âmbar/veludo fixados na decisão "Design tokens do tema cinema 35mm definidos na Story 1.1". Tema: TV de tubo/videolocadora anos 80/90, fundo escuro roxo-preto, gradiente vermelho→dourado + azul ciano de contraste, tipografia Bungee/Archivo/VT323, cartões com borda preta 3px e sombra deslocada. CLAUDE.md atualizado com a nova paleta/tipografia.
+- **Por quê**: o protótipo já cobre a maior parte das telas do fluxo ponta a ponta (login, cadastro de cliente, vitrine, detalhe de filme, mapa de assentos, ticket com QR, painel do organizador, portaria, meus ingressos, sobre, salas) de forma consistente e mais trabalhada visualmente que os tokens hardcoded direto na Story 1.1 sem sessão de UX dedicada. Reaproveitar um design já pronto e testado visualmente custa menos que continuar evoluindo tokens improvisados tela a tela.
+- **Impacto**: `web/src/index.css` (tokens Tailwind `@theme` da Story 1.1) e as telas já implementadas (login, busca de filmes, painel do organizador, edição de sessão) precisam de retrofit pra nova paleta/tipografia — trabalho ainda não feito, registrado aqui como pendência, não deferred-work (não é achado de review, é mudança de direção deliberada).
+
+---
+
+## Escopo novo: autocadastro de cliente (fora do sprint plan original)
+
+- **Decisão**: adicionar autocadastro (`isCadastro` no protótipo — nome/e-mail/senha/termos) como fluxo real, restrito ao papel `CLIENTE`. Organizador e portaria continuam provisionados só via seed/gestão manual, sem tela de cadastro própria — os botões CLIENTE/ORGANIZADOR/PORTARIA no header do protótipo são um alternador de preview de papel, não um seletor de papel num formulário de cadastro real.
+- **Por quê**: a Story 1.1 ("Fundação e Login com Papel Fixo") assumia usuários pré-existentes via seed; o design trazido introduz um fluxo de autoatendimento que não estava nos epics originais. Restringir a CLIENTE mantém a superfície de ataque pequena — criar conta com papel `ORGANIZADOR`/`PORTARIA` livre seria escalação de privilégio via cadastro público.
+
+---
+
+## Cadastro de salas: adiado até existir design
+
+- **Decisão**: não implementar tela de criar/editar sala do organizador agora. O bundle de design não cobre essa tela (só existe uma página somente-leitura "SALAS"); o organizador segue sem CRUD de sala pela UI, dependendo do seed/SQL direto, até chegar um handoff específico.
+- **Por quê**: construir essa tela "no escuro" arriscaria retrabalho quando o design chegar. `GET /api/salas` já existe (decisão prévia, Story 2.1) como infraestrutura mínima — falta só a tela de escrita.
+
+---
+
 ## Sessão seed com dado real do TMDb, buscado uma vez e congelado no SQL (correção pós-Epic 2)
 
 - **Decisão**: `V2__seed.sql` foi editado no lugar (não uma nova migration) pra: (1) trocar `poster_url`/`sinopse` da sessão seed, antes fake/placeholder, pelos valores reais retornados pelo TMDb (`GET /search/movie?query=Clube da Luta&language=pt-BR`, o mesmo endpoint que `TmdbClient.buscarPorTitulo` usa em produção) — a consulta foi feita uma única vez, fora da aplicação, com o token real do projeto, e os valores retornados (`tmdb_id=550`, poster, sinopse, `data_estreia=1999-10-15`) ficaram gravados como literais no `INSERT`; (2) aumentar a Sala 1 de 40 pra 80 assentos e criar mais 2 salas (Sala 2, 30 assentos; Sala 3, 140 assentos), com a geração de `assentos` generalizada numa única query orientada por `linhas`/`colunas` de cada sala.
