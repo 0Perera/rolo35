@@ -26,3 +26,52 @@
   --font-body: "Archivo", sans-serif;
   --font-mono: "VT323", monospace;
 }
+
+body {
+  margin: 0;
+  background: var(--color-paper-100);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='checkbox']:focus-visible {
+  outline: 3px solid var(--color-cyan-400);
+  outline-offset: 2px;
+}
+
+@keyframes rolo-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+@keyframes rolo-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes rolo-flick {
+  0%,
+  96% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0.86;
+  }
+  100% {
+    opacity: 1;
+  }
+}
