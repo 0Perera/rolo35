@@ -1,7 +1,7 @@
 package br.com.rolo35.api.sessoes.dto;
 
 import java.math.BigDecimal;
-import java.sql.Date;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record SessaoListagemDto(
@@ -11,7 +11,7 @@ public record SessaoListagemDto(
         String titulo,
         String posterUrl,
         String sinopse,
-        Date dataEstreia,
+        LocalDate dataEstreia,
         LocalDateTime dataHora,
         BigDecimal preco,
         int capacidade,

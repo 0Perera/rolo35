@@ -1,7 +1,7 @@
 package br.com.rolo35.api.sessoes.repository;
 
 import java.math.BigDecimal;
-import java.sql.Date;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public interface SessaoListagemProjection {
@@ -18,7 +18,9 @@ public interface SessaoListagemProjection {
 
     String getSinopse();
 
-    Date getDataEstreia();
+    // Precisa bater com o tipo do campo na entidade (LocalDate) — a projection não converte
+    // pra java.sql.Date, e a incompatibilidade só estoura em runtime (500), não em compile time.
+    LocalDate getDataEstreia();
 
     LocalDateTime getDataHora();
 

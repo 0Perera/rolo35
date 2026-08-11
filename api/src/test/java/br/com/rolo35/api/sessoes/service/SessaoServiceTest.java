@@ -37,7 +37,7 @@ import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.math.BigDecimal;
-import java.sql.Date;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -284,7 +284,7 @@ class SessaoServiceTest {
         given(projecao.getTitulo()).willReturn("Clube da Luta");
         given(projecao.getPosterUrl()).willReturn("http://poster");
         given(projecao.getSinopse()).willReturn("sinopse");
-        given(projecao.getDataEstreia()).willReturn(Date.valueOf("1999-10-15"));
+        given(projecao.getDataEstreia()).willReturn(LocalDate.parse("1999-10-15"));
         given(projecao.getDataHora()).willReturn(LocalDateTime.now().plusDays(7));
         given(projecao.getPreco()).willReturn(new BigDecimal("25.00"));
         given(projecao.getCapacidade()).willReturn(40);

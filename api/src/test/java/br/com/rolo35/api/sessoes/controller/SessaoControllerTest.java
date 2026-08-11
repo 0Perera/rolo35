@@ -24,7 +24,7 @@ import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
 import br.com.rolo35.api.sessoes.service.SessaoService;
 import java.math.BigDecimal;
-import java.sql.Date;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -197,7 +197,7 @@ class SessaoControllerTest {
     @Test
     void returns200WithSessaoListagemArrayForGetSessoes() throws Exception {
         SessaoListagemDto dto = new SessaoListagemDto(
-                100L, "Sala 1", 550L, "Clube da Luta", "http://poster", "sinopse", Date.valueOf("1999-10-15"),
+                100L, "Sala 1", 550L, "Clube da Luta", "http://poster", "sinopse", LocalDate.parse("1999-10-15"),
                 LocalDateTime.now().plusDays(7), new BigDecimal("25.00"), 40, false);
         given(sessaoService.listarPublicadas()).willReturn(List.of(dto));
 
