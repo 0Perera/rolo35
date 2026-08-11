@@ -46,9 +46,12 @@ banco):
 | Cliente | `cliente2@rolo35.com.br` | `cliente123` |
 | Portaria | `portaria@rolo35.com.br` | `portaria123` |
 
-Também existe 1 sessão publicada de exemplo ("Clube da Luta (placeholder)" — dado
-de filme fictício, integração real com TMDb é da Story 1.2), numa sala de 40
-assentos (5 fileiras x 8 colunas), todos com status `LIVRE`.
+Também existem 3 salas semeadas, com tamanhos variados: Sala 1 (8 fileiras x 10
+colunas = 80 assentos), Sala 2 (5x6 = 30 assentos) e Sala 3 (10x14 = 140
+assentos). Existe 1 sessão publicada de exemplo, na Sala 1 — "Clube da Luta"
+(1999), com pôster e sinopse reais obtidos do TMDb — com todos os 80 assentos
+dessa sessão livres. Salas 2 e 3 ainda não têm sessão vinculada; ficam
+disponíveis pro organizador criar sessões manualmente durante o teste.
 
 ## Uso de IA
 
