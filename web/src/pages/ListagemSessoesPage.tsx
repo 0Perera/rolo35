@@ -93,7 +93,7 @@ export function ListagemSessoesPage() {
                 className="relative animate-[rolo-flick_7s_infinite] overflow-hidden rounded-[28px]"
                 style={{ background: '#05060A', border: '12px solid #14100E', boxShadow: 'inset 0 0 60px rgba(0,0,0,0.9)' }}
               >
-                <div className="relative min-h-[clamp(300px,92cqw,460px)]">
+                <div className="relative min-h-[clamp(360px,92cqw,460px)]">
                   {destaque.posterUrl && (
                     <img
                       src={destaque.posterUrl}
@@ -137,7 +137,7 @@ export function ListagemSessoesPage() {
                       </div>
                     )}
                     {proximaSessaoDestaque?.sinopse && (
-                      <p className="max-w-[430px] text-[15px] leading-relaxed text-[#CFC5B8]">
+                      <p className="line-clamp-2 max-w-[430px] text-[15px] leading-relaxed text-[#CFC5B8]">
                         {proximaSessaoDestaque.sinopse}
                       </p>
                     )}
