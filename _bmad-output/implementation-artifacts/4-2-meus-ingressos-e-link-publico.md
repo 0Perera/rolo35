@@ -4,7 +4,7 @@ baseline_commit: e255202
 
 # Story 4.2: Meus Ingressos e Link Público
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -24,9 +24,9 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — `IngressoRepository`: leitura por cliente e por id, sem mutação (AC1, AC3)**
-  - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/repository/IngressoLeituraRepositoryTest.java` (`@Import(TestcontainersConfiguration.class) @SpringBootTest`, mesmo padrão de `IngressoRepositorySmokeTest` da Story 4.1): popular 2 clientes, 2 reservas (uma por cliente), ingressos pra cada uma; `buscarPorCliente(clienteId)` retorna só os ingressos da reserva daquele cliente, com `titulo`/`salaNome`/`dataHora`/`fileira`/`numero` do assento já resolvidos (projection, sem N+1 — mesmo critério non-negotiable das stories anteriores); `findById(codigoUuid)` (herdado de `JpaRepository`, já existe da Story 4.1) usado pro link público, sem lock nenhum (nenhum `@Lock` na query de leitura pública — AC4/AD-9 exigem isso explicitamente). Rodar e confirmar que falha por `buscarPorCliente()`/projection ainda não existirem.
-  - [ ] **[GREEN]** Criar `ingressos/repository/IngressoResumoProjection.java` (interface Spring Data: `getId(): UUID`, `getStatus(): String`, `getAssentoFileira(): String`, `getAssentoNumero(): Integer`, `getSessaoTitulo(): String`, `getSessaoPosterUrl(): String`, `getSalaNome(): String`, `getDataHora(): LocalDateTime`). Adicionar em `IngressoRepository`:
+- [x] **Task 1 — `IngressoRepository`: leitura por cliente e por id, sem mutação (AC1, AC3)**
+  - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/repository/IngressoLeituraRepositoryTest.java` (`@Import(TestcontainersConfiguration.class) @SpringBootTest`, mesmo padrão de `IngressoRepositorySmokeTest` da Story 4.1): popular 2 clientes, 2 reservas (uma por cliente), ingressos pra cada uma; `buscarPorCliente(clienteId)` retorna só os ingressos da reserva daquele cliente, com `titulo`/`salaNome`/`dataHora`/`fileira`/`numero` do assento já resolvidos (projection, sem N+1 — mesmo critério non-negotiable das stories anteriores); `findById(codigoUuid)` (herdado de `JpaRepository`, já existe da Story 4.1) usado pro link público, sem lock nenhum (nenhum `@Lock` na query de leitura pública — AC4/AD-9 exigem isso explicitamente). Rodar e confirmar que falha por `buscarPorCliente()`/projection ainda não existirem.
+  - [x] **[GREEN]** Criar `ingressos/repository/IngressoResumoProjection.java` (interface Spring Data: `getId(): UUID`, `getStatus(): String`, `getAssentoFileira(): String`, `getAssentoNumero(): Integer`, `getSessaoTitulo(): String`, `getSessaoPosterUrl(): String`, `getSalaNome(): String`, `getDataHora(): LocalDateTime`). Adicionar em `IngressoRepository`:
     ```java
     @Query("""
         SELECT i.id AS id, i.status AS status,
@@ -43,7 +43,7 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
     List<IngressoResumoProjection> buscarPorCliente(Long clienteId);
     ```
     Mesmo padrão de `JOIN ... ON` explícito já usado em `AssentoSessaoRepository.buscarMapaPorSessao()` (Story 3.1) pra navegar entre entidades sem associação `@ManyToOne` mapeada (`Ingresso` guarda só os IDs soltos `reservaId`/`assentoId`/`sessaoId`, mesmo estilo de `AssentoSessao`/`AssentoSessaoId` — decisão consistente, não single-purpose desta query). `findById(UUID)` da leitura pública já vem de `JpaRepository`, sem necessidade de método novo — só usar sem `@Lock` (ao contrário de todo outro `findByIdForUpdate` do projeto, é deliberado: AD-9 exige "sem lock" pra rota pública). Rodar o teste até passar.
-  - [ ] Commit: `feat(ingressos): IngressoRepository.buscarPorCliente() sem N+1 (AC1, AC3)`
+  - [x] Commit: `feat(ingressos): IngressoRepository.buscarPorCliente() sem N+1 (AC1, AC3)`
 
 - [ ] **Task 2 — `IngressoService`: `listarMinhas()` e `buscarPublico()` com validação HMAC antes do banco (AC1-5)**
   - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/service/IngressoServiceTest.java` (Mockito puro, mocka `IngressoRepository`, `UsuarioRepository`, `CodigoIngressoService`): (a) `listarMinhas(clienteEmail)` → resolve `Usuario` por e-mail, chama `buscarPorCliente(usuario.getId())`, mapeia pra `List<IngressoResumoDto>`; cliente sem ingresso → lista vazia (não exceção, AC2); (b) `buscarPublico(codigo)` com `codigo` cuja assinatura HMAC não bate (mock de `CodigoIngressoService.validar()` retornando `false`) → `IngressoNaoEncontradoException`, **sem nenhuma chamada** a `ingressoRepository.findById()` (prova de AC5: a assinatura é checada antes do banco); (c) assinatura válida mas `findById()` não encontra a linha → mesma `IngressoNaoEncontradoException` (mesma exceção dos dois casos — prova de que a resposta não diferencia os motivos, AC5); (d) assinatura válida + linha encontrada → `IngressoPublicoDto` com `titulo/salaNome/dataHora/status`, sem `clienteId`/`reservaId`/outros campos internos. Rodar e confirmar que falha.
@@ -152,4 +152,12 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
 
 ### Completion Notes List
 
+- Task 1: `IngressoRepository.buscarPorCliente()` adicionado com `JOIN ... ON` explícito
+  (4 tabelas numa query só, sem N+1), mesmo padrão de `AssentoSessaoRepository.buscarMapaPorSessao()`
+  (Story 3.1). `IngressoResumoProjection` criada conforme spec.
+
 ### File List
+
+- `api/src/main/java/br/com/rolo35/api/ingressos/repository/IngressoResumoProjection.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/ingressos/repository/IngressoRepository.java` (update — `buscarPorCliente()`)
+- `api/src/test/java/br/com/rolo35/api/ingressos/repository/IngressoLeituraRepositoryTest.java` (novo)
