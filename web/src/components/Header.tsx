@@ -27,17 +27,19 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-ink-950">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-6 px-6 py-3">
-        <Link to="/" className="flex items-baseline gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-full border-[3px] border-flame-400 font-display text-sm text-flame-400">
+      {/* Em telas estreitas o header quebra em duas faixas: marca + ação na de cima, navegação
+          na de baixo. A partir de sm tudo volta pra uma linha só, com a ação empurrada pra direita. */}
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2.5 px-4 py-3 sm:px-6">
+        <Link to="/" className="order-1 flex shrink-0 items-baseline gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-full border-[3px] border-flame-400 font-display text-xs text-flame-400 sm:h-9 sm:w-9 sm:text-sm">
             35
           </span>
-          <span className="font-display text-2xl tracking-wide text-flame-400 [text-shadow:2px_2px_0_var(--color-flame-600)]">
+          <span className="font-display text-xl tracking-wide text-flame-400 [text-shadow:2px_2px_0_var(--color-flame-600)] sm:text-2xl">
             ROLO&nbsp;35
           </span>
         </Link>
 
-        <nav className="flex flex-wrap gap-4 text-xs font-bold tracking-[1.6px]">
+        <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] gap-4 overflow-x-auto px-4 text-xs font-bold tracking-[1.6px] whitespace-nowrap sm:order-2 sm:mx-0 sm:w-auto sm:overflow-visible sm:px-0">
           <Link to="/" className={linkClass(location.pathname === '/')}>
             EM CARTAZ
           </Link>
@@ -68,20 +70,18 @@ export function Header() {
           )}
         </nav>
 
-        <div className="flex-1" />
-
         {token ? (
           <button
             type="button"
             onClick={sair}
-            className="border-[3px] border-ink-950 bg-paper-50 px-4 py-2 font-display text-xs tracking-wide text-ink-950 shadow-[4px_4px_0_var(--color-flame-400)]"
+            className="order-2 ml-auto shrink-0 border-[3px] border-ink-950 bg-paper-50 px-3 py-1.5 font-display text-[11px] tracking-wide text-ink-950 shadow-[4px_4px_0_var(--color-flame-400)] sm:order-3 sm:px-4 sm:py-2 sm:text-xs"
           >
             {papel} · SAIR
           </button>
         ) : (
           <Link
             to="/login"
-            className="border-[3px] border-ink-950 bg-gradient-to-r from-flame-600 via-flame-500 to-flame-400 px-4 py-2 font-display text-xs tracking-wide text-ink-950 shadow-[4px_4px_0_var(--color-ink-950)]"
+            className="order-2 ml-auto shrink-0 border-[3px] border-ink-950 bg-gradient-to-r from-flame-600 via-flame-500 to-flame-400 px-3 py-1.5 font-display text-[11px] tracking-wide text-ink-950 shadow-[4px_4px_0_var(--color-ink-950)] sm:order-3 sm:px-4 sm:py-2 sm:text-xs"
           >
             ENTRAR
           </Link>

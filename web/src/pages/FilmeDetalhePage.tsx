@@ -122,9 +122,11 @@ export function FilmeDetalhePage() {
             {agruparPorDia(sessoesDoFilme).map(({ dia, sessoes: sessoesDoDia }) => (
               <div
                 key={dia}
-                className="flex flex-wrap items-center gap-5 border-t-2 border-dashed border-[#C7B694] py-4"
+                className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t-2 border-dashed border-[#C7B694] py-4 sm:gap-x-5"
               >
-                <div className="w-[150px] font-mono text-xl tracking-wide uppercase">{dia}</div>
+                {/* Largura fixa só a partir de sm: em telas estreitas ela abriria um vão entre
+                    a data e o primeiro horário quando o dia tem poucas sessões. */}
+                <div className="shrink-0 font-mono text-xl tracking-wide uppercase sm:w-[150px]">{dia}</div>
                 <div className="flex flex-wrap gap-3">
                   {sessoesDoDia.map((sessao) => (
                     <button

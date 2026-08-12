@@ -8,6 +8,7 @@ import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
 import { EditarSessaoPage } from './pages/EditarSessaoPage';
 import { ListagemSessoesPage } from './pages/ListagemSessoesPage';
 import { FilmeDetalhePage } from './pages/FilmeDetalhePage';
+import { SobrePage } from './pages/SobrePage';
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />
+            <Route path="/sobre" element={<SobrePage />} />
             <Route path="/organizador" element={<BuscaFilmesPage />} />
             <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
             <Route path="/organizador/sessoes" element={<GerenciarSessoesPage />} />
