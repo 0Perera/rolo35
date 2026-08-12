@@ -66,9 +66,9 @@ so that eu decida se quero reservar antes mesmo de criar conta.
     Adicionar constante `STATUS_RESERVADO = "RESERVADO"` ao lado da já existente `STATUS_LIVRE`. Rodar o teste até passar.
   - [x] Commit: `feat(sessoes): SessaoService.mapaAssentos() com TTL lazy (AC1, AC3-4)`
 
-- [ ] **Task 3 — `GET /api/sessoes/{id}/mapa-assentos` público, sem autenticação (AC1, AC4)**
-  - [ ] **[RED]** Estender `api/src/test/java/br/com/rolo35/api/sessoes/controller/SessaoControllerTest.java`: `GET /api/sessoes/{id}/mapa-assentos` → `200` + shape de `MapaAssentosDto` (incluindo array `assentos` com `id/fileira/numero/status`, sem qualquer campo de identidade de cliente); service lança `SessaoNaoEncontradaException` → `404` com `{codigo: "SESSAO_NAO_ENCONTRADA"}` (reaproveita o handler já existente, sem exceção nova). Estender `api/src/test/java/br/com/rolo35/api/sessoes/SessaoSecurityTest.java` com um caso **sem token nenhum** → `200` no service mockado (RED que prova a lacuna, mesmo padrão do teste equivalente de `GET /api/sessoes` da Story 2.3). Rodar e confirmar que falha.
-  - [ ] **[GREEN]** Adicionar em `SessaoController`:
+- [x] **Task 3 — `GET /api/sessoes/{id}/mapa-assentos` público, sem autenticação (AC1, AC4)**
+  - [x] **[RED]** Estender `api/src/test/java/br/com/rolo35/api/sessoes/controller/SessaoControllerTest.java`: `GET /api/sessoes/{id}/mapa-assentos` → `200` + shape de `MapaAssentosDto` (incluindo array `assentos` com `id/fileira/numero/status`, sem qualquer campo de identidade de cliente); service lança `SessaoNaoEncontradaException` → `404` com `{codigo: "SESSAO_NAO_ENCONTRADA"}` (reaproveita o handler já existente, sem exceção nova). Estender `api/src/test/java/br/com/rolo35/api/sessoes/SessaoSecurityTest.java` com um caso **sem token nenhum** → `200` no service mockado (RED que prova a lacuna, mesmo padrão do teste equivalente de `GET /api/sessoes` da Story 2.3). Rodar e confirmar que falha.
+  - [x] **[GREEN]** Adicionar em `SessaoController`:
     ```java
     @GetMapping("/{id}/mapa-assentos")
     public ResponseEntity<MapaAssentosDto> mapaAssentos(@PathVariable Long id) {
@@ -76,7 +76,7 @@ so that eu decida se quero reservar antes mesmo de criar conta.
     }
     ```
     Sem `@PreAuthorize` — rota pública. Em `SecurityConfig`, adicionar **outra** entrada `.requestMatchers(HttpMethod.GET, "/api/sessoes/*/mapa-assentos").permitAll()` antes de `.anyRequest().authenticated()` — **não** ampliar o matcher existente pra `/api/sessoes/**`, porque isso liberaria `GET /api/sessoes/{id}` (rota de gestão, exige `ORGANIZADOR`) e `GET /api/sessoes/minhas` sem querer. `/*/` casa exatamente um segmento de path (o `{id}`), sem alcançar `/minhas` nem sub-rotas mais profundas. Rodar os testes até passar.
-  - [ ] Commit: `feat(sessoes): GET /api/sessoes/{id}/mapa-assentos público sem autenticação (AC1, AC4)`
+  - [x] Commit: `feat(sessoes): GET /api/sessoes/{id}/mapa-assentos público sem autenticação (AC1, AC4)`
 
 - [ ] **Task 4 — Tela de mapa de assentos (AC1, AC4, AC5)**
   - [ ] Estender `web/src/api/sessoes.ts`: adicionar `interface AssentoMapa { id: number; fileira: string; numero: number; status: 'LIVRE' | 'RESERVADO' | 'VENDIDO' }`, `interface MapaAssentos { sessaoId: number; titulo: string; posterUrl: string | null; salaNome: string; dataHora: string; preco: number; assentos: AssentoMapa[] }` e `buscarMapaAssentos(id: number): Promise<MapaAssentos>` (`GET /api/sessoes/${id}/mapa-assentos`) — sem `Authorization`, mesmo raciocínio de `listarSessoesPublicadas` (Story 2.3): `apiFetch` só anexa o header se houver token, visitante sem login não tem.
@@ -151,3 +151,7 @@ so that eu decida se quero reservar antes mesmo de criar conta.
 - `api/src/main/java/br/com/rolo35/api/sessoes/dto/MapaAssentosDto.java` (novo)
 - `api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java` (update — `mapaAssentos()`, `STATUS_RESERVADO`)
 - `api/src/test/java/br/com/rolo35/api/sessoes/service/SessaoServiceTest.java` (update)
+- `api/src/main/java/br/com/rolo35/api/sessoes/controller/SessaoController.java` (update — `GET /{id}/mapa-assentos`)
+- `api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java` (update — `permitAll()` específico)
+- `api/src/test/java/br/com/rolo35/api/sessoes/controller/SessaoControllerTest.java` (update)
+- `api/src/test/java/br/com/rolo35/api/sessoes/SessaoSecurityTest.java` (update)

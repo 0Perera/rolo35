@@ -17,8 +17,10 @@ import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
+import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -312,5 +314,36 @@ class SessaoControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"));
+    }
+
+    @Test
+    void returns200WithMapaAssentosDtoForGetMapaAssentos() throws Exception {
+        MapaAssentosDto dto = new MapaAssentosDto(
+                100L, "Clube da Luta", "http://poster", "Sala 1", LocalDateTime.now().plusDays(7),
+                new BigDecimal("25.00"),
+                List.of(new AssentoMapaDto(1L, "A", 1, "LIVRE"), new AssentoMapaDto(2L, "A", 2, "RESERVADO")));
+        given(sessaoService.mapaAssentos(100L)).willReturn(dto);
+
+        mockMvc.perform(get("/api/sessoes/100/mapa-assentos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessaoId").value(100))
+                .andExpect(jsonPath("$.titulo").value("Clube da Luta"))
+                .andExpect(jsonPath("$.salaNome").value("Sala 1"))
+                .andExpect(jsonPath("$.assentos[0].id").value(1))
+                .andExpect(jsonPath("$.assentos[0].fileira").value("A"))
+                .andExpect(jsonPath("$.assentos[0].numero").value(1))
+                .andExpect(jsonPath("$.assentos[0].status").value("LIVRE"))
+                .andExpect(jsonPath("$.assentos[1].status").value("RESERVADO"))
+                .andExpect(jsonPath("$.assentos[0].reservaId").doesNotExist())
+                .andExpect(jsonPath("$.assentos[0].expiresAt").doesNotExist());
+    }
+
+    @Test
+    void returns404WithSessaoNaoEncontradaEnvelopeForGetMapaAssentos() throws Exception {
+        given(sessaoService.mapaAssentos(999L)).willThrow(new SessaoNaoEncontradaException());
+
+        mockMvc.perform(get("/api/sessoes/999/mapa-assentos"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("SESSAO_NAO_ENCONTRADA"));
     }
 }

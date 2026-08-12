@@ -126,6 +126,16 @@ class SessaoSecurityTest {
         mockMvc.perform(get("/api/sessoes")).andExpect(status().isOk());
     }
 
+    // AC1 desta story (3.1): visitante sem conta precisa ver o mapa de assentos de uma sessão
+    // específica antes de decidir se reserva. Sem esse matcher próprio em SecurityConfig, a rota
+    // herdaria .anyRequest().authenticated() em silêncio.
+    @Test
+    void returns200ForGetMapaAssentosWithoutAnyToken() throws Exception {
+        given(sessaoService.mapaAssentos(100L)).willReturn(null);
+
+        mockMvc.perform(get("/api/sessoes/100/mapa-assentos")).andExpect(status().isOk());
+    }
+
     private EditarSessaoRequest editarRequestValido() {
         return new EditarSessaoRequest(
                 1L, "Clube da Luta (editado)", "sinopse editada", LocalDateTime.now().plusDays(30),

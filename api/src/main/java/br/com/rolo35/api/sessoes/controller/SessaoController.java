@@ -2,6 +2,7 @@ package br.com.rolo35.api.sessoes.controller;
 
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -60,5 +61,10 @@ public class SessaoController {
     public ResponseEntity<SessaoResponse> editar(
             @PathVariable Long id, @Valid @RequestBody EditarSessaoRequest request, Authentication authentication) {
         return ResponseEntity.ok(sessaoService.editar(id, request, authentication.getName()));
+    }
+
+    @GetMapping("/{id}/mapa-assentos")
+    public ResponseEntity<MapaAssentosDto> mapaAssentos(@PathVariable Long id) {
+        return ResponseEntity.ok(sessaoService.mapaAssentos(id));
     }
 }

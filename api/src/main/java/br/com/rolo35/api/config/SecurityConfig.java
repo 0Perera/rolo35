@@ -49,6 +49,11 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessoes")
                         .permitAll()
+                        // Matcher próprio (não amplia o path exato acima): libera só o mapa de
+                        // assentos de uma sessão específica. Ampliar pra /api/sessoes/** vazaria
+                        // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/minhas.
+                        .requestMatchers(HttpMethod.GET, "/api/sessoes/*/mapa-assentos")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new RestAuthenticationEntryPoint(objectMapper))
