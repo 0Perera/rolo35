@@ -4,7 +4,7 @@ baseline_commit: 7a12d86
 
 # Story 3.1: Mapa de Assentos Público
 
-Status: ready-for-dev
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -86,11 +86,11 @@ so that eu decida se quero reservar antes mesmo de criar conta.
   - [x] Depois do componente pronto: `MapaAssentosPage.test.tsx` (vitest + testing-library) — mocka `api/sessoes.ts`, cobre estados `loading/erro/nao-encontrado/pronto`, e que cada assento renderiza com o status correto (contrato de comportamento, não pixel/CSS).
   - [x] Commit: `feat(sessoes): tela de mapa de assentos (AC1, AC4-5)`
 
-- [ ] **Task 5 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa (back-end `mvn test`, incluindo o teste Testcontainers da Task 1; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
-  - [ ] Registrar em `docs/decisions.md`: (a) por que o TTL lazy do mapa não escreve no banco na leitura (AD-4 é explícito — só o caminho de escrita, que chega na Story 3.2, precisa reivindicar o assento de verdade); (b) por que o `permitAll()` usa `/api/sessoes/*/mapa-assentos` em vez de ampliar `/api/sessoes/**`; (c) por que `buscarMapaPorSessao()` usa JPQL com `JOIN ... ON` em vez de `nativeQuery = true`, apesar do precedente de `listarPublicadas()` (Story 2.3) — sem agregação, JPQL tipado é suficiente e evita SQL amarrado ao dialeto do Postgres.
-  - [ ] Atualizar o Status desta story pra `review` (mesmo ciclo já usado nas Stories 1.1/1.2/2.1/2.3: code-review antes de `done`).
-  - [ ] Commit: `docs(sessoes): confirmação final e fecha Story 3.1 pra review`
+- [x] **Task 5 — Confirmação final (sem código novo, checklist de saída)**
+  - [x] Rodar a suíte completa (back-end `mvn test`, incluindo o teste Testcontainers da Task 1; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
+  - [x] Registrar em `docs/decisions.md`: (a) por que o TTL lazy do mapa não escreve no banco na leitura (AD-4 é explícito — só o caminho de escrita, que chega na Story 3.2, precisa reivindicar o assento de verdade); (b) por que o `permitAll()` usa `/api/sessoes/*/mapa-assentos` em vez de ampliar `/api/sessoes/**`; (c) por que `buscarMapaPorSessao()` usa JPQL com `JOIN ... ON` em vez de `nativeQuery = true`, apesar do precedente de `listarPublicadas()` (Story 2.3) — sem agregação, JPQL tipado é suficiente e evita SQL amarrado ao dialeto do Postgres.
+  - [x] Atualizar o Status desta story pra `review` (mesmo ciclo já usado nas Stories 1.1/1.2/2.1/2.3: code-review antes de `done`).
+  - [x] Commit: `docs(sessoes): confirmação final e fecha Story 3.1 pra review`
 
 ## Dev Notes
 

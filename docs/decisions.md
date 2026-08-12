@@ -334,3 +334,24 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: no protótipo essa cor é dado estático de demonstração (`FILMES[i].cor`, hardcoded no array de exemplo da ferramenta de design), sem equivalente real no nosso modelo (`sessoes` não tem — e não tem por que ter — uma "cor do filme"). Derivar de forma determinística do `tmdbId` mantém o efeito visual (variedade de cor entre pôsteres) sem inventar uma coluna nova nem exigir curadoria manual por filme.
 
 ---
+
+## Mapa de assentos calcula TTL lazy só na leitura, sem corrigir o banco (Story 3.1)
+
+- **Decisão**: `SessaoService.mapaAssentos()` calcula o status efetivo de cada assento (hold vencido → `LIVRE`) só em memória, a partir de `expires_at`, sem nunca escrever de volta na linha `assento_sessao` — mesmo quando detecta um hold expirado.
+- **Por quê**: AD-4 é explícito que TTL de reserva é lazy e sem job agendado, mas o cálculo acontece em todo lugar que **lê ou escreve** o estado — esta story cobre só leitura. Corrigir a linha no banco durante uma consulta pública e sem lock criaria uma race condition (dois visitantes consultando o mapa ao mesmo tempo poderiam ambos tentar "liberar" o mesmo assento vencido, sem coordenação) e antecipar lógica que a Story 3.2 já vai centralizar sob `SELECT ... FOR UPDATE` (AD-3) na hora de reivindicar o assento de verdade. Manter o mapa 100% leitura evita esse acoplamento prematuro.
+
+---
+
+## `permitAll()` do mapa de assentos usa matcher específico, não amplia `/api/sessoes/**` (Story 3.1)
+
+- **Decisão**: `SecurityConfig` libera `GET /api/sessoes/*/mapa-assentos` como uma entrada `permitAll()` própria, em vez de ampliar o matcher exato já existente para `GET /api/sessoes` cobrir qualquer sub-rota.
+- **Por quê**: `GET /api/sessoes/{id}` (sem sufixo) é a rota de gestão do organizador, autenticada, e `GET /api/sessoes/minhas` também exige login — um matcher `/api/sessoes/**` tornaria as duas públicas sem querer, regressão de segurança grave. O padrão com wildcard `/*/mapa-assentos` casa só o segmento exato do `{id}` seguido do sufixo literal, preservando as demais rotas atrás de `.anyRequest().authenticated()`. Mesmo cuidado que já motivou os dois grupos de `permitAll()` separados na Story 2.3.
+
+---
+
+## `buscarMapaPorSessao()` usa JPQL com `JOIN ... ON`, não `nativeQuery = true` (Story 3.1)
+
+- **Decisão**: `AssentoSessaoRepository.buscarMapaPorSessao()` é uma query JPQL tipada (`@Query` sem `nativeQuery = true`), com `JOIN Assento a ON a.id = asx.id.assentoId` explícito entre duas entidades sem `@ManyToOne` mapeado.
+- **Por quê**: `SessaoRepository.listarPublicadas()` (Story 2.3) usa SQL nativo porque precisa de `COUNT(DISTINCT ...)` + `CASE WHEN` em agregação, que não é natural em JPQL — mas essa query é um join simples sem agregação nenhuma. JPQL com `JOIN ... ON` (suportado desde JPA 2.1) resolve o join sem exigir associação mapeada entre as entidades, mantendo a query validada pelo Hibernate contra o metamodelo em tempo de build (SQL nativo só falha em runtime se um nome de coluna estiver errado) e portável entre dialetos de banco. Não copiar o padrão `nativeQuery = true` por reflexo — cada query usa a ferramenta que o caso pede.
+
+---
