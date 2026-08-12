@@ -355,3 +355,24 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: `SessaoRepository.listarPublicadas()` (Story 2.3) usa SQL nativo porque precisa de `COUNT(DISTINCT ...)` + `CASE WHEN` em agregação, que não é natural em JPQL — mas essa query é um join simples sem agregação nenhuma. JPQL com `JOIN ... ON` (suportado desde JPA 2.1) resolve o join sem exigir associação mapeada entre as entidades, mantendo a query validada pelo Hibernate contra o metamodelo em tempo de build (SQL nativo só falha em runtime se um nome de coluna estiver errado) e portável entre dialetos de banco. Não copiar o padrão `nativeQuery = true` por reflexo — cada query usa a ferramenta que o caso pede.
 
 ---
+
+## `travarParaReserva`/`reivindicar` usam `@Modifying @Query` em vez de `save()` de entidade recarregada (Story 3.2)
+
+- **Decisão**: `AssentoSessaoRepository.reivindicar()` é um `UPDATE` em JPQL via `@Modifying @Query` (com `clearAutomatically = true`), não um `save()` de uma instância de `AssentoSessao` reconstruída em memória com o mesmo id.
+- **Por quê**: `AssentoSessao` implementa `Persistable<AssentoSessaoId>` com a flag `novo` controlada só por `@PostPersist`/`@PostLoad` (Story 2.1) — ela não tem setters. Uma instância nova construída via `new AssentoSessao(id, ...)` sempre nasce com `novo=true` (`isNew()=true`), então um `save()` dessa instância forçaria o Spring Data a tentar um `INSERT` sobre uma PK composta que já existe, violando a constraint. `@Modifying @Query` evita esse caminho inteiro: escreve direto via SQL gerado pelo Hibernate a partir do JPQL, sem passar pela máquina de dirty-checking/`Persistable` da entidade. `clearAutomatically = true` evita que a sessão JPA devolva entidades stale (do cache de identidade) depois do UPDATE em massa — sem isso, `ReservaAssentoLockRepositoryTest` falhava com `TransactionRequiredException`/dado desatualizado ao reler as linhas na mesma transação de teste.
+
+---
+
+## `StatusAssento` fica em `sessoes/`, não em `reservas/`, mesmo sendo usado por `ReservaService` (Story 3.2)
+
+- **Decisão**: o enum `StatusAssento` (`LIVRE`/`RESERVADO`/`VENDIDO`) foi criado em `br.com.rolo35.api.sessoes`, e não em `br.com.rolo35.api.reservas`, apesar de `ReservaService.statusEfetivoLivre()` (pacote `reservas`) ser o principal consumidor da regra de TTL lazy que usa esses valores.
+- **Por quê**: AD-1 fixa a direção de dependência entre os pacotes de domínio como `reservas → sessoes`, nunca o inverso — `SessaoService` (que também compara contra os mesmos três valores, hoje como `String`) não pode importar um tipo do pacote `reservas` sem inverter essa direção. Colocar o enum em `sessoes/` deixa os dois lados (leitura em `SessaoService`, escrita em `ReservaService`) importarem de um único lugar compatível com AD-1. Pelo mesmo motivo, `HoldAtivoException` (Task 5) também foi criada em `sessoes/`, e não em `reservas/` como um rascunho anterior do artefato da story sugeria — `SessaoService.editar()` é quem lança essa exceção, e ela não pode depender de `reservas/`.
+
+---
+
+## Correção de `SessaoService.editar()` (hold ativo) entrou na Story 3.2, não ficou só em `deferred-work.md` (Story 3.2)
+
+- **Decisão**: a checagem de hold ativo antes de `editar()` apagar `assento_sessao` numa troca de sala (Task 5 desta story) foi implementada aqui, e não deixada como item solto em `deferred-work.md` esperando uma story futura dedicada.
+- **Por quê**: o review da Story 2.2 já tinha marcado esse gap como "ação obrigatória pra Epic 3", mas na época era um cenário inalcançável — nenhum código criava hold real ainda. A partir do momento em que `ReservaService.reservar()` (Task 3 desta mesma story) passa a criar holds de verdade, o gap deixa de ser teórico: um cliente em checkout perderia o assento silenciosamente se um organizador trocasse a sala da sessão no meio da janela de 10 minutos, deixando a `reserva` órfã. Adiar essa correção pra depois arriscaria um intervalo real (entre esta story e a próxima) em que o bug estaria ativo em produção.
+
+---
