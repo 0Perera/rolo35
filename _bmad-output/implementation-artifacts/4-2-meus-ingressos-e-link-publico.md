@@ -94,14 +94,14 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
     Em `SecurityConfig`, adicionar **outra** entrada específica ao grupo de `permitAll()` já existente: `.requestMatchers(HttpMethod.GET, "/api/ingressos/*").permitAll()` — casa só `/api/ingressos/{codigo}` (um segmento), **não** `/api/ingressos/minhas`... **atenção**: `/minhas` também é um segmento único, então esse matcher bateria nos dois paths igualmente e vazaria `/minhas` como pública, replicando o erro que a Story 3.1 evitou de propósito com `/mapa-assentos`. **Ordem dos `requestMatchers` importa aqui**: declarar `.requestMatchers(HttpMethod.GET, "/api/ingressos/minhas").authenticated()` **antes** do `permitAll()` de `/api/ingressos/*` não resolve sozinho (Spring Security avalia na ordem declarada e para no primeiro match, então **inverter a ordem** — `minhas` autenticado primeiro, `*` público depois — é a correção correta; testar via `IngressoSecurityTest` que `/minhas` sem token realmente cai em `403`, não em `200` do service mockado). Rodar os testes até passar, prestando atenção nesse caso específico.
   - [x] Commit: `feat(ingressos): GET /api/ingressos/minhas e /{codigo} (AC1-5)`
 
-- [ ] **Task 4 — Front-end: "Meus Ingressos" e página pública do link (AC1-5) — BLOQUEADA até Story 4.1 estar implementada**
-  - [ ] **⚠️ Pré-requisito não satisfeito no momento da criação desta story**: `Ingresso`/`IngressoRepository`/`CodigoIngressoService`/rotas de `pagamentos` (Story 4.1) só existem como spec, não como código. Não iniciar esta task (nem as Tasks 1-3 desta story, na verdade) antes da Story 4.1 estar implementada e commitada — o `IngressoResumoDto`/`IngressoPublicoDto` desta story dependem de `Ingresso` já existir com os campos exatos que a 4.1 definiu.
-  - [ ] Criar `web/src/api/ingressos.ts` (novo módulo por domínio, AD-2): `interface IngressoResumo { id: string; status: 'VALIDO' | 'UTILIZADO'; assentoFileira: string; assentoNumero: number; sessaoTitulo: string; sessaoPosterUrl: string | null; salaNome: string; dataHora: string; codigo: string }`, `interface IngressoPublico { sessaoTitulo: string; salaNome: string; dataHora: string; status: 'VALIDO' | 'UTILIZADO' }`, `listarMeusIngressos(): Promise<IngressoResumo[]>` (`GET /api/ingressos/minhas`, precisa de `Authorization`), `buscarIngressoPublico(codigo: string): Promise<IngressoPublico>` (`GET /api/ingressos/${codigo}`, sem `Authorization` — mesmo raciocínio de `buscarMapaAssentos` da Story 3.1: `apiFetch` só anexa o header se houver token).
-  - [ ] Criar `web/src/pages/MeusIngressosPage.tsx`: no mount chama `listarMeusIngressos()`, máquina de estado `loading/erro/vazio/pronto` (AC2 — lista vazia é estado próprio, não erro, mesmo padrão de `ListagemSessoesPage`). Cada ingresso mostra pôster/título/sala/data/assento/status, com um link/botão "compartilhar" que monta a URL pública (`${window.location.origin}/ingressos/${ingresso.codigo}`) — copiar pra clipboard ou exibir a URL, sem inventar mecanismo de compartilhamento nativo (`navigator.share`) fora de escopo.
-  - [ ] Criar `web/src/pages/IngressoPublicoPage.tsx`: lê `codigo` da URL via `useParams`, chama `buscarIngressoPublico(codigo)`, mesma máquina de estado `loading/nao-encontrado/erro/pronto` (404 → `nao-encontrado`, resto → `erro`, mesmo padrão de `MapaAssentosPage` da Story 3.1). Renderiza só filme/sala/data-hora/status — sem nenhum controle de ação (não é a tela de validação da portaria, é só exibição, AC4).
-  - [ ] Em `web/src/App.tsx`: adicionar `<Route path="/meus-ingressos" element={<MeusIngressosPage />} />` e `<Route path="/ingressos/:codigo" element={<IngressoPublicoPage />} />` dentro do `<Route element={<Layout />}>` (mesmo padrão de `MapaAssentosPage`, pública mas dentro do Layout comum — não isolada como `/login`).
-  - [ ] Depois dos componentes prontos: `MeusIngressosPage.test.tsx` e `IngressoPublicoPage.test.tsx` (vitest + testing-library) — cobrem os estados de cada máquina (contrato de comportamento, não pixel/CSS, mesmo critério de todas as stories anteriores).
-  - [ ] Commit: `feat(ingressos): telas de Meus Ingressos e link público (AC1-5)`
+- [x] **Task 4 — Front-end: "Meus Ingressos" e página pública do link (AC1-5)**
+  - [x] **⚠️ Pré-requisito não satisfeito no momento da criação desta story**: `Ingresso`/`IngressoRepository`/`CodigoIngressoService`/rotas de `pagamentos` (Story 4.1) só existem como spec, não como código. Não iniciar esta task (nem as Tasks 1-3 desta story, na verdade) antes da Story 4.1 estar implementada e commitada — o `IngressoResumoDto`/`IngressoPublicoDto` desta story dependem de `Ingresso` já existir com os campos exatos que a 4.1 definiu.
+  - [x] Criar `web/src/api/ingressos.ts` (novo módulo por domínio, AD-2): `interface IngressoResumo { id: string; status: 'VALIDO' | 'UTILIZADO'; assentoFileira: string; assentoNumero: number; sessaoTitulo: string; sessaoPosterUrl: string | null; salaNome: string; dataHora: string; codigo: string }`, `interface IngressoPublico { sessaoTitulo: string; salaNome: string; dataHora: string; status: 'VALIDO' | 'UTILIZADO' }`, `listarMeusIngressos(): Promise<IngressoResumo[]>` (`GET /api/ingressos/minhas`, precisa de `Authorization`), `buscarIngressoPublico(codigo: string): Promise<IngressoPublico>` (`GET /api/ingressos/${codigo}`, sem `Authorization` — mesmo raciocínio de `buscarMapaAssentos` da Story 3.1: `apiFetch` só anexa o header se houver token).
+  - [x] Criar `web/src/pages/MeusIngressosPage.tsx`: no mount chama `listarMeusIngressos()`, máquina de estado `loading/erro/vazio/pronto` (AC2 — lista vazia é estado próprio, não erro, mesmo padrão de `ListagemSessoesPage`). Cada ingresso mostra pôster/título/sala/data/assento/status, com um link/botão "compartilhar" que monta a URL pública (`${window.location.origin}/ingressos/${ingresso.codigo}`) — copiar pra clipboard ou exibir a URL, sem inventar mecanismo de compartilhamento nativo (`navigator.share`) fora de escopo.
+  - [x] Criar `web/src/pages/IngressoPublicoPage.tsx`: lê `codigo` da URL via `useParams`, chama `buscarIngressoPublico(codigo)`, mesma máquina de estado `loading/nao-encontrado/erro/pronto` (404 → `nao-encontrado`, resto → `erro`, mesmo padrão de `MapaAssentosPage` da Story 3.1). Renderiza só filme/sala/data-hora/status — sem nenhum controle de ação (não é a tela de validação da portaria, é só exibição, AC4).
+  - [x] Em `web/src/App.tsx`: adicionar `<Route path="/meus-ingressos" element={<MeusIngressosPage />} />` e `<Route path="/ingressos/:codigo" element={<IngressoPublicoPage />} />` dentro do `<Route element={<Layout />}>` (mesmo padrão de `MapaAssentosPage`, pública mas dentro do Layout comum — não isolada como `/login`).
+  - [x] Depois dos componentes prontos: `MeusIngressosPage.test.tsx` e `IngressoPublicoPage.test.tsx` (vitest + testing-library) — cobrem os estados de cada máquina (contrato de comportamento, não pixel/CSS, mesmo critério de todas as stories anteriores).
+  - [x] Commit: `feat(ingressos): telas de Meus Ingressos e link público (AC1-5)`
 
 - [ ] **Task 5 — Confirmação final (sem código novo, checklist de saída)**
   - [ ] Rodar a suíte completa (back-end `mvn test`; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde. Se a Task 4 ainda estiver bloqueada (Story 4.1 sem implementação), registrar isso nos Dev Agent Record e rodar só o que existe (backend).
@@ -165,6 +165,14 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
   própria story (os dois paths têm a mesma forma, um segmento só) e coberta por
   `IngressoSecurityTest` (`minhas` sem token → 401; com token `ORGANIZADOR` → 403).
   Decisão registrada em `docs/decisions.md`.
+- Task 4: `web/src/api/ingressos.ts` + `MeusIngressosPage`/`IngressoPublicoPage` seguem o
+  padrão de máquina de estado `loading/erro/vazio(ou nao-encontrado)/pronto` já usado por
+  `ListagemSessoesPage`/`MapaAssentosPage`. Compartilhamento copia a URL pública pro
+  clipboard (`navigator.clipboard`), com fallback silencioso — a URL também aparece no
+  card, então falha de clipboard não bloqueia o fluxo. `npx tsc --noEmit`, `npm run lint`
+  e `npm run build` verdes; testes novos (8) verdes — as 4 falhas pré-existentes em
+  `client.test.ts`/`LoginPage.test.tsx` (`localStorage` undefined no jsdom) são anteriores
+  a esta story, confirmado via `git stash` antes de tocar o código.
 
 ### File List
 
@@ -181,5 +189,11 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
 - `api/src/main/java/br/com/rolo35/api/ingressos/controller/IngressoController.java` (novo)
 - `api/src/test/java/br/com/rolo35/api/ingressos/controller/IngressoControllerTest.java` (novo)
 - `api/src/test/java/br/com/rolo35/api/ingressos/IngressoSecurityTest.java` (novo)
+- `web/src/api/ingressos.ts` (novo)
+- `web/src/pages/MeusIngressosPage.tsx` (novo)
+- `web/src/pages/MeusIngressosPage.test.tsx` (novo)
+- `web/src/pages/IngressoPublicoPage.tsx` (novo)
+- `web/src/pages/IngressoPublicoPage.test.tsx` (novo)
+- `web/src/App.tsx` (update — rotas `/meus-ingressos`, `/ingressos/:codigo`)
 - `api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java` (update — ordem de `permitAll()`)
 - `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` (update — handler de `IngressoNaoEncontradoException`)
