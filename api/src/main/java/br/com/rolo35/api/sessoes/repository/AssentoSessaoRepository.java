@@ -25,6 +25,19 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
             """)
     List<AssentoSessao> travarParaReserva(Long sessaoId, List<Long> assentoIds);
 
+    // Mesmo mecanismo de travarParaReserva, pra todas as linhas da sessão — usado por
+    // SessaoService.editar() antes de checar hold ativo/apagar numa troca de sala, fechando a
+    // corrida em que um reservar() concorrente confirma um hold entre a leitura e o delete
+    // (achado do code review da Story 3.2).
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            """
+            SELECT a FROM AssentoSessao a
+            WHERE a.id.sessaoId = :sessaoId
+            ORDER BY a.id.assentoId
+            """)
+    List<AssentoSessao> travarPorSessao(Long sessaoId);
+
     // @Modifying @Query em vez de save() de entidade recarregada: AssentoSessao é Persistable
     // sem setters (isNew() controlado só por @PostPersist/@PostLoad) — reconstruir a entidade
     // manualmente com o mesmo id forçaria isNew()=true e um INSERT sobre PK já existente.

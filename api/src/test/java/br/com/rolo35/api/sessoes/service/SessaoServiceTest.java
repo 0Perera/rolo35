@@ -379,7 +379,7 @@ class SessaoServiceTest {
         given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
         AssentoSessao linhaAntiga = new AssentoSessao(new AssentoSessaoId(5L, 1L), "LIVRE", null, null);
-        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of(linhaAntiga));
+        given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(linhaAntiga));
 
         var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");
 
@@ -407,7 +407,7 @@ class SessaoServiceTest {
                 .willReturn(false);
         AssentoSessao holdAtivo =
                 new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().plusMinutes(5));
-        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of(holdAtivo));
+        given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(holdAtivo));
 
         assertThatThrownBy(() -> sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br"))
                 .isInstanceOf(HoldAtivoException.class);
@@ -432,7 +432,7 @@ class SessaoServiceTest {
         given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
         AssentoSessao holdVencido =
                 new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().minusMinutes(1));
-        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of(holdVencido));
+        given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(holdVencido));
 
         var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");
 

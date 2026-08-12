@@ -187,4 +187,36 @@ class ReservaAssentoLockRepositoryTest {
         assertThat(linhaA3.getReservaId()).isNull();
         assertThat(linhaA3.getExpiresAt()).isNull();
     }
+
+    // Achado do code review da Story 3.2: editar() lia assento_sessao sem lock antes de checar
+    // hold ativo e apagar — travarPorSessao() fecha essa corrida usando o mesmo mecanismo de
+    // travarParaReserva (PESSIMISTIC_WRITE ordenado por assento_id, AD-3).
+    @Test
+    @Transactional
+    void travarPorSessaoDevolveTodasAsLinhasDaSessaoOrdenadasPorAssentoId() {
+        Sala sala = salaSalva(2, 2);
+        salaCriadaId = sala.getId();
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+
+        Assento a1 = assentoSalvo(sala.getId(), "A", 1);
+        Assento a2 = assentoSalvo(sala.getId(), "A", 2);
+        Assento a3 = assentoSalvo(sala.getId(), "B", 1);
+
+        Sessao sessao = sessaoSalva(sala.getId(), organizadorId);
+        sessaoCriadaId = sessao.getId();
+
+        // Salvos fora de ordem de assento_id de propósito, pra provar que o ORDER BY da query
+        // é quem garante a ordem, não a ordem de inserção.
+        assentoSessaoRepository.saveAll(List.of(
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), "LIVRE", null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null)));
+
+        List<AssentoSessao> travados = assentoSessaoRepository.travarPorSessao(sessao.getId());
+
+        assertThat(travados).hasSize(3);
+        assertThat(travados.get(0).getId().getAssentoId()).isEqualTo(a1.getId());
+        assertThat(travados.get(1).getId().getAssentoId()).isEqualTo(a2.getId());
+        assertThat(travados.get(2).getId().getAssentoId()).isEqualTo(a3.getId());
+    }
 }

@@ -155,7 +155,11 @@ public class SessaoService {
             // se perde ao trocar o mapa de assentos pra sala nova. Mas um hold ativo (cliente em
             // checkout, Story 3.2) é diferente: apagar assento_sessao sob ele deixaria a reserva
             // órfã, apontando pra uma linha que não existe mais (dívida obrigatória da Story 2.2).
-            List<AssentoSessao> linhasAtuais = assentoSessaoRepository.findByIdSessaoId(id);
+            // travarPorSessao() (não findByIdSessaoId) trava as linhas via PESSIMISTIC_WRITE antes
+            // de ler o status: sem o lock, um reservar() concorrente podia confirmar um hold novo
+            // entre esta leitura e o deleteAll logo abaixo, reabrindo a mesma corrida (achado do
+            // code review da Story 3.2 — ver ReservaEditarConcorrenciaTest pra prova via banco real).
+            List<AssentoSessao> linhasAtuais = assentoSessaoRepository.travarPorSessao(id);
             LocalDateTime agora = LocalDateTime.now();
             boolean temHoldAtivo = linhasAtuais.stream().anyMatch(assento -> holdAtivo(assento, agora));
             if (temHoldAtivo) {
