@@ -16,7 +16,9 @@ interface FilmeAgrupado {
   sessoes: SessaoPublicada[];
 }
 
-const PALETA_ACENTO = ['#F26522', '#E32B21', '#2E7D46', '#7ED9F2', '#FFC414', '#E85D9E', '#8A8F98', '#123A5C'];
+const MAXIMO_DE_CANAIS = 6;
+
+const PALETA_ACENTO =['#F26522', '#E32B21', '#2E7D46', '#7ED9F2', '#FFC414', '#E85D9E', '#8A8F98', '#123A5C'];
 
 function corPorFilme(tmdbId: number): string {
   return PALETA_ACENTO[Math.abs(tmdbId) % PALETA_ACENTO.length];
@@ -82,7 +84,10 @@ export function ListagemSessoesPage() {
   }, [tentativa]);
 
   const filmes = agruparPorFilme(sessoes);
-  const destaque = filmes.length > 0 ? filmes[heroIdx % filmes.length] : null;
+  // O hero do protótipo tem seis canais; com mais filmes em cartaz a fileira de bolinhas
+  // viraria uma régua sem serventia — o resto do catálogo aparece na grade abaixo.
+  const canais = filmes.slice(0, MAXIMO_DE_CANAIS);
+  const destaque = canais.length > 0 ? canais[heroIdx % canais.length] : null;
   const proximaSessaoDestaque = destaque?.sessoes[0];
 
   return (
@@ -163,16 +168,16 @@ export function ListagemSessoesPage() {
                     </div>
                   </div>
 
-                  {filmes.length > 1 && (
+                  {canais.length > 1 && (
                     <div className="absolute bottom-5 right-8 flex items-center gap-2.5">
-                      {filmes.map((filme, i) => (
+                      {canais.map((filme, i) => (
                         <button
                           key={filme.tmdbId}
                           type="button"
                           aria-label={`Destaque ${i + 1}`}
                           onClick={() => setHeroIdx(i)}
                           className="h-2.5 w-2.5 rounded-full border-2 border-paper-100"
-                          style={{ background: i === heroIdx % filmes.length ? '#FFC414' : 'transparent' }}
+                          style={{ background: i === heroIdx % canais.length ? '#FFC414' : 'transparent' }}
                         />
                       ))}
                     </div>

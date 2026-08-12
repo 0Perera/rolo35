@@ -46,7 +46,7 @@ export function Header() {
 
           {papel === 'ORGANIZADOR' && (
             <Link
-              to="/organizador/sessoes"
+              to="/organizador"
               className={linkClass(location.pathname.startsWith('/organizador'))}
             >
               PAINEL

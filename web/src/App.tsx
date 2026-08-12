@@ -1,11 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
-import { BuscaFilmesPage } from './pages/BuscaFilmesPage';
-import { CriarSessaoPage } from './pages/CriarSessaoPage';
 import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
-import { EditarSessaoPage } from './pages/EditarSessaoPage';
 import { ListagemSessoesPage } from './pages/ListagemSessoesPage';
 import { FilmeDetalhePage } from './pages/FilmeDetalhePage';
 import { SobrePage } from './pages/SobrePage';
@@ -37,10 +34,10 @@ function App() {
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />
             <Route path="/sobre" element={<SobrePage />} />
-            <Route path="/organizador" element={<BuscaFilmesPage />} />
-            <Route path="/organizador/sessoes/nova" element={<CriarSessaoPage />} />
-            <Route path="/organizador/sessoes" element={<GerenciarSessoesPage />} />
-            <Route path="/organizador/sessoes/:id/editar" element={<EditarSessaoPage />} />
+            {/* O painel cria e edita sessão na própria tela; as rotas antigas de
+                busca/criação/edição em telas separadas caíram junto com elas. */}
+            <Route path="/organizador" element={<GerenciarSessoesPage />} />
+            <Route path="/organizador/sessoes" element={<Navigate to="/organizador" replace />} />
             <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
             <Route path="/em-construcao" element={<PapelPlaceholderPage />} />
           </Route>
