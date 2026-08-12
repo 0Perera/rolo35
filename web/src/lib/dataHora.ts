@@ -45,6 +45,22 @@ export function paraDataHoraIso(data: string, hora: string): string {
   return `${ano}-${mes}-${dia}T${hora}:00`;
 }
 
+/** "16/08/2026" → Date local; `null` quando o texto ainda não é uma data válida. */
+export function paraDate(valor: string): Date | null {
+  if (!dataValida(valor)) {
+    return null;
+  }
+  const [dia, mes, ano] = valor.split('/').map(Number);
+  return new Date(ano, mes - 1, dia);
+}
+
+/** Date → "16/08/2026" */
+export function deDate(data: Date): string {
+  const dia = String(data.getDate()).padStart(2, '0');
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  return `${dia}/${mes}/${data.getFullYear()}`;
+}
+
 /** "2026-08-16T20:30:00" → { data: "16/08/2026", hora: "20:30" } */
 export function deDataHoraIso(dataHora: string): { data: string; hora: string } {
   const [ano, mes, dia] = dataHora.slice(0, 10).split('-');

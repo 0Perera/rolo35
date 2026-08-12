@@ -2,15 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Filme } from '../api/filmes';
 import { ApiRequestError } from '../api/client';
 import { criarSessao, editarSessao, type Sala, type SessaoGestao } from '../api/sessoes';
-import {
-  dataValida,
-  deDataHoraIso,
-  horaValida,
-  mascararData,
-  mascararHora,
-  paraDataHoraIso,
-} from '../lib/dataHora';
+import { dataValida, deDataHoraIso, horaValida, paraDataHoraIso } from '../lib/dataHora';
 import { Alert } from './Alert';
+import { CampoDeData } from './CampoDeData';
+import { CampoDeHora } from './CampoDeHora';
 import { Button } from './Button';
 import { SeletorDeFilme } from './SeletorDeFilme';
 import { SeletorDeOpcao } from './SeletorDeOpcao';
@@ -163,24 +158,8 @@ export function FormSessao({ salas, emEdicao, onSalvou, onCancelarEdicao }: Form
         />
 
         <div className="grid grid-cols-2 gap-3.5">
-          <TextField
-            id="data"
-            label="DATA"
-            inputMode="numeric"
-            placeholder="dd/mm/aaaa"
-            value={data}
-            onChange={(evento) => setData(mascararData(evento.target.value))}
-            required
-          />
-          <TextField
-            id="hora"
-            label="HORA"
-            inputMode="numeric"
-            placeholder="hh:mm"
-            value={hora}
-            onChange={(evento) => setHora(mascararHora(evento.target.value))}
-            required
-          />
+          <CampoDeData id="data" label="DATA" valor={data} onChange={setData} />
+          <CampoDeHora id="hora" label="HORA" valor={hora} onChange={setHora} />
         </div>
 
         <TextField
