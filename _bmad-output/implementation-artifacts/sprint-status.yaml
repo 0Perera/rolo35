@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: 2026-08-12 (Story 3.2 → done, epic-3 → done; 4 patches do code review resolvidos, 3 achados de front-end descartados por decisão)
+last_updated: 2026-08-12 (Story 3.2 → done, epic-3 → done; 4 patches do code review resolvidos, 3 achados de front-end descartados por decisão; Story 4.2 criada, ready-for-dev — Epic 4 totalmente especificada)
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
@@ -65,9 +65,9 @@ development_status:
   3-2-reserva-de-assentos-com-hold-temporario: done
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-confirmacao-de-pagamento-simulado-com-emissao-de-ingresso: backlog
-  4-2-meus-ingressos-e-link-publico: backlog
+  epic-4: in-progress
+  4-1-confirmacao-de-pagamento-simulado-com-emissao-de-ingresso: ready-for-dev
+  4-2-meus-ingressos-e-link-publico: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog

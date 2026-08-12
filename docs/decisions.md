@@ -390,3 +390,15 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: um timeout de lock não é a mesma coisa que "assento confirmado indisponível" — é só a impossibilidade de confirmar o status a tempo, porque outra transação segurava a linha; o assento pode estar livre de novo no instante seguinte. Misturar os dois casos na mesma exceção/código enganaria o front-end, que trataria "tente de novo, pode funcionar" e "reselecione, está confirmado indisponível" da mesma forma. Optou-se por 409 (não 503 como `SALA_OCUPADA`) porque o recurso em disputa é identificável (os assentos da própria requisição) e a mensagem já orienta o cliente a tentar de novo, sem precisar de um código de "serviço indisponível" mais genérico.
 
 ---
+
+## Login com hash dummy pra igualar tempo de resposta (Story 1.1)
+
+- **Decisão**: `AuthService.login` sempre roda uma comparação BCrypt, mesmo quando o e-mail não existe — usando um hash dummy fixo (`DUMMY_HASH`) como alvo da comparação nesse caso, em vez de recusar direto sem rodar BCrypt.
+- **Por quê**: sem isso, "e-mail não encontrado" retornaria quase instantâneo (sem custo de BCrypt) enquanto "senha errada" levaria o tempo real do hash — a diferença de latência entre os dois caminhos de erro vaza, por side-channel de tempo, quais e-mails estão cadastrados na base, mesmo a resposta HTTP sendo idêntica nos dois casos. Rodar BCrypt sempre, contra um hash real (ainda que não pertencente a ninguém), equaliza os dois tempos.
+
+---
+
+## Ownership checado antes da validação de corpo na edição de sessão (Story 2.2)
+
+- **Decisão**: em `SessaoService.editar`, a checagem de que o organizador autenticado é dono da sessão (`SessaoNaoPertenceAoOrganizadorException`) roda antes de qualquer validação do corpo da requisição (`DataHoraNoPassadoException`, conflito de horário, etc.) — nessa ordem, mesmo que o corpo esteja malformado.
+- **Por quê**: se a validação de corpo rodasse primeiro, um organizador tentando editar sessão de outro (ID certo, mas sem ser o dono) só descobriria isso depois de passar por um 400 de corpo malformado — ou, pior, um 400 nunca apareceria e a diferença de status entre "corpo ruim" e "não é seu" vazaria, por inferência, se aquele ID de sessão existe e pertence a outra pessoa. Checar dono primeiro garante 403 sempre que o recurso não é do chamador, independente do que vier no corpo — mesma classe de cuidado que já rege a mitigação de timing attack no login.
