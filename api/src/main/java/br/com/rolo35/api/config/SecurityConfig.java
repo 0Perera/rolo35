@@ -54,6 +54,15 @@ public class SecurityConfig {
                         // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/minhas.
                         .requestMatchers(HttpMethod.GET, "/api/sessoes/*/mapa-assentos")
                         .permitAll()
+                        // /api/ingressos/minhas e /api/ingressos/{codigo} têm a mesma forma de
+                        // path (um segmento só) — ordem importa aqui: o matcher específico e
+                        // autenticado de /minhas precisa vir ANTES do matcher genérico público de
+                        // /*, senão o wildcard casa primeiro e vaza /minhas como rota pública
+                        // (achado da Story 4.2, ver docs/decisions.md).
+                        .requestMatchers(HttpMethod.GET, "/api/ingressos/minhas")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/ingressos/*")
+                        .permitAll()
                         .anyRequest()
                         .authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new RestAuthenticationEntryPoint(objectMapper))

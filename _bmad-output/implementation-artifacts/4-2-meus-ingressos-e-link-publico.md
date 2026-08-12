@@ -72,9 +72,9 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
     **`extrairId(codigo)` reaproveita o mesmo parsing que `CodigoIngressoService.validar()` já faz internamente** (Story 4.1: `codigo.split("\\.", 2)`, primeira parte é o `uuid`) — expor um método `CodigoIngressoService.extrairId(String): Optional<UUID>` em vez de duplicar o parsing aqui é a opção mais limpa; ajustar a Task 1 da Story 4.1 nesse sentido é aceitável (mudança aditiva, não quebra nada já especificado lá) ou, se a 4.1 já estiver implementada de outro jeito quando esta story rodar, adaptar pro que existir de fato. `sessaoRepository`/`salaRepository` são os mesmos beans de `sessoes.repository`, reaproveitados (não duplicar consulta de sessão/sala — já existem desde a Story 3.1). Rodar o teste até passar.
   - [x] Commit: `feat(ingressos): IngressoService.listarMinhas()/buscarPublico() (AC1-5)`
 
-- [ ] **Task 3 — Rotas: `GET /api/ingressos/minhas` (autenticada) e `GET /api/ingressos/{codigo}` (pública) (AC1-5)**
-  - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/controller/IngressoControllerTest.java` (`@WebMvcTest`, service mockado): `GET /api/ingressos/minhas` com token `CLIENTE` → `200` + array de `IngressoResumoDto`; `GET /api/ingressos/{codigo}` sem token → `200` + shape de `IngressoPublicoDto` (sem `clienteId`/`id`/`codigo` no corpo — assert negativo desses campos, não só positivo dos que devem aparecer); service lança `IngressoNaoEncontradoException` → `404 INGRESSO_NAO_ENCONTRADO`. Estender `IngressoSecurityTest.java` (mesmo padrão de `SessaoSecurityTest`/`ReservaSecurityTest`): `GET /api/ingressos/minhas` sem token → `403`; `GET /api/ingressos/{codigo}` sem token nenhum → passa pro service mockado, prova a lacuna de autenticação de propósito (mesmo padrão do teste equivalente das Stories 2.3/3.1). Rodar e confirmar que falha.
-  - [ ] **[GREEN]** Criar `ingressos/controller/IngressoController.java`:
+- [x] **Task 3 — Rotas: `GET /api/ingressos/minhas` (autenticada) e `GET /api/ingressos/{codigo}` (pública) (AC1-5)**
+  - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/controller/IngressoControllerTest.java` (`@WebMvcTest`, service mockado): `GET /api/ingressos/minhas` com token `CLIENTE` → `200` + array de `IngressoResumoDto`; `GET /api/ingressos/{codigo}` sem token → `200` + shape de `IngressoPublicoDto` (sem `clienteId`/`id`/`codigo` no corpo — assert negativo desses campos, não só positivo dos que devem aparecer); service lança `IngressoNaoEncontradoException` → `404 INGRESSO_NAO_ENCONTRADO`. Estender `IngressoSecurityTest.java` (mesmo padrão de `SessaoSecurityTest`/`ReservaSecurityTest`): `GET /api/ingressos/minhas` sem token → `403`; `GET /api/ingressos/{codigo}` sem token nenhum → passa pro service mockado, prova a lacuna de autenticação de propósito (mesmo padrão do teste equivalente das Stories 2.3/3.1). Rodar e confirmar que falha.
+  - [x] **[GREEN]** Criar `ingressos/controller/IngressoController.java`:
     ```java
     @RestController
     @RequestMapping("/api/ingressos")
@@ -92,7 +92,7 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
     }
     ```
     Em `SecurityConfig`, adicionar **outra** entrada específica ao grupo de `permitAll()` já existente: `.requestMatchers(HttpMethod.GET, "/api/ingressos/*").permitAll()` — casa só `/api/ingressos/{codigo}` (um segmento), **não** `/api/ingressos/minhas`... **atenção**: `/minhas` também é um segmento único, então esse matcher bateria nos dois paths igualmente e vazaria `/minhas` como pública, replicando o erro que a Story 3.1 evitou de propósito com `/mapa-assentos`. **Ordem dos `requestMatchers` importa aqui**: declarar `.requestMatchers(HttpMethod.GET, "/api/ingressos/minhas").authenticated()` **antes** do `permitAll()` de `/api/ingressos/*` não resolve sozinho (Spring Security avalia na ordem declarada e para no primeiro match, então **inverter a ordem** — `minhas` autenticado primeiro, `*` público depois — é a correção correta; testar via `IngressoSecurityTest` que `/minhas` sem token realmente cai em `403`, não em `200` do service mockado). Rodar os testes até passar, prestando atenção nesse caso específico.
-  - [ ] Commit: `feat(ingressos): GET /api/ingressos/minhas e /{codigo} (AC1-5)`
+  - [x] Commit: `feat(ingressos): GET /api/ingressos/minhas e /{codigo} (AC1-5)`
 
 - [ ] **Task 4 — Front-end: "Meus Ingressos" e página pública do link (AC1-5) — BLOQUEADA até Story 4.1 estar implementada**
   - [ ] **⚠️ Pré-requisito não satisfeito no momento da criação desta story**: `Ingresso`/`IngressoRepository`/`CodigoIngressoService`/rotas de `pagamentos` (Story 4.1) só existem como spec, não como código. Não iniciar esta task (nem as Tasks 1-3 desta story, na verdade) antes da Story 4.1 estar implementada e commitada — o `IngressoResumoDto`/`IngressoPublicoDto` desta story dependem de `Ingresso` já existir com os campos exatos que a 4.1 definiu.
@@ -160,6 +160,11 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
   Notes desta story) em vez de duplicar o parsing `split("\\.", 2)`. Assinatura checada
   antes de qualquer consulta ao banco (AC5). `ClienteNaoEncontradoException` (pacote
   `reservas`) reaproveitada, mesmo padrão de `PagamentoService`.
+- Task 3: `SecurityConfig` ganhou o matcher autenticado de `/api/ingressos/minhas`
+  declarado ANTES do `permitAll()` de `/api/ingressos/*` — armadilha real prevista pela
+  própria story (os dois paths têm a mesma forma, um segmento só) e coberta por
+  `IngressoSecurityTest` (`minhas` sem token → 401; com token `ORGANIZADOR` → 403).
+  Decisão registrada em `docs/decisions.md`.
 
 ### File List
 
@@ -173,3 +178,8 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
 - `api/src/main/java/br/com/rolo35/api/ingressos/dto/IngressoPublicoDto.java` (novo)
 - `api/src/main/java/br/com/rolo35/api/ingressos/service/IngressoService.java` (novo)
 - `api/src/test/java/br/com/rolo35/api/ingressos/service/IngressoServiceTest.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/ingressos/controller/IngressoController.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/ingressos/controller/IngressoControllerTest.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/ingressos/IngressoSecurityTest.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java` (update — ordem de `permitAll()`)
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` (update — handler de `IngressoNaoEncontradoException`)
