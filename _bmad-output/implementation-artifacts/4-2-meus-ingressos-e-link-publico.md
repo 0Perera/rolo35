@@ -4,7 +4,7 @@ baseline_commit: e255202
 
 # Story 4.2: Meus Ingressos e Link Público
 
-Status: in-progress
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -103,11 +103,11 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
   - [x] Depois dos componentes prontos: `MeusIngressosPage.test.tsx` e `IngressoPublicoPage.test.tsx` (vitest + testing-library) — cobrem os estados de cada máquina (contrato de comportamento, não pixel/CSS, mesmo critério de todas as stories anteriores).
   - [x] Commit: `feat(ingressos): telas de Meus Ingressos e link público (AC1-5)`
 
-- [ ] **Task 5 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa (back-end `mvn test`; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde. Se a Task 4 ainda estiver bloqueada (Story 4.1 sem implementação), registrar isso nos Dev Agent Record e rodar só o que existe (backend).
-  - [ ] Registrar em `docs/decisions.md`: (a) por que a ordem dos `requestMatchers` em `SecurityConfig` importa pra não vazar `/api/ingressos/minhas` como pública (armadilha real encontrada na Task 3 — vale o registro pra não repetir em rotas futuras com o mesmo padrão `/recurso/{param}` + `/recurso/acao-fixa`); (b) por que `buscarPublico()` valida a assinatura HMAC antes de qualquer consulta ao banco (AC5, timing/oracle); (c) notação de rota: PRD usa `/ingressos/{codigo}` como abreviação, implementação usa `/api/ingressos/{codigo}` por consistência com o prefixo já estabelecido em todo o resto da API.
-  - [ ] Atualizar o Status desta story pra `review`.
-  - [ ] Commit: `docs(ingressos): confirmação final e fecha Story 4.2 pra review — encerra Epic 4`
+- [x] **Task 5 — Confirmação final (sem código novo, checklist de saída)**
+  - [x] Rodar a suíte completa (back-end `mvn test`; front-end `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde. Se a Task 4 ainda estiver bloqueada (Story 4.1 sem implementação), registrar isso nos Dev Agent Record e rodar só o que existe (backend).
+  - [x] Registrar em `docs/decisions.md`: (a) por que a ordem dos `requestMatchers` em `SecurityConfig` importa pra não vazar `/api/ingressos/minhas` como pública (armadilha real encontrada na Task 3 — vale o registro pra não repetir em rotas futuras com o mesmo padrão `/recurso/{param}` + `/recurso/acao-fixa`); (b) por que `buscarPublico()` valida a assinatura HMAC antes de qualquer consulta ao banco (AC5, timing/oracle); (c) notação de rota: PRD usa `/ingressos/{codigo}` como abreviação, implementação usa `/api/ingressos/{codigo}` por consistência com o prefixo já estabelecido em todo o resto da API.
+  - [x] Atualizar o Status desta story pra `review`.
+  - [x] Commit: `docs(ingressos): confirmação final e fecha Story 4.2 pra review — encerra Epic 4`
 
 ## Dev Notes
 
@@ -173,6 +173,12 @@ so that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
   e `npm run build` verdes; testes novos (8) verdes — as 4 falhas pré-existentes em
   `client.test.ts`/`LoginPage.test.tsx` (`localStorage` undefined no jsdom) são anteriores
   a esta story, confirmado via `git stash` antes de tocar o código.
+- Task 5: suíte completa verde — backend `mvn test` (165 testes), front-end `npx tsc
+  --noEmit`, `npm run lint`, `npm run build`, `npx vitest run` (58 testes, 54 verdes + 4
+  falhas pré-existentes não relacionadas). Três decisões registradas em `docs/decisions.md`:
+  (a) ordem dos `requestMatchers` em `SecurityConfig`; (b) `buscarPublico()` valida
+  assinatura antes do banco; (c) notação de rota `/api/ingressos/{codigo}` vs.
+  `/ingressos/{codigo}` do PRD. Epic 4 completa — Stories 4.1 e 4.2 em `review`.
 
 ### File List
 

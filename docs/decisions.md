@@ -437,3 +437,17 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 - **Decisão**: `SecurityConfig` declara `.requestMatchers(HttpMethod.GET, "/api/ingressos/minhas").authenticated()` **antes** de `.requestMatchers(HttpMethod.GET, "/api/ingressos/*").permitAll()` — nessa ordem exata, não a reversa.
 - **Por quê**: `/api/ingressos/minhas` e `/api/ingressos/{codigo}` têm a mesma forma de path — um segmento só depois do prefixo comum — então um `permitAll()` em `/api/ingressos/*` bate nos dois igualmente. A Story 3.1 (`/api/sessoes/{id}/mapa-assentos`) não teve esse problema porque o path público tinha um segmento a mais, não colidindo com `/api/sessoes/{id}` puro. Aqui não tem esse luxo. Spring Security avalia `requestMatchers` na ordem declarada e para no primeiro que casar — declarar o matcher específico e autenticado antes do genérico público garante que `/minhas` nunca cai no `permitAll()` mais amplo. Coberto por teste explícito (`IngressoSecurityTest`, `minhas` sem token → `401`) porque é o tipo de erro fácil de cometer por acidente na ordem errada e só perceber em produção.
+
+---
+
+## `IngressoService.buscarPublico()` valida a assinatura HMAC antes de qualquer consulta ao banco (Story 4.2)
+
+- **Decisão**: `buscarPublico()` chama `CodigoIngressoService.extrairId()` + `.validar()` primeiro; só chama `ingressoRepository.findById()` depois de a assinatura bater. Código com assinatura inválida nunca gera uma consulta ao banco.
+- **Por quê**: continuação direta de AD-8 (Story 4.1) do lado da leitura pública — a validação de assinatura é puramente computacional (HMAC + comparação em tempo constante), então checar antes do banco evita que a rota funcione como oráculo de timing (uma consulta ao banco que sempre acontece daria pistas por tempo de resposta sobre se o UUID existe, mesmo com assinatura errada) e evita gastar uma consulta com um código adulterado. `IngressoServiceTest` prova isso explicitamente: assinatura inválida → `IngressoNaoEncontradoException` sem nenhuma chamada a `findById()`.
+
+---
+
+## Notação de rota do link público: `/api/ingressos/{codigo}`, não `/ingressos/{codigo}` (Story 4.2)
+
+- **Decisão**: a implementação usa `GET /api/ingressos/{codigo}`, com o prefixo `/api` — o PRD usa `/ingressos/{codigo}` como abreviação nos exemplos.
+- **Por quê**: toda a API já usa `/api` como prefixo consistente (`/api/sessoes`, `/api/reservas`, `/api/pagamentos`); criar uma exceção só pra esta rota pública quebraria essa consistência sem ganho nenhum. O front-end monta a URL de compartilhamento como `/ingressos/{codigo}` (rota do React Router, sem `/api`) — a distinção é: `/ingressos/{codigo}` é a página do SPA que o cliente vê e compartilha, `/api/ingressos/{codigo}` é o endpoint que essa página chama por baixo.
