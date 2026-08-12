@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
+import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
 import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.dto.ReservaDto;
@@ -111,5 +112,18 @@ class ReservaControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"));
+    }
+
+    @Test
+    void returns401WithNaoAutenticadoEnvelopeWhenServiceRejectsClienteNaoEncontrado() throws Exception {
+        given(reservaService.reservar(any(ReservarAssentosRequest.class), anyString()))
+                .willThrow(new ClienteNaoEncontradoException());
+
+        mockMvc.perform(post("/api/reservas")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTENTICADO"));
     }
 }
