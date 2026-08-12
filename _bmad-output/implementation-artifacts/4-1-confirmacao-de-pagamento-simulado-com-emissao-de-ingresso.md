@@ -4,7 +4,7 @@ baseline_commit: e255202
 
 # Story 4.1: Confirmação de Pagamento Simulado com Emissão de Ingresso
 
-Status: ready-for-dev
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -143,11 +143,11 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
   - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoConcorrenciaConflitanteTest.java` (`@SpringBootTest` + Testcontainers, mesmo padrão de `ReservaConcorrenciaConflitoTest` da Story 3.2 — ler antes de escrever): criar uma `Reserva` `ATIVA` real (via `ReservaService.reservar()`, não fixture direta — garante que o estado de `assento_sessao` também está coerente); disparar duas chamadas reais a `pagamentoService.confirmar()` em threads separadas pra mesma `reservaId`, uma com `APROVADO` e outra com `RECUSADO`, simultaneamente; assert que as duas respostas têm o **mesmo** `status` (uma delas "venceu", a outra ecoa); assert no banco que só existe um estado final coerente: se `CONFIRMADA`, existem `Ingresso`s e `assento_sessao=VENDIDO`; se `RECUSADA`, não existe nenhum `Ingresso` pra essa reserva e `assento_sessao=LIVRE`. Rodar e confirmar que passa (prova final de AC5, não deveria exigir código novo se a Task 3 fez o lock certo).
   - [x] Commit: `test(pagamentos): concorrência com parâmetros conflitantes é determinística (AC5)`
 
-- [ ] **Task 6 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa (back-end `mvn test`, incluindo os testes Testcontainers das Tasks 2 e 5) e confirmar tudo verde. Front-end não é tocado nesta story (a tela de confirmação de pagamento fica fora do escopo explícito — ver Dev Notes; se o dev decidir que uma UI mínima é necessária pra fechar o fluxo ponta a ponta manualmente, registrar isso como decisão em `docs/decisions.md`, não expandir a story sem avisar).
-  - [ ] Registrar em `docs/decisions.md`: (a) por que `NaoAutorizadoException` de `pagamentos` retorna o mesmo `403 NAO_AUTORIZADO` de reserva inexistente (não revelar existência, AC3); (b) por que a mutação de `Reserva`/`assento_sessao` usa os métodos exatos que a Story 3.2 implementou de fato (registrar aqui qual foi — `toBuilder()`, mutador estreito, ou `@Modifying @Query` — só se souber no momento desta confirmação; caso contrário, deixar como nota pendente pro code review); (c) confirmar que `TICKET_HMAC_SECRET` ficou documentado em `.env.example` como distinto do `JWT_SECRET`.
-  - [ ] Atualizar o Status desta story pra `review`.
-  - [ ] Commit: `docs(pagamentos): confirmação final e fecha Story 4.1 pra review`
+- [x] **Task 6 — Confirmação final (sem código novo, checklist de saída)**
+  - [x] Rodar a suíte completa (back-end `mvn test`, incluindo os testes Testcontainers das Tasks 2 e 5) e confirmar tudo verde. Front-end não é tocado nesta story (a tela de confirmação de pagamento fica fora do escopo explícito — ver Dev Notes; se o dev decidir que uma UI mínima é necessária pra fechar o fluxo ponta a ponta manualmente, registrar isso como decisão em `docs/decisions.md`, não expandir a story sem avisar).
+  - [x] Registrar em `docs/decisions.md`: (a) por que `NaoAutorizadoException` de `pagamentos` retorna o mesmo `403 NAO_AUTORIZADO` de reserva inexistente (não revelar existência, AC3); (b) por que a mutação de `Reserva`/`assento_sessao` usa os métodos exatos que a Story 3.2 implementou de fato (registrar aqui qual foi — `toBuilder()`, mutador estreito, ou `@Modifying @Query` — só se souber no momento desta confirmação; caso contrário, deixar como nota pendente pro code review); (c) confirmar que `TICKET_HMAC_SECRET` ficou documentado em `.env.example` como distinto do `JWT_SECRET`.
+  - [x] Atualizar o Status desta story pra `review`.
+  - [x] Commit: `docs(pagamentos): confirmação final e fecha Story 4.1 pra review`
 
 ## Dev Notes
 
@@ -222,6 +222,14 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
   Registrado em `docs/decisions.md` (Task 6) como achado de correção — relevante pra
   qualquer código futuro que misture mutação de entidade + `@Modifying @Query` bulk update
   na mesma transação.
+- Task 6: suíte completa (`mvn test`) verde — 149 testes. Front-end não tocado (fora de
+  escopo explícito da story). Três decisões registradas em `docs/decisions.md`: (a)
+  `NaoAutorizadoException`/`ReservaExpiradaException` em `pagamentos/`, reaproveitando
+  `ClienteNaoEncontradoException` de `reservas/`; (b) mutadores estreitos `confirmar()`/
+  `recusar()` em `Reserva` (3.2 não tinha builder); (c) `TICKET_HMAC_SECRET` confirmado
+  distinto de `JWT_SECRET` em `.env.example`. Registrado também o achado fora de escopo do
+  código de ingresso ser longo demais pra digitação manual (adiado pra Story 5.2) e o bug
+  de `flushAutomatically` da Task 5.
 
 ### File List
 
