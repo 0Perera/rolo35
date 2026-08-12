@@ -139,9 +139,9 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
     Mesmo padrão de `ReservaController` — **sem mudança em `SecurityConfig`**, cai no `.anyRequest().authenticated()` já existente. Adicionar em `GlobalExceptionHandler`: `handleNaoAutorizado` (pagamentos) → `403 NAO_AUTORIZADO` (reaproveitar a mesma constante de código já usada por `handleAcessoNegado`/`handleSessaoNaoPertenceAoOrganizador` — mesmo `codigo`, é o mesmo conceito de negação de acesso, só a exceção Java é de outro pacote); `handleReservaExpirada` → `409 RESERVA_EXPIRADA` (código já estava na lista não-exaustiva de AD-11). Rodar os testes até passar.
   - [x] Commit: `feat(pagamentos): POST /api/pagamentos/confirmar restrito a CLIENTE (AC1-4)`
 
-- [ ] **Task 5 — Teste de concorrência real com parâmetros conflitantes via Testcontainers (AC5)**
-  - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoConcorrenciaConflitanteTest.java` (`@SpringBootTest` + Testcontainers, mesmo padrão de `ReservaConcorrenciaConflitoTest` da Story 3.2 — ler antes de escrever): criar uma `Reserva` `ATIVA` real (via `ReservaService.reservar()`, não fixture direta — garante que o estado de `assento_sessao` também está coerente); disparar duas chamadas reais a `pagamentoService.confirmar()` em threads separadas pra mesma `reservaId`, uma com `APROVADO` e outra com `RECUSADO`, simultaneamente; assert que as duas respostas têm o **mesmo** `status` (uma delas "venceu", a outra ecoa); assert no banco que só existe um estado final coerente: se `CONFIRMADA`, existem `Ingresso`s e `assento_sessao=VENDIDO`; se `RECUSADA`, não existe nenhum `Ingresso` pra essa reserva e `assento_sessao=LIVRE`. Rodar e confirmar que passa (prova final de AC5, não deveria exigir código novo se a Task 3 fez o lock certo).
-  - [ ] Commit: `test(pagamentos): concorrência com parâmetros conflitantes é determinística (AC5)`
+- [x] **Task 5 — Teste de concorrência real com parâmetros conflitantes via Testcontainers (AC5)**
+  - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoConcorrenciaConflitanteTest.java` (`@SpringBootTest` + Testcontainers, mesmo padrão de `ReservaConcorrenciaConflitoTest` da Story 3.2 — ler antes de escrever): criar uma `Reserva` `ATIVA` real (via `ReservaService.reservar()`, não fixture direta — garante que o estado de `assento_sessao` também está coerente); disparar duas chamadas reais a `pagamentoService.confirmar()` em threads separadas pra mesma `reservaId`, uma com `APROVADO` e outra com `RECUSADO`, simultaneamente; assert que as duas respostas têm o **mesmo** `status` (uma delas "venceu", a outra ecoa); assert no banco que só existe um estado final coerente: se `CONFIRMADA`, existem `Ingresso`s e `assento_sessao=VENDIDO`; se `RECUSADA`, não existe nenhum `Ingresso` pra essa reserva e `assento_sessao=LIVRE`. Rodar e confirmar que passa (prova final de AC5, não deveria exigir código novo se a Task 3 fez o lock certo).
+  - [x] Commit: `test(pagamentos): concorrência com parâmetros conflitantes é determinística (AC5)`
 
 - [ ] **Task 6 — Confirmação final (sem código novo, checklist de saída)**
   - [ ] Rodar a suíte completa (back-end `mvn test`, incluindo os testes Testcontainers das Tasks 2 e 5) e confirmar tudo verde. Front-end não é tocado nesta story (a tela de confirmação de pagamento fica fora do escopo explícito — ver Dev Notes; se o dev decidir que uma UI mínima é necessária pra fechar o fluxo ponta a ponta manualmente, registrar isso como decisão em `docs/decisions.md`, não expandir a story sem avisar).
@@ -208,6 +208,20 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
 - Task 4: `PagamentoController`/`PagamentoSecurityTest` seguem exatamente o padrão de
   `ReservaController`/`ReservaSecurityTest` — sem mudança em `SecurityConfig`, rota cai no
   `.anyRequest().authenticated()` já existente. Suíte completa (148 testes) verde.
+- Task 5: **achado real durante a implementação, não previsto na spec** —
+  `PagamentoConcorrenciaConflitanteTest` inicialmente falhava de forma não-determinística:
+  as duas chamadas concorrentes processavam seu próprio `resultadoSimulado` independente
+  (a segunda nunca via a reserva como não-`ATIVA`). Causa raiz: `reivindicarVendido()`/
+  `liberar()` tinham `@Modifying(clearAutomatically = true)` sem `flushAutomatically = true`
+  — `clearAutomatically` chama `entityManager.clear()` **antes** de qualquer flush automático,
+  descartando silenciosamente a mutação pendente de `Reserva.status` (feita via
+  `confirmar()`/`recusar()` + `save()` alguns comandos antes, ainda não flushada). A reserva
+  nunca era persistida como `CONFIRMADA`/`RECUSADA` de verdade — voltava sempre `ATIVA` no
+  banco. Corrigido adicionando `flushAutomatically = true` nos dois métodos. Suíte completa
+  (149 testes) verde, `PagamentoConcorrenciaConflitanteTest` estável em 5 execuções seguidas.
+  Registrado em `docs/decisions.md` (Task 6) como achado de correção — relevante pra
+  qualquer código futuro que misture mutação de entidade + `@Modifying @Query` bulk update
+  na mesma transação.
 
 ### File List
 
@@ -235,3 +249,4 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
 - `api/src/test/java/br/com/rolo35/api/pagamentos/controller/PagamentoControllerTest.java` (novo)
 - `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoSecurityTest.java` (novo)
 - `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` (update — handlers de `NaoAutorizadoException`/`ReservaExpiradaException`)
+- `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoConcorrenciaConflitanteTest.java` (novo)

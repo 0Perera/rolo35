@@ -60,7 +60,15 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
     // Write path do pagamento aprovado (Story 4.1): a Reserva já foi travada via
     // ReservaRepository.findByIdForUpdate antes desta chamada, então não precisa de guarda de
     // status/expiresAt como reivindicar() — só marca VENDIDO as linhas da reserva confirmada.
-    @Modifying(clearAutomatically = true)
+    //
+    // flushAutomatically = true é obrigatório aqui: PagamentoService muta Reserva.status em
+    // memória (reserva.confirmar()/recusar()) e chama save() ANTES deste método. Sem o flush
+    // automático, clearAutomatically = true limpa o persistence context (entityManager.clear())
+    // antes de qualquer flush do UPDATE pendente de Reserva — a mudança de status é descartada
+    // silenciosamente, sem exceção, e a reserva volta ATIVA no banco (achado real: sem isso, o
+    // PagamentoConcorrenciaConflitanteTest mostrava as duas chamadas concorrentes processando o
+    // resultadoSimulado de cada uma como se a reserva nunca tivesse sido decidida).
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
             """
             UPDATE AssentoSessao a SET a.status = 'VENDIDO'
@@ -70,7 +78,8 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
 
     // Write path do pagamento recusado (Story 4.1): libera a linha imediatamente, sem esperar o
     // TTL lazy de AD-4 — este caminho é escrita imediata, por decisão explícita da AC2.
-    @Modifying(clearAutomatically = true)
+    // flushAutomatically = true pelo mesmo motivo de reivindicarVendido() acima.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
             """
             UPDATE AssentoSessao a SET a.status = 'LIVRE', a.reservaId = null, a.expiresAt = null
