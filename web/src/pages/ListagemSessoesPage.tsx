@@ -214,32 +214,54 @@ export function ListagemSessoesPage() {
         {estado === 'pronto' && (
           <div
             data-testid="grade-filmes"
-            className="mt-8 grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-7"
+            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-7"
           >
             {filmes.map((filme) => {
               const esgotado = filme.sessoes.every((sessao) => sessao.esgotada);
               return (
-                <Link key={filme.tmdbId} to={`/filmes/${filme.tmdbId}`} className="flex flex-col">
-                  <div className="relative border-[3px] border-ink-950 bg-ink-950 shadow-[7px_7px_0_rgba(23,18,25,0.85)]">
-                    <div className="relative aspect-[2/3]">
+                <article key={filme.tmdbId} className="flex h-full flex-col">
+                  <Link
+                    to={`/filmes/${filme.tmdbId}`}
+                    aria-label={filme.titulo}
+                    className="relative block border-[3px] border-ink-950 bg-ink-950 shadow-[7px_7px_0_rgba(23,18,25,0.85)] transition hover:-translate-x-0.5 hover:-translate-y-[3px]"
+                  >
+                    <div className="relative aspect-[2/3] w-full overflow-hidden">
                       {filme.posterUrl ? (
-                        <img src={filme.posterUrl} alt={filme.titulo} className="h-full w-full object-cover" />
+                        <img
+                          src={filme.posterUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
                       ) : (
-                        <div className="h-full w-full bg-ink-900" />
+                        <div className="absolute inset-0 bg-ink-900" />
                       )}
+                      <div
+                        aria-hidden
+                        className="absolute inset-y-0 left-0 w-3.5"
+                        style={{ backgroundImage: 'linear-gradient(90deg, rgba(0,0,0,0.55), transparent)' }}
+                      />
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-1.5" style={{ background: corPorFilme(filme.tmdbId) }} />
+                    <div
+                      aria-hidden
+                      className="absolute bottom-0 left-0 right-0 h-1.5"
+                      style={{ background: corPorFilme(filme.tmdbId) }}
+                    />
                     {esgotado && (
                       <span className="absolute top-2 left-2 border-2 border-flame-600 bg-ink-950/80 px-2 py-0.5 text-xs tracking-wide text-flame-600">
                         Esgotada
                       </span>
                     )}
-                  </div>
-                  <div className="mt-3.5 font-display text-sm leading-tight">{filme.titulo}</div>
-                  <div className="mt-1.5 font-mono text-base tracking-wide text-ink-950/50">
+                  </Link>
+
+                  <h2 className="mt-3.5 font-display text-sm leading-tight tracking-[0.3px]">{filme.titulo}</h2>
+                  <p className="mt-1.5 mb-3 font-mono text-base tracking-wide text-ink-950/50">
                     {filme.sessoes.length === 1 ? '1 sessão' : `${filme.sessoes.length} sessões`}
-                  </div>
-                </Link>
+                  </p>
+
+                  <Link to={`/filmes/${filme.tmdbId}`} className={buttonClass('ticket', 'mt-auto w-full')}>
+                    🎟 {esgotado ? 'VER SESSÕES' : 'COMPRAR INGRESSO'}
+                  </Link>
+                </article>
               );
             })}
           </div>
