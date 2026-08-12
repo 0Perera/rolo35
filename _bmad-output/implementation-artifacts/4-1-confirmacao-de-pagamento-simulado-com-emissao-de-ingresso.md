@@ -25,9 +25,9 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — `CodigoIngressoService`: gera e valida assinatura HMAC-SHA256, sem banco (AC1, AC6)**
-  - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/service/CodigoIngressoServiceTest.java` (JUnit puro, sem `@SpringBootTest` — a classe não depende de banco nem de Spring context, só do secret): construir o service com um secret fixo de teste; `gerar(uuid)` retorna string no formato `<uuid>.<base64url>`; `validar(uuidExtraido, codigo)` retorna `true` pro código recém-gerado; adulterar 1 caractere do trecho base64 → `validar` retorna `false`; gerar um segundo código com outro `uuid` e colar sua assinatura no primeiro `uuid` → `validar` retorna `false` (prova que a assinatura é vinculada ao `uuid` específico, não só "uma assinatura válida qualquer"). Rodar e confirmar que falha por `CodigoIngressoService` ainda não existir.
-  - [ ] **[GREEN]** Criar `ingressos/service/CodigoIngressoService.java`:
+- [x] **Task 1 — `CodigoIngressoService`: gera e valida assinatura HMAC-SHA256, sem banco (AC1, AC6)**
+  - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/service/CodigoIngressoServiceTest.java` (JUnit puro, sem `@SpringBootTest` — a classe não depende de banco nem de Spring context, só do secret): construir o service com um secret fixo de teste; `gerar(uuid)` retorna string no formato `<uuid>.<base64url>`; `validar(uuidExtraido, codigo)` retorna `true` pro código recém-gerado; adulterar 1 caractere do trecho base64 → `validar` retorna `false`; gerar um segundo código com outro `uuid` e colar sua assinatura no primeiro `uuid` → `validar` retorna `false` (prova que a assinatura é vinculada ao `uuid` específico, não só "uma assinatura válida qualquer"). Rodar e confirmar que falha por `CodigoIngressoService` ainda não existir.
+  - [x] **[GREEN]** Criar `ingressos/service/CodigoIngressoService.java`:
     ```java
     @Service
     public class CodigoIngressoService {
@@ -68,7 +68,7 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
     }
     ```
     `MessageDigest.isEqual` (não `Arrays.equals`/`.equals()` de String) é o que garante tempo constante — comparação byte-a-byte sem short-circuit no primeiro byte diferente, evita timing attack na validação da assinatura (mesmo raciocínio de qualquer comparação de segredo/hash). Adicionar `ticket.hmac.secret=${TICKET_HMAC_SECRET}` em `application.properties` (seção nova `### Ticket HMAC ###`, mesmo padrão de `security.jwt.secret=${JWT_SECRET}` — sem fallback, obrigatório) e `TICKET_HMAC_SECRET=troque-por-um-segredo-aleatorio-de-verdade-so-pra-dev-local` em `.env.example`, com comentário explícito que é **distinto** do `JWT_SECRET` (non-negotiable da arquitetura, AD-8) — nunca derivar um do outro nem reaproveitar. Rodar o teste até passar.
-  - [ ] Commit: `feat(ingressos): CodigoIngressoService com HMAC-SHA256 e comparação em tempo constante (AC1, AC6)`
+  - [x] Commit: `feat(ingressos): CodigoIngressoService com HMAC-SHA256 e comparação em tempo constante (AC1, AC6)`
 
 - [ ] **Task 2 — `Ingresso` entity + `IngressoRepository` (setup, suporta AC1)**
   - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/IngressoRepositorySmokeTest.java` (`@Import(TestcontainersConfiguration.class) @SpringBootTest`, mesmo padrão de `ReservaRepositorySmokeTest` da Story 3.2): salvar um `Ingresso` (`id` gerado como `UUID`, `reservaId`, `assentoId`, `sessaoId`, `status=StatusIngresso.VALIDO`, `createdAt`), recarregar por id, assert de round-trip. Rodar e confirmar que falha.
@@ -191,4 +191,15 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
 
 ### Completion Notes List
 
+- Task 1: `CodigoIngressoService` criado com HMAC-SHA256 e comparação em tempo constante
+  (`MessageDigest.isEqual`). Secret `TICKET_HMAC_SECRET` adicionado em
+  `application.properties`/`.env.example` (distinto de `JWT_SECRET`) e no `pom.xml`
+  (env var de teste do surefire, mesmo padrão de `JWT_SECRET`/`TMDB_API_TOKEN`).
+
 ### File List
+
+- `api/src/main/java/br/com/rolo35/api/ingressos/service/CodigoIngressoService.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/ingressos/service/CodigoIngressoServiceTest.java` (novo)
+- `api/src/main/resources/application.properties` (update)
+- `.env.example` (update)
+- `api/pom.xml` (update)
