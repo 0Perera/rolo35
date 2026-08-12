@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode } from 'react';
 
 const labelClass = 'block font-mono text-lg tracking-wide text-ink-950/60';
 // O ícone de calendário/relógio dos inputs nativos vem colorido pelo navegador e destoa do
@@ -20,30 +20,3 @@ export function TextField({ label, className = '', id, ...props }: TextFieldProp
   );
 }
 
-interface TextAreaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label: ReactNode;
-}
-
-export function TextAreaField({ label, className = '', id, ...props }: TextAreaFieldProps) {
-  return (
-    <label className="block" htmlFor={id}>
-      <span className={labelClass}>{label}</span>
-      <textarea id={id} className={`${controlClass} ${className}`} {...props} />
-    </label>
-  );
-}
-
-interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  label: ReactNode;
-}
-
-export function SelectField({ label, className = '', id, children, ...props }: SelectFieldProps) {
-  return (
-    <label className="block" htmlFor={id}>
-      <span className={labelClass}>{label}</span>
-      <select id={id} className={`${controlClass} ${className}`} {...props}>
-        {children}
-      </select>
-    </label>
-  );
-}
