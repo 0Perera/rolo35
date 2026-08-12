@@ -136,6 +136,7 @@ class AssentoSessaoMapaRepositoryTest {
         assertThat(mapa.get(2).getFileira()).isEqualTo("B");
         assertThat(mapa.get(2).getNumero()).isEqualTo(1);
         assertThat(mapa.get(2).getStatus()).isEqualTo("VENDIDO");
+        assertThat(mapa.get(2).getExpiresAt()).isNull();
 
         assertThat(mapa.get(3).getAssentoId()).isEqualTo(a4.getId());
         assertThat(mapa.get(3).getFileira()).isEqualTo("B");

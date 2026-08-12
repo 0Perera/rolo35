@@ -142,6 +142,13 @@ class SessaoSecurityTest {
                 new BigDecimal("30.00"));
     }
 
+    // Regressão explícita do risco descrito no comentário de SecurityConfig: o permitAll()
+    // novo de /api/sessoes/*/mapa-assentos (Story 3.1) não pode vazar pra essa rota de gestão.
+    @Test
+    void returns401WithNaoAutenticadoEnvelopeForGetMinhasWithoutAnyToken() throws Exception {
+        mockMvc.perform(get("/api/sessoes/minhas")).andExpect(status().isUnauthorized());
+    }
+
     @Test
     void returns200ForGetMinhasWithOrganizadorToken() throws Exception {
         given(sessaoService.listarMinhas(anyString())).willReturn(List.of());
@@ -158,6 +165,13 @@ class SessaoSecurityTest {
         mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    // Regressão explícita do risco descrito no comentário de SecurityConfig: o permitAll()
+    // novo de /api/sessoes/*/mapa-assentos (Story 3.1) não pode vazar pra essa rota de gestão.
+    @Test
+    void returns401WithNaoAutenticadoEnvelopeForGetByIdWithoutAnyToken() throws Exception {
+        mockMvc.perform(get("/api/sessoes/100")).andExpect(status().isUnauthorized());
     }
 
     @Test

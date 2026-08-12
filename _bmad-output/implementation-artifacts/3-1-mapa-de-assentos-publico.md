@@ -4,7 +4,7 @@ baseline_commit: 7a12d86
 
 # Story 3.1: Mapa de Assentos Público
 
-Status: review
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -91,6 +91,18 @@ so that eu decida se quero reservar antes mesmo de criar conta.
   - [x] Registrar em `docs/decisions.md`: (a) por que o TTL lazy do mapa não escreve no banco na leitura (AD-4 é explícito — só o caminho de escrita, que chega na Story 3.2, precisa reivindicar o assento de verdade); (b) por que o `permitAll()` usa `/api/sessoes/*/mapa-assentos` em vez de ampliar `/api/sessoes/**`; (c) por que `buscarMapaPorSessao()` usa JPQL com `JOIN ... ON` em vez de `nativeQuery = true`, apesar do precedente de `listarPublicadas()` (Story 2.3) — sem agregação, JPQL tipado é suficiente e evita SQL amarrado ao dialeto do Postgres.
   - [x] Atualizar o Status desta story pra `review` (mesmo ciclo já usado nas Stories 1.1/1.2/2.1/2.3: code-review antes de `done`).
   - [x] Commit: `docs(sessoes): confirmação final e fecha Story 3.1 pra review`
+
+### Review Findings
+
+- [x] [Review][Patch] Front-end não guarda contra `:id` ausente/não-numérico antes de disparar a requisição [web/src/pages/MapaAssentosPage.tsx]
+- [x] [Review][Patch] `ESTILO_POR_STATUS`/`aria-label` sem fallback pra um valor de `status` inesperado vindo da API [web/src/pages/MapaAssentosPage.tsx]
+- [x] [Review][Patch] Teste de repositório não afirma `getExpiresAt()` da linha `VENDIDO` (só LIVRE/RESERVADO têm assert explícito) [api/src/test/java/br/com/rolo35/api/sessoes/repository/AssentoSessaoMapaRepositoryTest.java]
+- [x] [Review][Patch] Falta teste de regressão provando que `GET /api/sessoes/{id}` e `GET /api/sessoes/minhas` continuam exigindo autenticação depois do novo `permitAll()` — é exatamente o risco que o comentário em `SecurityConfig` avisa [api/src/test/java/br/com/rolo35/api/sessoes/SessaoSecurityTest.java]
+- [x] [Review][Defer] Lista de assentos vazia não tem feedback explícito na UI (`INNER JOIN` retornaria vazio se uma sessão existisse sem `assento_sessao`) [web/src/pages/MapaAssentosPage.tsx] — deferred, pré-existente: `SessaoService.criar()` sempre popula `assento_sessao` atomicamente junto da `Sessao`, então o caso não é alcançável pelo fluxo normal da aplicação hoje.
+- [x] [Review][Defer] `new Date(mapa.dataHora)` sem tratamento defensivo pra data malformada (renderiza "Invalid Date") [web/src/pages/MapaAssentosPage.tsx] — deferred, pré-existente: o backend sempre serializa `LocalDateTime` válido via Jackson JSR310, não há caminho de escrita que produza um valor malformado hoje.
+- [x] [Review][Defer] Precisão decimal de `BigDecimal` → `number` do JS via Jackson sem teste de ponta a ponta pra valores como `19.999` [api/src/main/java/br/com/rolo35/api/sessoes/dto/MapaAssentosDto.java] — deferred, padrão pré-existente já usado do mesmo jeito em `SessaoListagemDto`/`SessaoGestaoDto`, não é regressão desta story.
+- [x] [Review][Defer] Células de assento são `<div>` sem `role`/`tabIndex`/handler de teclado [web/src/pages/MapaAssentosPage.tsx] — deferred, fora de escopo explícito desta story (Dev Notes: "Sem seleção/clique nesta story") — revisitar quando a Story 3.2 adicionar interação real de seleção.
+- [x] [Review][Defer] `SessaoService.mapaAssentos()` não filtra por janela de tempo — sessões passadas continuam com mapa acessível via link direto [api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java] — deferred, parece intencional (Dev Notes exigem que link direto/compartilhado continue funcionando mesmo sem `state` de navegação); revisitar só se um conceito de "sessão retirada" for introduzido.
 
 ## Dev Notes
 

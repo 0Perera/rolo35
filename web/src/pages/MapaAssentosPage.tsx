@@ -12,6 +12,8 @@ const ESTILO_POR_STATUS: Record<AssentoMapa['status'], string> = {
   VENDIDO: 'border-[3px] border-ink-950 bg-ink-950 text-paper-100/50 cursor-not-allowed',
 };
 
+const ESTILO_STATUS_DESCONHECIDO = 'border-[3px] border-flame-600 text-flame-600';
+
 function agruparPorFileira(assentos: AssentoMapa[]): { fileira: string; assentos: AssentoMapa[] }[] {
   const porFileira = new Map<string, AssentoMapa[]>();
 
@@ -37,8 +39,13 @@ export function MapaAssentosPage() {
 
   useEffect(() => {
     let ativo = true;
+    const sessaoId = Number(id);
+    if (!id || Number.isNaN(sessaoId)) {
+      setEstado('nao-encontrado');
+      return;
+    }
     setEstado('loading');
-    buscarMapaAssentos(Number(id))
+    buscarMapaAssentos(sessaoId)
       .then((resultado) => {
         if (!ativo) {
           return;
@@ -117,7 +124,7 @@ export function MapaAssentosPage() {
                         key={assento.id}
                         aria-label={`Assento ${assento.fileira}${assento.numero} — ${assento.status.toLowerCase()}`}
                         data-status={assento.status}
-                        className={`flex h-9 w-9 items-center justify-center font-mono text-sm ${ESTILO_POR_STATUS[assento.status]}`}
+                        className={`flex h-9 w-9 items-center justify-center font-mono text-sm ${ESTILO_POR_STATUS[assento.status] ?? ESTILO_STATUS_DESCONHECIDO}`}
                       >
                         {assento.numero}
                       </div>
