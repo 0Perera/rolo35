@@ -5,6 +5,7 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -38,6 +39,21 @@ public class CodigoIngressoService {
             return false;
         }
         return MessageDigest.isEqual(esperado, recebido);
+    }
+
+    // Reaproveita o mesmo parsing que validar() já faz internamente (Story 4.2: buscarPublico()
+    // precisa do id antes de validar a assinatura). Optional.empty() cobre tanto formato
+    // malformado quanto UUID inválido — o chamador trata os dois como "não encontrado".
+    public Optional<UUID> extrairId(String codigo) {
+        String[] partes = codigo.split("\\.", 2);
+        if (partes.length != 2) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(partes[0]));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private byte[] assinar(UUID id) {

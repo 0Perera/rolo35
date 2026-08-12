@@ -2,6 +2,7 @@ package br.com.rolo35.api.ingressos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -49,5 +50,23 @@ class CodigoIngressoServiceTest {
         String codigoForjado = id1 + "." + assinatura2;
 
         assertThat(service.validar(id1, codigoForjado)).isFalse();
+    }
+
+    @Test
+    void extrairIdDevolveUuidDoCodigoGerado() {
+        UUID id = UUID.randomUUID();
+        String codigo = service.gerar(id);
+
+        assertThat(service.extrairId(codigo)).contains(id);
+    }
+
+    @Test
+    void extrairIdDevolveVazioParaCodigoSemPonto() {
+        assertThat(service.extrairId("sem-ponto-nenhum")).isEqualTo(Optional.empty());
+    }
+
+    @Test
+    void extrairIdDevolveVazioParaUuidMalformado() {
+        assertThat(service.extrairId("nao-e-um-uuid.assinatura")).isEqualTo(Optional.empty());
     }
 }
