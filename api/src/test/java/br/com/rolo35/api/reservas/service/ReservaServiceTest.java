@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -98,6 +100,9 @@ class ReservaServiceTest {
             ReflectionTestUtils.setField(reserva, "id", 99L);
             return reserva;
         });
+        given(assentoSessaoRepository.reivindicar(
+                        anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(assentoIds.size());
 
         ReservaDto dto = reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL);
 
@@ -105,7 +110,8 @@ class ReservaServiceTest {
         assertThat(dto.sessaoId()).isEqualTo(SESSAO_ID);
         assertThat(dto.status()).isEqualTo(StatusReserva.ATIVA);
         assertThat(dto.assentoIds()).containsExactlyElementsOf(assentoIds);
-        verify(assentoSessaoRepository).reivindicar(anyLong(), anyList(), anyLong(), any(LocalDateTime.class));
+        verify(assentoSessaoRepository)
+                .reivindicar(anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test
@@ -114,7 +120,7 @@ class ReservaServiceTest {
                 .isInstanceOf(SelecaoAssentosInvalidaException.class);
 
         verify(assentoSessaoRepository, never()).travarParaReserva(anyLong(), anyList());
-        verify(assentoSessaoRepository, never()).reivindicar(anyLong(), anyList(), anyLong(), any());
+        verify(assentoSessaoRepository, never()).reivindicar(anyLong(), anyList(), anyLong(), any(), any());
         verify(reservaRepository, never()).save(any());
     }
 
@@ -154,7 +160,7 @@ class ReservaServiceTest {
                         () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL))
                 .isInstanceOf(AssentoIndisponivelException.class);
 
-        verify(assentoSessaoRepository, never()).reivindicar(anyLong(), anyList(), anyLong(), any());
+        verify(assentoSessaoRepository, never()).reivindicar(anyLong(), anyList(), anyLong(), any(), any());
         verify(reservaRepository, never()).save(any());
     }
 
@@ -170,7 +176,7 @@ class ReservaServiceTest {
                         () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL))
                 .isInstanceOf(AssentoIndisponivelException.class);
 
-        verify(assentoSessaoRepository, never()).reivindicar(anyLong(), anyList(), anyLong(), any());
+        verify(assentoSessaoRepository, never()).reivindicar(anyLong(), anyList(), anyLong(), any(), any());
         verify(reservaRepository, never()).save(any());
     }
 
@@ -186,11 +192,15 @@ class ReservaServiceTest {
             ReflectionTestUtils.setField(reserva, "id", 100L);
             return reserva;
         });
+        given(assentoSessaoRepository.reivindicar(
+                        anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(assentoIds.size());
 
         ReservaDto dto = reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL);
 
         assertThat(dto.id()).isEqualTo(100L);
-        verify(assentoSessaoRepository).reivindicar(anyLong(), anyList(), anyLong(), any(LocalDateTime.class));
+        verify(assentoSessaoRepository)
+                .reivindicar(anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test
@@ -202,6 +212,45 @@ class ReservaServiceTest {
                 .isInstanceOf(ClienteNaoEncontradoException.class);
 
         verify(assentoSessaoRepository, never()).travarParaReserva(anyLong(), anyList());
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    void reivindicarAtualizandoMenosLinhasQueOSelecionadoLancaAssentoIndisponivel() {
+        stubEntityManager();
+        stubCliente();
+        List<Long> assentoIds = List.of(10L, 20L);
+        given(assentoSessaoRepository.travarParaReserva(SESSAO_ID, assentoIds))
+                .willReturn(List.of(assentoLivre(10L), assentoLivre(20L)));
+        given(reservaRepository.save(any(Reserva.class))).willAnswer(invocation -> {
+            Reserva reserva = invocation.getArgument(0);
+            ReflectionTestUtils.setField(reserva, "id", 101L);
+            return reserva;
+        });
+        // Guarda de status do próprio UPDATE recusou 1 das 2 linhas — mesmo com a checagem prévia
+        // em Java já tendo aprovado os dois assentos, uma corrida entre a leitura e o UPDATE pode
+        // ter mudado o status de uma delas.
+        given(assentoSessaoRepository.reivindicar(
+                        anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(1);
+
+        assertThatThrownBy(
+                        () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL))
+                .isInstanceOf(AssentoIndisponivelException.class);
+    }
+
+    @Test
+    void timeoutDeLockAoTravarViraAssentoEmDisputaNaoAssentoIndisponivel() {
+        stubEntityManager();
+        stubCliente();
+        List<Long> assentoIds = List.of(10L);
+        given(assentoSessaoRepository.travarParaReserva(SESSAO_ID, assentoIds))
+                .willThrow(new PessimisticLockingFailureException("lock timeout"));
+
+        assertThatThrownBy(
+                        () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL))
+                .isInstanceOf(AssentoEmDisputaException.class);
+
         verify(reservaRepository, never()).save(any());
     }
 }

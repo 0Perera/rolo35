@@ -1,6 +1,7 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
@@ -187,6 +188,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleClienteNaoEncontrado() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiError("NAO_AUTENTICADO", "Usuário do token não existe mais"));
+    }
+
+    // Distinto de AssentoIndisponivelException: aqui o lock_timeout de 3s estourou sem confirmar
+    // se o assento está de fato ocupado — é incerteza de contenção, não uma checagem concluída.
+    // 409 (não 503 como o SALA_OCUPADA de criação de sessão) porque o recurso em disputa é
+    // identificável (os assentos da requisição), e a mensagem já orienta a tentar de novo.
+    @ExceptionHandler(AssentoEmDisputaException.class)
+    public ResponseEntity<ApiError> handleAssentoEmDisputa(AssentoEmDisputaException exception) {
+        log.warn("Lock de assento não obtido dentro do timeout da transação", exception);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("ASSENTO_EM_DISPUTA", "Assento em disputa no momento — tente novamente"));
     }
 
     @ExceptionHandler(Exception.class)

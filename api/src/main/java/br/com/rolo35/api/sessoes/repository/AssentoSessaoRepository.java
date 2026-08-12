@@ -41,13 +41,21 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
     // @Modifying @Query em vez de save() de entidade recarregada: AssentoSessao é Persistable
     // sem setters (isNew() controlado só por @PostPersist/@PostLoad) — reconstruir a entidade
     // manualmente com o mesmo id forçaria isNew()=true e um INSERT sobre PK já existente.
+    //
+    // O WHERE de status/expiresAt é defesa em profundidade (achado do code review da Story 3.2):
+    // o único call site atual (ReservaService.reservar) já confirma disponibilidade via
+    // statusEfetivoLivre antes de chamar este método, mas o UPDATE em si não confiava nisso —
+    // um futuro call site que pulasse essa checagem sobrescreveria um assento vendido/reservado
+    // sem o banco reclamar. O retorno int (linhas afetadas) deixa o chamador perceber quando a
+    // guarda recusou parte da atualização.
     @Modifying(clearAutomatically = true)
     @Query(
             """
             UPDATE AssentoSessao a SET a.status = 'RESERVADO', a.reservaId = :reservaId, a.expiresAt = :expiresAt
             WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds
+              AND (a.status = 'LIVRE' OR (a.status = 'RESERVADO' AND a.expiresAt < :agora))
             """)
-    void reivindicar(Long sessaoId, List<Long> assentoIds, Long reservaId, LocalDateTime expiresAt);
+    int reivindicar(Long sessaoId, List<Long> assentoIds, Long reservaId, LocalDateTime expiresAt, LocalDateTime agora);
 
     @Query(
             """

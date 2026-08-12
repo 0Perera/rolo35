@@ -2,6 +2,7 @@ package br.com.rolo35.api.reservas.service;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,7 +57,16 @@ public class ReservaService {
                 usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
-        List<AssentoSessao> travados = assentoSessaoRepository.travarParaReserva(request.sessaoId(), assentoIds);
+        List<AssentoSessao> travados;
+        try {
+            travados = assentoSessaoRepository.travarParaReserva(request.sessaoId(), assentoIds);
+        } catch (PessimisticLockingFailureException e) {
+            // Timeout do lock_timeout de 3s não significa que o assento está indisponível — só que
+            // não deu pra confirmar isso a tempo (outra transação segurava a linha). Diferente de
+            // AssentoIndisponivelException (checagem concluída, negativa), aqui o cliente pode
+            // tentar de novo com os mesmos assentos e funcionar.
+            throw new AssentoEmDisputaException();
+        }
 
         LocalDateTime agora = LocalDateTime.now();
         boolean algumIndisponivel = travados.size() != assentoIds.size()
@@ -67,7 +78,11 @@ public class ReservaService {
         LocalDateTime expiraEm = agora.plusMinutes(MINUTOS_HOLD);
         Reserva reserva = reservaRepository.save(
                 new Reserva(null, cliente.getId(), request.sessaoId(), StatusReserva.ATIVA, Instant.now(), expiraEm));
-        assentoSessaoRepository.reivindicar(request.sessaoId(), assentoIds, reserva.getId(), expiraEm);
+        int linhasAfetadas =
+                assentoSessaoRepository.reivindicar(request.sessaoId(), assentoIds, reserva.getId(), expiraEm, agora);
+        if (linhasAfetadas != assentoIds.size()) {
+            throw new AssentoIndisponivelException();
+        }
 
         return new ReservaDto(reserva.getId(), request.sessaoId(), reserva.getStatus(), expiraEm, assentoIds);
     }

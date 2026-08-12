@@ -158,7 +158,9 @@ class ReservaAssentoLockRepositoryTest {
         Reserva reserva = reservaRepository.save(
                 new Reserva(null, organizadorId, sessao.getId(), StatusReserva.ATIVA, Instant.now(), expiraEm));
         reservaCriadaId = reserva.getId();
-        assentoSessaoRepository.reivindicar(sessao.getId(), List.of(a1.getId(), a2.getId()), reserva.getId(), expiraEm);
+        int linhasAfetadas = assentoSessaoRepository.reivindicar(
+                sessao.getId(), List.of(a1.getId(), a2.getId()), reserva.getId(), expiraEm, LocalDateTime.now());
+        assertThat(linhasAfetadas).isEqualTo(2);
 
         List<AssentoSessao> recarregado = assentoSessaoRepository.findByIdSessaoId(sessao.getId());
 
@@ -186,6 +188,49 @@ class ReservaAssentoLockRepositoryTest {
         assertThat(linhaA3.getStatus()).isEqualTo("LIVRE");
         assertThat(linhaA3.getReservaId()).isNull();
         assertThat(linhaA3.getExpiresAt()).isNull();
+    }
+
+    // Achado do code review da Story 3.2: o UPDATE de reivindicar() confiava cegamente que o
+    // chamador já tinha validado disponibilidade — sem guarda de status no próprio SQL, um
+    // call site futuro que pulasse a checagem prévia sobrescreveria um assento já vendido.
+    @Test
+    @Transactional
+    void reivindicarNaoSobrescreveAssentoJaVendidoMesmoSemChecagemPrevia() {
+        Sala sala = salaSalva(1, 2);
+        salaCriadaId = sala.getId();
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+
+        Assento a1 = assentoSalvo(sala.getId(), "A", 1);
+        Assento a2 = assentoSalvo(sala.getId(), "A", 2);
+
+        Sessao sessao = sessaoSalva(sala.getId(), organizadorId);
+        sessaoCriadaId = sessao.getId();
+
+        Reserva reservaVendida = reservaRepository.save(new Reserva(
+                null, organizadorId, sessao.getId(), StatusReserva.CONFIRMADA, Instant.now(),
+                LocalDateTime.now().minusMinutes(30)));
+        assentoSessaoRepository.saveAll(List.of(
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "VENDIDO", reservaVendida.getId(), null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null)));
+
+        LocalDateTime expiraEm = LocalDateTime.now().plusMinutes(10).withNano(0);
+        Reserva reservaNova = reservaRepository.save(
+                new Reserva(null, organizadorId, sessao.getId(), StatusReserva.ATIVA, Instant.now(), expiraEm));
+        reservaCriadaId = reservaNova.getId();
+
+        int linhasAfetadas = assentoSessaoRepository.reivindicar(
+                sessao.getId(), List.of(a1.getId(), a2.getId()), reservaNova.getId(), expiraEm, LocalDateTime.now());
+
+        // Só o assento livre (a2) foi atualizado — a guarda de status no UPDATE recusou a linha
+        // vendida (a1), mesmo sem nenhuma checagem prévia em Java protegendo essa chamada.
+        assertThat(linhasAfetadas).isEqualTo(1);
+
+        AssentoSessao linhaA1 = assentoSessaoRepository.findByIdSessaoId(sessao.getId()).stream()
+                .filter(a -> a.getId().getAssentoId().equals(a1.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(linhaA1.getStatus()).isEqualTo("VENDIDO");
+        assertThat(linhaA1.getReservaId()).isEqualTo(reservaVendida.getId());
     }
 
     // Achado do code review da Story 3.2: editar() lia assento_sessao sem lock antes de checar
