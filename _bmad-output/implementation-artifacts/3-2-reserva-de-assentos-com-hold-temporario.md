@@ -4,7 +4,7 @@ baseline_commit: e255202
 
 # Story 3.2: Reserva de Assentos com Hold Temporário
 
-Status: review
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
