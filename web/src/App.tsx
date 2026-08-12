@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router';
 import { Layout } from './components/Layout';
+import { RolarAoTrocarDeRota } from './components/RolarAoTrocarDeRota';
 import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
 import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
@@ -10,6 +11,7 @@ import { SobrePage } from './pages/SobrePage';
 function App() {
   return (
     <BrowserRouter>
+      <RolarAoTrocarDeRota />
       <div className="relative" style={{ containerType: 'inline-size' }}>
         <div
           aria-hidden
