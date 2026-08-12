@@ -17,6 +17,7 @@ import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.HoldAtivoException;
 import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
@@ -389,6 +390,54 @@ class SessaoServiceTest {
         verify(assentoSessaoRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(12);
         assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo("LIVRE"));
+    }
+
+    // Dívida obrigatória do review da Story 2.2 (deferred-work.md): trocar de sala com um hold
+    // ativo em andamento apagaria assento_sessao sob o cliente em checkout, deixando a reserva
+    // órfã. Só alcançável agora que ReservaService.reservar() cria holds de verdade (Story 3.2).
+    @Test
+    void rejeitaTrocaDeSalaComHoldAtivoAntesDeApagarAssentoSessao() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        stubOrganizador();
+        Sessao existente = sessaoCom(5L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
+        given(sessaoRepository.findByIdForUpdate(5L)).willReturn(Optional.of(existente));
+        given(sessaoRepository.existeIngressoConfirmado(5L)).willReturn(false);
+        given(salaRepository.findByIdForUpdate(2L)).willReturn(Optional.of(salaCom(2L, "Sala 2", 3, 4)));
+        given(sessaoRepository.existeConflitanteExcluindo(eq(2L), any(LocalDateTime.class), any(Integer.class), eq(5L)))
+                .willReturn(false);
+        AssentoSessao holdAtivo =
+                new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().plusMinutes(5));
+        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of(holdAtivo));
+
+        assertThatThrownBy(() -> sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br"))
+                .isInstanceOf(HoldAtivoException.class);
+
+        verify(assentoSessaoRepository, never()).deleteAll(anyList());
+        verify(assentoSessaoRepository, never()).saveAll(any());
+        verify(sessaoRepository, never()).save(any());
+    }
+
+    // Cenário de controle: hold vencido (TTL lazy, AD-4) não é hold ativo — não bloqueia a edição.
+    @Test
+    void holdVencidoNaoBloqueiaTrocaDeSala() {
+        given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
+        stubOrganizador();
+        Sessao existente = sessaoCom(5L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
+        given(sessaoRepository.findByIdForUpdate(5L)).willReturn(Optional.of(existente));
+        given(sessaoRepository.existeIngressoConfirmado(5L)).willReturn(false);
+        given(salaRepository.findByIdForUpdate(2L)).willReturn(Optional.of(salaCom(2L, "Sala 2", 3, 4)));
+        given(sessaoRepository.existeConflitanteExcluindo(eq(2L), any(LocalDateTime.class), any(Integer.class), eq(5L)))
+                .willReturn(false);
+        given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
+        AssentoSessao holdVencido =
+                new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().minusMinutes(1));
+        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of(holdVencido));
+
+        var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");
+
+        assertThat(resposta.capacidade()).isEqualTo(12);
+        verify(assentoSessaoRepository).deleteAll(List.of(holdVencido));
     }
 
     @Test

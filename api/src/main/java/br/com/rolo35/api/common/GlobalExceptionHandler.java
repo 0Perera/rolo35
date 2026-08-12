@@ -6,6 +6,7 @@ import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
 import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.HoldAtivoException;
 import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SalaSemAssentosException;
@@ -156,6 +157,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleSessaoComIngressoConfirmado() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
                 "SESSAO_COM_INGRESSO_CONFIRMADO", "Sessão já tem ingresso confirmado — nenhum campo pode ser editado"));
+    }
+
+    @ExceptionHandler(HoldAtivoException.class)
+    public ResponseEntity<ApiError> handleHoldAtivo() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "SESSAO_COM_HOLD_ATIVO", "Sessão tem hold de reserva ativo — troque de sala só depois que ele expirar"));
     }
 
     @ExceptionHandler(OrganizadorNaoEncontradoException.class)

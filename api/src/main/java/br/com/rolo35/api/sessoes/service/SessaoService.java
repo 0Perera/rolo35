@@ -7,6 +7,7 @@ import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
 import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
+import br.com.rolo35.api.sessoes.HoldAtivoException;
 import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
@@ -151,8 +152,16 @@ public class SessaoService {
         int capacidade;
         if (trocouSala) {
             // Passo anterior já garantiu que não há ingresso confirmado — nenhum estado de venda
-            // se perde ao trocar o mapa de assentos pra sala nova.
-            assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(id));
+            // se perde ao trocar o mapa de assentos pra sala nova. Mas um hold ativo (cliente em
+            // checkout, Story 3.2) é diferente: apagar assento_sessao sob ele deixaria a reserva
+            // órfã, apontando pra uma linha que não existe mais (dívida obrigatória da Story 2.2).
+            List<AssentoSessao> linhasAtuais = assentoSessaoRepository.findByIdSessaoId(id);
+            LocalDateTime agora = LocalDateTime.now();
+            boolean temHoldAtivo = linhasAtuais.stream().anyMatch(assento -> holdAtivo(assento, agora));
+            if (temHoldAtivo) {
+                throw new HoldAtivoException();
+            }
+            assentoSessaoRepository.deleteAll(linhasAtuais);
             List<Assento> assentos = assentoRepository.findBySalaId(sala.getId());
             if (assentos.isEmpty()) {
                 throw new SalaSemAssentosException();
@@ -248,5 +257,13 @@ public class SessaoService {
                 && projecao.getExpiresAt() != null
                 && projecao.getExpiresAt().isBefore(agora);
         return holdVencido ? STATUS_LIVRE : projecao.getStatus();
+    }
+
+    // Mesma regra de TTL lazy (AD-4) de statusEfetivo, aplicada a AssentoSessao em vez da
+    // projeção de leitura: hold vencido não é hold ativo, uma nova reserva pode reivindicar.
+    private boolean holdAtivo(AssentoSessao assento, LocalDateTime agora) {
+        return STATUS_RESERVADO.equals(assento.getStatus())
+                && assento.getExpiresAt() != null
+                && !assento.getExpiresAt().isBefore(agora);
     }
 }
