@@ -1,28 +1,77 @@
 @import "tailwindcss";
 
 @theme {
-  /* base sépia/âmbar — fundo e superfícies */
-  --color-sepia-950: #14100d;
-  --color-sepia-900: #1f1810;
-  --color-sepia-800: #2c2016;
-  --color-sepia-700: #3b2a1a;
+  /* tinta — fundo escuro roxo-preto, texto sobre fundo claro */
+  --color-ink-950: #171219;
+  --color-ink-900: #0c0910;
 
-  /* âmbar — destaque secundário */
-  --color-amber-400: #d99a44;
-  --color-amber-300: #e6b567;
+  /* papel — fundo claro das telas públicas e cartões */
+  --color-paper-100: #f4e9d4;
+  --color-paper-50: #fffdf6;
+  --color-paper-line: #e0d2b6;
 
-  /* vermelho veludo — ação primária/CTA */
-  --color-velvet-700: #7a1220;
-  --color-velvet-600: #8c1c2c;
+  /* chama — gradiente de destaque vermelho → laranja → dourado */
+  --color-flame-600: #e32b21;
+  --color-flame-500: #f26522;
+  --color-flame-400: #ffc414;
 
-  /* dourado — borda, foco, acento de moldura */
-  --color-gold-500: #c9a227;
+  /* ciano — contraste/foco */
+  --color-cyan-400: #7ed9f2;
 
-  /* texto sobre fundo escuro */
-  --color-cream-100: #f2e8d5;
-  --color-cream-300: #b8a692;
+  /* azul marinho — texto de status sobre fundo claro (ex.: portaria, avisos) */
+  --color-navy-700: #123a5c;
 
-  /* tipografia: marquise robusta pra título, serifada legível pro corpo — evita sans-serif genérica de SaaS */
-  --font-display: "Bebas Neue", sans-serif;
-  --font-body: "Lora", serif;
+  /* tipografia: display retrô pra título, corpo legível, monospace estilo terminal/TV de tubo */
+  --font-display: "Bungee", sans-serif;
+  --font-body: "Archivo", sans-serif;
+  --font-mono: "VT323", monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper-100);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='checkbox']:focus-visible {
+  outline: 3px solid var(--color-cyan-400);
+  outline-offset: 2px;
+}
+
+@keyframes rolo-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+@keyframes rolo-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes rolo-flick {
+  0%,
+  96% {
+    opacity: 1;
+  }
+  97% {
+    opacity: 0.86;
+  }
+  100% {
+    opacity: 1;
+  }
 }

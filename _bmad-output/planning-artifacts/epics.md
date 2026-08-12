@@ -207,6 +207,32 @@ So that eu escolho qual filme vincular a uma sessão sem nunca falar direto com 
 **When** o endpoint de busca é chamado
 **Then** retorna erro controlado via envelope `{codigo, mensagem}`, sem vazar detalhe da resposta bruta do TMDb
 
+### Story 1.3: Autocadastro de Cliente
+
+> Adicionada após o desenho de arquitetura, a partir do handoff de design (`Rolo 35.dc.html`, ver `docs/decisions.md` — "Escopo novo: autocadastro de cliente"). Sem FR própria no PRD original — mesma classe de adição que `GET /api/salas` na Story 2.1: infraestrutura mínima pra uma tela do design funcionar de ponta a ponta, não abertura de escopo maior (organizador/portaria continuam só por seed).
+
+As a visitante sem conta,
+I want criar minha própria conta com papel CLIENTE,
+So that eu reserve assentos sem depender de um cadastro feito manualmente por outra pessoa.
+
+**Acceptance Criteria:**
+
+**Given** um visitante na tela de cadastro, preenchendo nome, e-mail, senha e aceite dos termos
+**When** submete com todos os campos válidos e e-mail ainda não usado
+**Then** uma conta com papel `CLIENTE` é criada, senha armazenada com hash (nunca em texto puro), e o fluxo segue pro login (ou já retorna token, a critério da implementação)
+
+**Given** um cadastro com e-mail já existente
+**When** submetido
+**Then** retorna erro claro via envelope `{codigo, mensagem}`, sem confirmar/negar implicitamente se o e-mail pertence a outra conta de forma que vaze dado sensível
+
+**Given** o endpoint de cadastro
+**When** chamado com `papel` diferente de `CLIENTE` (manipulação direta da requisição, já que a UI não expõe essa opção)
+**Then** o back-end rejeita ou ignora o campo — nunca cria conta `ORGANIZADOR`/`PORTARIA` por essa via; esses papéis só existem via seed/gestão manual
+
+**Given** senha ou e-mail em formato inválido
+**When** submetido
+**Then** validação de campo (`@Valid`) rejeita antes de tocar o banco, com mensagem de erro por campo
+
 ## Epic 2: Gestão de Sessões (Organizador)
 
 Organizador vincula filme + sala + horário + preço pra criar uma sessão, com bloqueio de conflito de horário na sala e trava de edição pós-venda. Sessões publicadas aparecem na listagem pública, mesmo esgotadas.

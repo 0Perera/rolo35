@@ -1,12 +1,85 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
+import { buttonClass } from '../components/Button';
+import { PageShell } from '../components/PageShell';
+import { SectionTitle } from '../components/SectionTitle';
+import {
+  contagemDeSessoes,
+  formatarPreco,
+  precoDoFilme,
+  resumoDeSalas,
+  rotuloDeDia,
+  rotuloDeHora,
+} from '../lib/sessoes';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
+
+interface FilmeAgrupado {
+  tmdbId: number;
+  titulo: string;
+  posterUrl: string | null;
+  dataEstreia: string | null;
+  sessoes: SessaoPublicada[];
+}
+
+const MAXIMO_DE_CANAIS = 6;
+const TROCA_DE_CANAL_MS = 7000;
+
+const PALETA_ACENTO =['#F26522', '#E32B21', '#2E7D46', '#7ED9F2', '#FFC414', '#E85D9E', '#8A8F98', '#123A5C'];
+
+/** `matchMedia` não existe no jsdom, então a checagem é defensiva. */
+function prefereMenosAnimacao(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function corPorFilme(tmdbId: number): string {
+  return PALETA_ACENTO[Math.abs(tmdbId) % PALETA_ACENTO.length];
+}
+
+function agruparPorFilme(sessoes: SessaoPublicada[]): FilmeAgrupado[] {
+  const porFilme = new Map<number, FilmeAgrupado>();
+
+  for (const sessao of sessoes) {
+    const existente = porFilme.get(sessao.tmdbId);
+    if (existente) {
+      existente.sessoes.push(sessao);
+    } else {
+      porFilme.set(sessao.tmdbId, {
+        tmdbId: sessao.tmdbId,
+        titulo: sessao.titulo,
+        posterUrl: sessao.posterUrl,
+        dataEstreia: sessao.dataEstreia,
+        sessoes: [sessao],
+      });
+    }
+  }
+
+  for (const filme of porFilme.values()) {
+    filme.sessoes.sort((a, b) => a.dataHora.localeCompare(b.dataHora));
+  }
+
+  return Array.from(porFilme.values());
+}
+
+/** "A partir de" só entra quando o filme tem sessões com preços diferentes. */
+function precoDoCard(sessoes: SessaoPublicada[]): string {
+  const preco = precoDoFilme(sessoes);
+  return preco.aPartirDe ? `A PARTIR DE ${preco.texto}` : preco.texto;
+}
+
+/** Ano de estreia, sala e nº de sessões — o que o snapshot do TMDb em `sessoes` permite mostrar. */
+function metaDoFilme(filme: FilmeAgrupado): string {
+  return [filme.dataEstreia?.slice(0, 4), resumoDeSalas(filme.sessoes), contagemDeSessoes(filme.sessoes.length)]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 export function ListagemSessoesPage() {
   const [sessoes, setSessoes] = useState<SessaoPublicada[]>([]);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
+  const [heroIdx, setHeroIdx] = useState(0);
 
   useEffect(() => {
     let ativo = true;
@@ -29,59 +102,225 @@ export function ListagemSessoesPage() {
     };
   }, [tentativa]);
 
-  return (
-    <main className="min-h-screen bg-sepia-950 px-4 py-10 font-body text-cream-100">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
-        <h1 className="font-display text-3xl tracking-wide text-amber-300">Sessões em cartaz</h1>
+  const totalDeCanais = Math.min(agruparPorFilme(sessoes).length, MAXIMO_DE_CANAIS);
 
-        {estado === 'loading' && <p className="text-sm text-cream-300">Carregando sessões…</p>}
-        {estado === 'vazio' && <p className="text-sm text-cream-300">Nenhuma sessão disponível no momento.</p>}
+  // A TV troca de canal sozinha, como uma vitrine de cinema. Fica parada quando só há um
+  // filme em cartaz e quando o sistema pede menos animação.
+  useEffect(() => {
+    if (totalDeCanais < 2 || prefereMenosAnimacao()) {
+      return;
+    }
+    const intervalo = setInterval(() => setHeroIdx((atual) => atual + 1), TROCA_DE_CANAL_MS);
+    return () => clearInterval(intervalo);
+  }, [totalDeCanais]);
+
+  const filmes = agruparPorFilme(sessoes);
+  // O hero do protótipo tem seis canais; com mais filmes em cartaz a fileira de bolinhas
+  // viraria uma régua sem serventia — o resto do catálogo aparece na grade abaixo.
+  const canais = filmes.slice(0, MAXIMO_DE_CANAIS);
+  const destaque = canais.length > 0 ? canais[heroIdx % canais.length] : null;
+  const proximaSessaoDestaque = destaque?.sessoes[0];
+
+  return (
+    <PageShell>
+      {estado === 'pronto' && destaque && (
+        <section
+          className="flex justify-center border-b-[3px] border-ink-950 px-6 py-11"
+          style={{
+            backgroundImage: 'radial-gradient(120% 90% at 50% 0%, #2A2130 0%, #171219 60%, #100C13 100%)',
+          }}
+        >
+          <div className="w-full max-w-[1080px]">
+            <div
+              className="relative p-[clamp(16px,4cqw,30px)] pb-[clamp(20px,5cqw,40px)]"
+              style={{
+                backgroundImage: 'linear-gradient(165deg, #6C6459 0%, #3B352F 45%, #221E1A 100%)',
+                boxShadow: 'inset 0 3px 0 rgba(255,255,255,0.18), 0 26px 60px rgba(0,0,0,0.55)',
+                border: '3px solid #0D0A0F',
+                borderRadius: 'clamp(22px,5cqw,46px) clamp(22px,5cqw,46px) clamp(14px,3cqw,30px) clamp(14px,3cqw,30px)',
+              }}
+            >
+              <div
+                className="relative animate-[rolo-flick_7s_infinite] overflow-hidden rounded-[28px]"
+                style={{ background: '#05060A', border: '12px solid #14100E', boxShadow: 'inset 0 0 60px rgba(0,0,0,0.9)' }}
+              >
+                <div className="relative min-h-[clamp(360px,92cqw,460px)]">
+                  {destaque.posterUrl && (
+                    <img
+                      src={destaque.posterUrl}
+                      alt=""
+                      aria-hidden
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(90deg, rgba(5,6,10,0.94) 0%, rgba(5,6,10,0.72) 38%, rgba(5,6,10,0.1) 70%, rgba(126,217,242,0.12) 100%)',
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 opacity-50"
+                    style={{
+                      backgroundImage:
+                        'repeating-linear-gradient(0deg, rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 1px, transparent 1px, transparent 4px)',
+                    }}
+                  />
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute left-0 right-0 h-[90px] animate-[rolo-scan_6s_linear_infinite] opacity-[0.16]"
+                    style={{ backgroundImage: 'linear-gradient(180deg, transparent, #7ED9F2, transparent)' }}
+                  />
+
+                  <div className="absolute inset-0 flex flex-col justify-center gap-[clamp(8px,1.4cqw,18px)] px-[clamp(18px,4cqw,56px)]">
+                    <div className="font-mono text-xl tracking-[3px] text-cyan-400">▶ TOCANDO AGORA · CANAL 35</div>
+                    <h1 className="max-w-[560px] font-display text-[clamp(30px,5.4cqw,60px)] leading-[0.92] text-flame-400 [text-shadow:4px_4px_0_var(--color-flame-600),8px_8px_0_rgba(0,0,0,0.45)]">
+                      {destaque.titulo}
+                    </h1>
+                    {proximaSessaoDestaque && (
+                      <div className="flex flex-wrap items-center gap-3 text-sm font-bold tracking-[1.4px] text-paper-100">
+                        <span>{proximaSessaoDestaque.salaNome}</span>
+                        <span className="text-white/30">/</span>
+                        <span>{new Date(proximaSessaoDestaque.dataHora).toLocaleString('pt-BR')}</span>
+                        <span className="text-white/30">/</span>
+                        <span>{formatarPreco(proximaSessaoDestaque.preco)}</span>
+                      </div>
+                    )}
+                    {proximaSessaoDestaque?.sinopse && (
+                      <p className="line-clamp-2 max-w-[430px] text-[15px] leading-relaxed text-[#CFC5B8]">
+                        {proximaSessaoDestaque.sinopse}
+                      </p>
+                    )}
+                    <div className="mt-1.5 flex flex-wrap gap-3">
+                      <Link to={`/filmes/${destaque.tmdbId}`} className={buttonClass('primary', 'px-6 py-3')}>
+                        COMPRAR INGRESSO
+                      </Link>
+                    </div>
+                  </div>
+
+                  {canais.length > 1 && (
+                    <div className="absolute bottom-5 right-8 flex items-center gap-2.5">
+                      {canais.map((filme, i) => (
+                        <button
+                          key={filme.tmdbId}
+                          type="button"
+                          aria-label={`Destaque ${i + 1}`}
+                          onClick={() => setHeroIdx(i)}
+                          className="h-2.5 w-2.5 rounded-full border-2 border-paper-100"
+                          style={{ background: i === heroIdx % canais.length ? '#FFC414' : 'transparent' }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-[18px] flex items-center justify-between px-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-3 w-[62px] rounded-sm" style={{ background: '#14100E' }} />
+                  <div className="font-mono text-lg tracking-[2px] text-[#C9BCA9]">ROLO 35 TRINITRON</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="h-[26px] w-[26px] rounded-full border-2"
+                    style={{ backgroundImage: 'linear-gradient(150deg, #8A8175, #423C35)', borderColor: '#14100E' }}
+                  />
+                  <div
+                    className="h-[26px] w-[26px] rounded-full border-2"
+                    style={{ backgroundImage: 'linear-gradient(150deg, #8A8175, #423C35)', borderColor: '#14100E' }}
+                  />
+                  <div
+                    aria-hidden
+                    className="h-2.5 w-2.5 animate-[rolo-blink_2.4s_infinite] rounded-full"
+                    style={{ background: '#E32B21', boxShadow: '0 0 10px #E32B21' }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <SectionTitle>O QUE TÁ PASSANDO?</SectionTitle>
+
+        {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
+        {estado === 'vazio' && (
+          <p className="mt-8 font-mono text-lg text-ink-950/60">Nenhuma sessão disponível no momento.</p>
+        )}
         {estado === 'erro' && (
-          <p role="alert" className="text-sm text-velvet-600">
+          <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
             Não foi possível carregar as sessões agora.
           </p>
         )}
 
         {(estado === 'erro' || estado === 'vazio') && (
-          <button
-            type="button"
-            onClick={() => setTentativa((atual) => atual + 1)}
-            className="self-start rounded border border-gold-500/60 px-4 py-2 font-display tracking-wide text-amber-300 transition hover:bg-sepia-900"
-          >
-            Tentar novamente
+          <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary', 'mt-4')}>
+            TENTAR NOVAMENTE
           </button>
         )}
 
         {estado === 'pronto' && (
-          <ul className="flex flex-col gap-4">
-            {sessoes.map((sessao) => (
-              <li
-                key={sessao.id}
-                className="flex gap-4 rounded border border-gold-500/40 bg-sepia-900 p-4"
-              >
-                {sessao.posterUrl && (
-                  <img src={sessao.posterUrl} alt={sessao.titulo} className="h-32 w-auto rounded" />
-                )}
-                <div className="flex flex-1 flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-display text-xl tracking-wide text-amber-300">{sessao.titulo}</h2>
-                    {sessao.esgotada && (
-                      <span className="rounded border border-velvet-600 px-2 py-0.5 text-xs tracking-wide text-velvet-600">
+          <div
+            data-testid="grade-filmes"
+            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-8"
+          >
+            {filmes.map((filme) => {
+              const esgotado = filme.sessoes.every((sessao) => sessao.esgotada);
+              return (
+                <article key={filme.tmdbId} className="flex h-full flex-col">
+                  <Link
+                    to={`/filmes/${filme.tmdbId}`}
+                    aria-label={filme.titulo}
+                    className="relative block border-[3px] border-ink-950 bg-ink-950 shadow-[7px_7px_0_rgba(23,18,25,0.85)] transition hover:-translate-x-0.5 hover:-translate-y-[3px]"
+                  >
+                    <div className="relative aspect-[2/3] w-full overflow-hidden">
+                      {filme.posterUrl ? (
+                        <img
+                          src={filme.posterUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-ink-900" />
+                      )}
+                      <div
+                        aria-hidden
+                        className="absolute inset-y-0 left-0 w-3.5"
+                        style={{ backgroundImage: 'linear-gradient(90deg, rgba(0,0,0,0.55), transparent)' }}
+                      />
+                    </div>
+                    <div
+                      aria-hidden
+                      className="absolute bottom-0 left-0 right-0 h-1.5"
+                      style={{ background: corPorFilme(filme.tmdbId) }}
+                    />
+                    {esgotado && (
+                      <span className="absolute top-2 left-2 border-2 border-flame-600 bg-ink-950/80 px-2 py-0.5 text-xs tracking-wide text-flame-600">
                         Esgotada
                       </span>
                     )}
-                  </div>
-                  <span className="text-sm text-cream-300">{sessao.salaNome}</span>
-                  <span className="text-sm text-cream-300">{new Date(sessao.dataHora).toLocaleString('pt-BR')}</span>
-                  <span className="text-sm text-cream-100">
-                    R$ {sessao.preco.toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
+                  </Link>
+
+                  <h2 className="mt-3.5 font-display text-sm leading-tight tracking-[0.3px]">{filme.titulo}</h2>
+                  <p className="mt-1.5 font-mono text-base leading-snug tracking-wide text-ink-950/50">
+                    {metaDoFilme(filme)}
+                  </p>
+                  <p className="mb-3 font-mono text-base leading-snug tracking-wide text-navy-700">
+                    {rotuloDeDia(filme.sessoes[0].dataHora)} · {rotuloDeHora(filme.sessoes[0].dataHora)} ·{' '}
+                    {precoDoCard(filme.sessoes)}
+                  </p>
+
+                  <Link to={`/filmes/${filme.tmdbId}`} className={buttonClass('ticket', 'mt-auto w-full')}>
+                    🎟 {esgotado ? 'VER SESSÕES' : 'COMPRAR INGRESSO'}
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
         )}
       </div>
-    </main>
+    </PageShell>
   );
 }

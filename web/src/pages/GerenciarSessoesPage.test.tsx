@@ -16,6 +16,8 @@ function renderPage() {
 describe('GerenciarSessoesPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // O formulário embutido no painel carrega as salas; sem o mock a chamada vaza pro fetch real.
+    vi.spyOn(sessoesApi, 'listarSalas').mockResolvedValue([{ id: 1, nome: 'Sala 1', capacidade: 40 }]);
   });
 
   it('shows a loading state while sessions are being fetched', () => {
@@ -42,7 +44,7 @@ describe('GerenciarSessoesPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar suas sessões/i);
   });
 
-  it('shows an edit link for editable sessions and a locked badge for non-editable ones', async () => {
+  it('opens the inline edit form for editable sessions and keeps locked ones out of reach', async () => {
     vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockResolvedValue([
       {
         id: 1,
@@ -68,12 +70,40 @@ describe('GerenciarSessoesPage', () => {
       },
     ]);
 
+    const user = userEvent.setup();
     renderPage();
 
-    const linkEditar = await screen.findByRole('link', { name: /editar/i });
-    expect(linkEditar).toHaveAttribute('href', '/organizador/sessoes/1/editar');
+    const botoesEditar = await screen.findAllByRole('button', { name: /editar/i });
+    expect(botoesEditar).toHaveLength(1);
     expect(screen.getByText('Travada', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /editar/i })).toHaveLength(1);
+
+    await user.click(botoesEditar[0]);
+
+    expect(screen.getByRole('button', { name: /salvar alterações/i })).toBeInTheDocument();
+    expect(screen.getByText('Editável', { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('leaves the edit form after cancelling, back to the creation form', async () => {
+    vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockResolvedValue([
+      {
+        id: 1,
+        salaId: 1,
+        salaNome: 'Sala 1',
+        titulo: 'Editável',
+        sinopse: null,
+        dataHora: '2030-01-01T20:00:00',
+        preco: 25,
+        capacidade: 40,
+        editavel: true,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /✎ editar/i }));
+    await user.click(screen.getByRole('button', { name: /cancelar edição/i }));
+
+    expect(screen.getByRole('button', { name: /publicar sessão/i })).toBeInTheDocument();
   });
 
   it('retries loading sessions when the retry button is clicked', async () => {
