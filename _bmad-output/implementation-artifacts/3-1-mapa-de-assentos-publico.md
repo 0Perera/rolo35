@@ -40,9 +40,9 @@ so that eu decida se quero reservar antes mesmo de criar conta.
     JPQL (não SQL nativo) com `JOIN ... ON` explícito entre `AssentoSessao` e `Assento` — as duas entidades não têm associação `@ManyToOne` mapeada entre si (`AssentoSessaoId` guarda `sessaoId`/`assentoId` como `Long` soltos, decisão da Story 2.1 pra manter o `Persistable` customizado que evita `SELECT` antes de cada `INSERT` no `saveAll()` em lote — ver Dev Notes). O `JOIN ... ON` do JPQL (suportado desde JPA 2.1) faz esse join sem precisar de relação mapeada nem de SQL nativo — mais portável e validado pelo Hibernate contra o metamodelo, ao contrário de `nativeQuery = true`. Uma única query, sem N+1 (non-negotiable do CLAUDE.md). Rodar o teste até passar.
   - [x] Commit: `feat(sessoes): AssentoSessaoRepository.buscarMapaPorSessao() sem N+1 (AC1-2)`
 
-- [ ] **Task 2 — `SessaoService.mapaAssentos()` calcula status efetivo via TTL lazy (AC1-4)**
-  - [ ] **[RED]** Estender `api/src/test/java/br/com/rolo35/api/sessoes/service/SessaoServiceTest.java` (Mockito puro, mocka `SessaoRepository`, `SalaRepository`, `AssentoSessaoRepository`) cobrindo: sessão existente com sala existente → `MapaAssentosDto` populado, `RESERVADO` com `expiresAt` futuro permanece `RESERVADO`, `RESERVADO` com `expiresAt` no passado vira `LIVRE` no DTO (sem chamar nenhum método de escrita no repository — nenhum `save`/`saveAll` invocado, prova que é só leitura), `VENDIDO` permanece `VENDIDO`; sessão inexistente → `SessaoNaoEncontradaException`. Rodar e confirmar que falha por `mapaAssentos()`/`MapaAssentosDto`/`AssentoMapaDto` ainda não existirem.
-  - [ ] **[GREEN]** Criar `dto/AssentoMapaDto.java` (record: `id, fileira, numero, status` — sem `reservaId`/`expiresAt` no DTO público, é detalhe interno de cálculo, AC2). Criar `dto/MapaAssentosDto.java` (record: `sessaoId, titulo, posterUrl, salaNome, dataHora, preco, assentos: List<AssentoMapaDto>` — contexto suficiente pra tela renderizar sozinha, mesmos campos já expostos em `SessaoListagemDto`). Adicionar `SessaoService.mapaAssentos(Long sessaoId): MapaAssentosDto`:
+- [x] **Task 2 — `SessaoService.mapaAssentos()` calcula status efetivo via TTL lazy (AC1-4)**
+  - [x] **[RED]** Estender `api/src/test/java/br/com/rolo35/api/sessoes/service/SessaoServiceTest.java` (Mockito puro, mocka `SessaoRepository`, `SalaRepository`, `AssentoSessaoRepository`) cobrindo: sessão existente com sala existente → `MapaAssentosDto` populado, `RESERVADO` com `expiresAt` futuro permanece `RESERVADO`, `RESERVADO` com `expiresAt` no passado vira `LIVRE` no DTO (sem chamar nenhum método de escrita no repository — nenhum `save`/`saveAll` invocado, prova que é só leitura), `VENDIDO` permanece `VENDIDO`; sessão inexistente → `SessaoNaoEncontradaException`. Rodar e confirmar que falha por `mapaAssentos()`/`MapaAssentosDto`/`AssentoMapaDto` ainda não existirem.
+  - [x] **[GREEN]** Criar `dto/AssentoMapaDto.java` (record: `id, fileira, numero, status` — sem `reservaId`/`expiresAt` no DTO público, é detalhe interno de cálculo, AC2). Criar `dto/MapaAssentosDto.java` (record: `sessaoId, titulo, posterUrl, salaNome, dataHora, preco, assentos: List<AssentoMapaDto>` — contexto suficiente pra tela renderizar sozinha, mesmos campos já expostos em `SessaoListagemDto`). Adicionar `SessaoService.mapaAssentos(Long sessaoId): MapaAssentosDto`:
     ```java
     public MapaAssentosDto mapaAssentos(Long sessaoId) {
         Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
@@ -64,7 +64,7 @@ so that eu decida se quero reservar antes mesmo de criar conta.
     }
     ```
     Adicionar constante `STATUS_RESERVADO = "RESERVADO"` ao lado da já existente `STATUS_LIVRE`. Rodar o teste até passar.
-  - [ ] Commit: `feat(sessoes): SessaoService.mapaAssentos() com TTL lazy (AC1, AC3-4)`
+  - [x] Commit: `feat(sessoes): SessaoService.mapaAssentos() com TTL lazy (AC1, AC3-4)`
 
 - [ ] **Task 3 — `GET /api/sessoes/{id}/mapa-assentos` público, sem autenticação (AC1, AC4)**
   - [ ] **[RED]** Estender `api/src/test/java/br/com/rolo35/api/sessoes/controller/SessaoControllerTest.java`: `GET /api/sessoes/{id}/mapa-assentos` → `200` + shape de `MapaAssentosDto` (incluindo array `assentos` com `id/fileira/numero/status`, sem qualquer campo de identidade de cliente); service lança `SessaoNaoEncontradaException` → `404` com `{codigo: "SESSAO_NAO_ENCONTRADA"}` (reaproveita o handler já existente, sem exceção nova). Estender `api/src/test/java/br/com/rolo35/api/sessoes/SessaoSecurityTest.java` com um caso **sem token nenhum** → `200` no service mockado (RED que prova a lacuna, mesmo padrão do teste equivalente de `GET /api/sessoes` da Story 2.3). Rodar e confirmar que falha.
@@ -147,3 +147,7 @@ so that eu decida se quero reservar antes mesmo de criar conta.
 - `api/src/main/java/br/com/rolo35/api/sessoes/repository/AssentoMapaProjection.java` (novo)
 - `api/src/main/java/br/com/rolo35/api/sessoes/repository/AssentoSessaoRepository.java` (update — `buscarMapaPorSessao()`)
 - `api/src/test/java/br/com/rolo35/api/sessoes/repository/AssentoSessaoMapaRepositoryTest.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/dto/AssentoMapaDto.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/dto/MapaAssentosDto.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/sessoes/service/SessaoService.java` (update — `mapaAssentos()`, `STATUS_RESERVADO`)
+- `api/src/test/java/br/com/rolo35/api/sessoes/service/SessaoServiceTest.java` (update)

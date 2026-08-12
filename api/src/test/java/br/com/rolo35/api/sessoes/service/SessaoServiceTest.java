@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,6 +30,7 @@ import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.repository.AssentoMapaProjection;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
@@ -487,5 +489,85 @@ class SessaoServiceTest {
                 .isInstanceOf(OrganizadorNaoEncontradoException.class);
 
         verify(sessaoRepository, never()).findByIdForUpdate(any());
+    }
+
+    private AssentoMapaProjection projecaoMapaCom(
+            Long assentoId, String fileira, Integer numero, String status, LocalDateTime expiresAt) {
+        AssentoMapaProjection projecao = mock(AssentoMapaProjection.class);
+        given(projecao.getAssentoId()).willReturn(assentoId);
+        given(projecao.getFileira()).willReturn(fileira);
+        given(projecao.getNumero()).willReturn(numero);
+        given(projecao.getStatus()).willReturn(status);
+        lenient().when(projecao.getExpiresAt()).thenReturn(expiresAt);
+        return projecao;
+    }
+
+    @Test
+    void mapaAssentosRetornaDtoPopuladoComContextoDaSessaoEAssentosOrdenados() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "LIVRE", null));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L);
+
+        assertThat(mapa.sessaoId()).isEqualTo(7L);
+        assertThat(mapa.titulo()).isEqualTo("Clube da Luta");
+        assertThat(mapa.salaNome()).isEqualTo("Sala 1");
+        assertThat(mapa.preco()).isEqualByComparingTo("25.00");
+        assertThat(mapa.assentos()).hasSize(1);
+        assertThat(mapa.assentos().get(0).id()).isEqualTo(1L);
+        assertThat(mapa.assentos().get(0).fileira()).isEqualTo("A");
+        assertThat(mapa.assentos().get(0).numero()).isEqualTo(1);
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("LIVRE");
+    }
+
+    @Test
+    void mapaAssentosMantemReservadoQuandoExpiresAtNoFuturo() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5)));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L);
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
+    }
+
+    @Test
+    void mapaAssentosViraLivreQuandoHoldExpiradoSemEscreverNoBanco() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().minusMinutes(5)));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L);
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("LIVRE");
+        verify(assentoSessaoRepository, never()).save(any());
+        verify(assentoSessaoRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void mapaAssentosMantemVendido() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "VENDIDO", null));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L);
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("VENDIDO");
+    }
+
+    @Test
+    void rejeitaMapaAssentosDeSessaoInexistente() {
+        given(sessaoRepository.findById(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sessaoService.mapaAssentos(999L)).isInstanceOf(SessaoNaoEncontradaException.class);
     }
 }

@@ -16,11 +16,14 @@ import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
+import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
+import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
+import br.com.rolo35.api.sessoes.repository.AssentoMapaProjection;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
@@ -39,6 +42,7 @@ public class SessaoService {
 
     private static final int BUFFER_MINUTOS = 240;
     private static final String STATUS_LIVRE = "LIVRE";
+    private static final String STATUS_RESERVADO = "RESERVADO";
 
     private final SalaRepository salaRepository;
     private final AssentoRepository assentoRepository;
@@ -225,5 +229,24 @@ public class SessaoService {
         } catch (DateTimeParseException e) {
             throw new DataEstreiaInvalidaException();
         }
+    }
+
+    public MapaAssentosDto mapaAssentos(Long sessaoId) {
+        Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
+        Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
+        LocalDateTime agora = LocalDateTime.now();
+        List<AssentoMapaDto> assentos = assentoSessaoRepository.buscarMapaPorSessao(sessaoId).stream()
+                .map(p -> new AssentoMapaDto(p.getAssentoId(), p.getFileira(), p.getNumero(), statusEfetivo(p, agora)))
+                .toList();
+        return new MapaAssentosDto(
+                sessao.getId(), sessao.getTitulo(), sessao.getPosterUrl(), sala.getNome(), sessao.getDataHora(),
+                sessao.getPreco(), assentos);
+    }
+
+    private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora) {
+        boolean holdVencido = STATUS_RESERVADO.equals(projecao.getStatus())
+                && projecao.getExpiresAt() != null
+                && projecao.getExpiresAt().isBefore(agora);
+        return holdVencido ? STATUS_LIVRE : projecao.getStatus();
     }
 }
