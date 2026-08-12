@@ -26,5 +26,5 @@ export function resumoDeSalas(sessoes: SessaoPublicada[]): string {
 }
 
 export function contagemDeSessoes(total: number): string {
-  return total === 1 ? '1 SESSÃO' : `${total} SESSÕES`;
+  return `${total} ${total === 1 ? 'SESSÃO' : 'SESSÕES'}`;
 }
