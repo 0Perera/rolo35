@@ -48,4 +48,16 @@ public class Reserva {
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
     }
+
+    // Mutadores estreitos (não um setter genérico de status) — Reserva é carregada dentro da
+    // mesma transação via ReservaRepository.findByIdForUpdate (PESSIMISTIC_WRITE), então mutar
+    // o campo aqui e deixar o dirty-checking do Hibernate cuidar do UPDATE no commit é seguro,
+    // ao contrário de AssentoSessao (Persistable com PK composta, onde isso não se aplica).
+    public void confirmar() {
+        this.status = StatusReserva.CONFIRMADA;
+    }
+
+    public void recusar() {
+        this.status = StatusReserva.RECUSADA;
+    }
 }

@@ -57,6 +57,27 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
             """)
     int reivindicar(Long sessaoId, List<Long> assentoIds, Long reservaId, LocalDateTime expiresAt, LocalDateTime agora);
 
+    // Write path do pagamento aprovado (Story 4.1): a Reserva já foi travada via
+    // ReservaRepository.findByIdForUpdate antes desta chamada, então não precisa de guarda de
+    // status/expiresAt como reivindicar() — só marca VENDIDO as linhas da reserva confirmada.
+    @Modifying(clearAutomatically = true)
+    @Query(
+            """
+            UPDATE AssentoSessao a SET a.status = 'VENDIDO'
+            WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds
+            """)
+    int reivindicarVendido(Long sessaoId, List<Long> assentoIds);
+
+    // Write path do pagamento recusado (Story 4.1): libera a linha imediatamente, sem esperar o
+    // TTL lazy de AD-4 — este caminho é escrita imediata, por decisão explícita da AC2.
+    @Modifying(clearAutomatically = true)
+    @Query(
+            """
+            UPDATE AssentoSessao a SET a.status = 'LIVRE', a.reservaId = null, a.expiresAt = null
+            WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds
+            """)
+    int liberar(Long sessaoId, List<Long> assentoIds);
+
     @Query(
             """
             SELECT a.id AS assentoId, a.fileira AS fileira, a.numero AS numero,
