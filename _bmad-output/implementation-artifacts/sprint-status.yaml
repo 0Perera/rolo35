@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: 2026-08-12 (Story 3.2 → in-progress, code review concluído com 7 patches deixados como itens de ação)
+last_updated: 2026-08-12 (Story 3.2 → done, epic-3 → done; 4 patches do code review resolvidos, 3 achados de front-end descartados por decisão)
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
@@ -60,9 +60,9 @@ development_status:
   2-3-listagem-publica-de-sessoes: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-mapa-de-assentos-publico: done
-  3-2-reserva-de-assentos-com-hold-temporario: in-progress
+  3-2-reserva-de-assentos-com-hold-temporario: done
   epic-3-retrospective: optional
 
   epic-4: backlog
