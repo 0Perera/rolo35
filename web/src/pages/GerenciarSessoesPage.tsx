@@ -1,18 +1,31 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { listarMinhasSessoes, type SessaoGestao } from '../api/sessoes';
+import { useEffect, useState, type ReactNode } from 'react';
+import { listarMinhasSessoes, listarSalas, type Sala, type SessaoGestao } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
+import { FormSessao } from '../components/FormSessao';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
-const COLUNAS = '1.6fr 1fr 0.9fr 0.8fr 0.8fr 0.7fr 1fr';
+/** Mesmas proporções do handoff; só valem a partir de lg, onde a tabela vira grade. */
+const COLUNAS = 'lg:grid-cols-[1.6fr_1fr_0.9fr_0.8fr_0.8fr_0.7fr_1fr]';
+
+/** Célula da tabela: mostra o rótulo do campo enquanto o cabeçalho da grade está escondido. */
+function Celula({ rotulo, children }: { rotulo: string; children: ReactNode }) {
+  return (
+    <div className="font-mono text-base text-ink-950/60">
+      <span className="block text-sm tracking-wide text-ink-950/40 lg:hidden">{rotulo}</span>
+      {children}
+    </div>
+  );
+}
 
 export function GerenciarSessoesPage() {
   const [sessoes, setSessoes] = useState<SessaoGestao[]>([]);
+  const [salas, setSalas] = useState<Sala[]>([]);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
+  const [emEdicao, setEmEdicao] = useState<SessaoGestao | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -34,6 +47,31 @@ export function GerenciarSessoesPage() {
       ativo = false;
     };
   }, [tentativa]);
+
+  // Salas carregam à parte: elas alimentam o formulário, e uma falha aqui não pode
+  // derrubar a listagem de sessões, que é o conteúdo principal da tela.
+  useEffect(() => {
+    let ativo = true;
+    listarSalas()
+      .then((carregadas) => {
+        if (ativo) {
+          setSalas(carregadas);
+        }
+      })
+      .catch(() => {
+        if (ativo) {
+          setSalas([]);
+        }
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [tentativa]);
+
+  function recarregar() {
+    setEmEdicao(null);
+    setTentativa((atual) => atual + 1);
+  }
 
   // Trava pós-venda da Story 2.2: sessão com ingresso confirmado chega com `editavel: false`.
   const travadas = sessoes.filter((sessao) => !sessao.editavel).length;
@@ -58,18 +96,12 @@ export function GerenciarSessoesPage() {
         </div>
 
         <div className="mt-9 flex flex-wrap items-start gap-8">
-          {/* Coluna do protótipo onde ficaria o formulário. Aqui ela é o ponto de partida do
-              fluxo: a criação exige escolher um filme do catálogo TMDb antes (Story 2.1). */}
-          <aside className="w-full max-w-[380px] flex-[1_1_300px] border-[3px] border-ink-950 bg-paper-50 p-6 shadow-[9px_9px_0_var(--color-ink-950)]">
-            <div className="font-display text-xl">NOVA SESSÃO</div>
-            <div className="my-3.5 h-1 bg-gradient-to-r from-flame-600 to-flame-400" />
-            <p className="font-mono text-base leading-snug tracking-wide text-ink-950/60">
-              TODA SESSÃO COMEÇA POR UM FILME DO CATÁLOGO TMDB. ESCOLHA O FILME E DEPOIS A SALA, A DATA E O PREÇO.
-            </p>
-            <Link to="/organizador" className={buttonClass('primary', 'mt-5 w-full')}>
-              BUSCAR FILME
-            </Link>
-          </aside>
+          <FormSessao
+            salas={salas}
+            emEdicao={emEdicao}
+            onSalvou={recarregar}
+            onCancelarEdicao={() => setEmEdicao(null)}
+          />
 
           <div className="min-w-0 flex-[3_1_460px]">
             <div className="mb-3 inline-block border-b-[3px] border-flame-600 pb-3 font-mono text-lg tracking-wide">
@@ -97,10 +129,11 @@ export function GerenciarSessoesPage() {
             )}
 
             {estado === 'pronto' && (
-              <div className="overflow-x-auto border-[3px] border-ink-950 bg-paper-50 shadow-[9px_9px_0_var(--color-ink-950)]">
+              <div className="border-[3px] border-ink-950 bg-paper-50 shadow-[9px_9px_0_var(--color-ink-950)]">
+                {/* Abaixo de lg cada sessão vira um bloco com rótulo por campo, em vez de uma
+                    grade estreita com barra de rolagem horizontal. */}
                 <div
-                  className="grid min-w-[720px] gap-3 bg-ink-950 px-5 py-3.5 font-mono text-lg tracking-wide text-flame-400"
-                  style={{ gridTemplateColumns: COLUNAS }}
+                  className={`hidden gap-3 bg-ink-950 px-5 py-3.5 font-mono text-lg tracking-wide text-flame-400 lg:grid ${COLUNAS}`}
                 >
                   <div>FILME</div>
                   <div>SALA</div>
@@ -112,13 +145,15 @@ export function GerenciarSessoesPage() {
                 </div>
                 {sessoes.map((sessao) => {
                   const data = new Date(sessao.dataHora);
+                  const emFoco = emEdicao?.id === sessao.id;
                   return (
                     <div
                       key={sessao.id}
-                      className="grid min-w-[720px] items-center gap-3 border-b-2 border-paper-line px-5 py-4 text-sm font-semibold"
-                      style={{ gridTemplateColumns: COLUNAS }}
+                      className={`grid grid-cols-2 gap-3 border-b-2 border-paper-line px-4 py-4 text-sm font-semibold sm:grid-cols-3 lg:items-center lg:px-5 ${COLUNAS} ${
+                        emFoco ? 'bg-flame-400/15' : ''
+                      }`}
                     >
-                      <div className="flex items-center gap-2 font-display text-sm leading-tight">
+                      <div className="col-span-2 flex flex-wrap items-center gap-2 font-display text-sm leading-tight sm:col-span-3 lg:col-span-1">
                         {sessao.titulo}
                         {!sessao.editavel && (
                           <span className="border-2 border-flame-600 px-2 py-0.5 text-xs tracking-wide text-flame-600">
@@ -126,24 +161,25 @@ export function GerenciarSessoesPage() {
                           </span>
                         )}
                       </div>
-                      <div className="font-mono text-base text-ink-950/60">{sessao.salaNome}</div>
-                      <div className="font-mono text-base">{data.toLocaleDateString('pt-BR')}</div>
-                      <div className="font-mono text-base">
+                      <Celula rotulo="SALA">{sessao.salaNome}</Celula>
+                      <Celula rotulo="DATA">{data.toLocaleDateString('pt-BR')}</Celula>
+                      <Celula rotulo="HORA">
                         {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                      <div className="font-mono text-base text-ink-950/60">{sessao.capacidade}</div>
-                      <div className="font-display text-flame-600">{sessao.preco.toFixed(2).replace('.', ',')}</div>
-                      <div>
+                      </Celula>
+                      <Celula rotulo="LUGARES">{sessao.capacidade}</Celula>
+                      <Celula rotulo="R$">
+                        <span className="font-display text-flame-600">
+                          {sessao.preco.toFixed(2).replace('.', ',')}
+                        </span>
+                      </Celula>
+                      <div className="col-span-2 sm:col-span-1">
                         {sessao.editavel ? (
-                          <Link
-                            to={`/organizador/sessoes/${sessao.id}/editar`}
-                            className={buttonClass('secondary', 'px-3 py-1.5 text-xs')}
-                          >
+                          <button type="button" onClick={() => setEmEdicao(sessao)} className={buttonClass('discreto')}>
                             ✎ EDITAR
-                          </Link>
+                          </button>
                         ) : (
                           <span
-                            className="inline-block border-2 border-ink-950/20 px-3 py-1.5 font-mono text-sm tracking-wide text-ink-950/40"
+                            className="inline-flex items-center gap-2 whitespace-nowrap border-2 border-ink-950/15 px-2.5 py-1.5 font-mono text-base tracking-wide text-ink-950/35"
                             title="Sessão com ingresso vendido não pode ser editada."
                           >
                             ✎ EDITAR
