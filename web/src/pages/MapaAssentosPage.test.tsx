@@ -90,13 +90,34 @@ describe('MapaAssentosPage', () => {
     expect(screen.getByLabelText('Assento B1 — vendido')).toHaveAttribute('data-status', 'VENDIDO');
   });
 
-  it('selects and deselects a free seat on click, enabling the reservar button only with a selection', async () => {
+  it('exposes a tooltip with the seat state and blocks clicks on taken seats', async () => {
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
+    const user = userEvent.setup();
+
+    renderPage();
+    const reservado = await screen.findByLabelText('Assento A2 — reservado');
+    const vendido = screen.getByLabelText('Assento B1 — vendido');
+
+    expect(screen.getByLabelText('Assento A1 — livre')).toHaveAttribute('title', 'Assento A1 — livre');
+    expect(reservado).toHaveAttribute('title', 'Assento A2 — reservado');
+    expect(reservado).toBeDisabled();
+    expect(vendido).toBeDisabled();
+
+    await user.click(reservado);
+    await user.click(vendido);
+
+    expect(reservado).toHaveAttribute('aria-pressed', 'false');
+    expect(vendido).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeDisabled();
+  });
+
+  it('selects and deselects a free seat on click, enabling the confirm button only with a selection', async () => {
     vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
     const user = userEvent.setup();
 
     renderPage();
     const assentoLivre = await screen.findByLabelText('Assento A1 — livre');
-    const botaoReservar = screen.getByRole('button', { name: /reservar/i });
+    const botaoReservar = screen.getByRole('button', { name: /ir para o pagamento/i });
 
     expect(botaoReservar).toBeDisabled();
 
@@ -107,6 +128,25 @@ describe('MapaAssentosPage', () => {
     await user.click(assentoLivre);
     expect(assentoLivre).toHaveAttribute('aria-pressed', 'false');
     expect(botaoReservar).toBeDisabled();
+  });
+
+  it('summarises the order, listing the chosen seats and the running total', async () => {
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapaComSeisLivres);
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByLabelText('Assento A1 — livre');
+
+    expect(screen.getByText(/nenhum assento escolhido/i)).toBeInTheDocument();
+    expect(screen.getByText('R$ 0,00')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Assento A1 — livre'));
+    await user.click(screen.getByLabelText('Assento A2 — livre'));
+
+    expect(screen.getByText('A1')).toBeInTheDocument();
+    expect(screen.getByText('A2')).toBeInTheDocument();
+    expect(screen.queryByText(/nenhum assento escolhido/i)).not.toBeInTheDocument();
+    expect(screen.getByText('R$ 50,00')).toBeInTheDocument();
   });
 
   it('does not select a seventh seat once six are already selected', async () => {
@@ -140,7 +180,7 @@ describe('MapaAssentosPage', () => {
 
     renderPage();
     await user.click(await screen.findByLabelText('Assento A1 — livre'));
-    await user.click(screen.getByRole('button', { name: /reservar/i }));
+    await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
 
     await waitFor(() => {
       expect(reservarSpy).toHaveBeenCalledWith({ sessaoId: 5, assentoIds: [1] });
@@ -165,12 +205,12 @@ describe('MapaAssentosPage', () => {
 
     renderPage();
     await user.click(await screen.findByLabelText('Assento A1 — livre'));
-    await user.click(screen.getByRole('button', { name: /reservar/i }));
+    await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/não estão mais disponíveis/i);
     await waitFor(() => expect(buscarSpy).toHaveBeenCalledTimes(2));
     expect(await screen.findByLabelText('Assento A1 — reservado')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reservar/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeDisabled();
   });
 
   it('shows a login message when the request is unauthorized', async () => {
@@ -180,7 +220,7 @@ describe('MapaAssentosPage', () => {
 
     renderPage();
     await user.click(await screen.findByLabelText('Assento A1 — livre'));
-    await user.click(screen.getByRole('button', { name: /reservar/i }));
+    await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/faça login como cliente/i);
   });
