@@ -383,3 +383,10 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: a severidade foi avaliada como média (janela de corrida estreita, exige timing quase exato entre uma edição de organizador e uma reserva de cliente na mesma sessão) mas o fix era barato e o non-negotiable de segurança do CLAUDE.md é explícito ("resolvida com constraint/lock no banco, não só checagem na aplicação") — decisão de corrigir na hora em vez de adiar pra depois que o custo do bug (uma vez que a Epic 4/pagamento existir e passar a confiar em holds) ficasse maior. Trade-off aceito: `editar()` numa troca de sala agora bloqueia temporariamente qualquer `reservar()` concorrente pra essa sessão (e vice-versa) — aceitável porque trocar sala de sessão publicada é ação rara do organizador, não caminho quente do sistema.
 
 ---
+
+## Timeout de lock em `reservar()` vira `AssentoEmDisputaException` (409), não reaproveita `AssentoIndisponivelException` nem `SALA_OCUPADA` — correção do code review da Story 3.2
+
+- **Decisão**: quando `travarParaReserva()` estoura o `lock_timeout` de 3s, o service agora lança uma exceção nova e dedicada (`AssentoEmDisputaException`, código `ASSENTO_EM_DISPUTA`, HTTP 409), em vez de deixar a `PessimisticLockingFailureException` propagar pro handler genérico `SALA_OCUPADA` (503, mensagem fala de criação de sessão) ou de relançá-la como `AssentoIndisponivelException` (409, mesma que já é usada quando a checagem de status *conclui* que o assento não está livre).
+- **Por quê**: um timeout de lock não é a mesma coisa que "assento confirmado indisponível" — é só a impossibilidade de confirmar o status a tempo, porque outra transação segurava a linha; o assento pode estar livre de novo no instante seguinte. Misturar os dois casos na mesma exceção/código enganaria o front-end, que trataria "tente de novo, pode funcionar" e "reselecione, está confirmado indisponível" da mesma forma. Optou-se por 409 (não 503 como `SALA_OCUPADA`) porque o recurso em disputa é identificável (os assentos da própria requisição) e a mensagem já orienta o cliente a tentar de novo, sem precisar de um código de "serviço indisponível" mais genérico.
+
+---
