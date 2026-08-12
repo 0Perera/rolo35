@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { listarMinhasSessoes, listarSalas, type Sala, type SessaoGestao } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { FormSessao } from '../components/FormSessao';
@@ -7,18 +7,9 @@ import { SectionTitle } from '../components/SectionTitle';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
-/** Mesmas proporções do handoff; só valem a partir de lg, onde a tabela vira grade. */
-const COLUNAS = 'lg:grid-cols-[1.6fr_1fr_0.9fr_0.8fr_0.8fr_0.7fr_1fr]';
-
-/** Célula da tabela: mostra o rótulo do campo enquanto o cabeçalho da grade está escondido. */
-function Celula({ rotulo, children }: { rotulo: string; children: ReactNode }) {
-  return (
-    <div className="font-mono text-base text-ink-950/60">
-      <span className="block text-sm tracking-wide text-ink-950/40 lg:hidden">{rotulo}</span>
-      {children}
-    </div>
-  );
-}
+const COLUNAS = '1.6fr 1fr 0.9fr 0.8fr 0.8fr 0.7fr 1fr';
+/** Abaixo disso a tabela rola em vez de espremer as colunas — cabe inteira no desktop. */
+const LARGURA_MINIMA_DA_TABELA = 640;
 
 export function GerenciarSessoesPage() {
   const [sessoes, setSessoes] = useState<SessaoGestao[]>([]);
@@ -78,7 +69,7 @@ export function GerenciarSessoesPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-[1280px] px-4 py-10 sm:px-8">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <SectionTitle kicker="PAINEL DO ORGANIZADOR" tone="ink" rule={false}>
             PROGRAME A SEMANA
@@ -128,12 +119,13 @@ export function GerenciarSessoesPage() {
               </button>
             )}
 
+            {/* Como no protótipo, a tabela mantém as colunas em qualquer largura: em telas
+                estreitas ela rola na horizontal dentro do próprio quadro, sem virar cartão. */}
             {estado === 'pronto' && (
-              <div className="border-[3px] border-ink-950 bg-paper-50 shadow-[9px_9px_0_var(--color-ink-950)]">
-                {/* Abaixo de lg cada sessão vira um bloco com rótulo por campo, em vez de uma
-                    grade estreita com barra de rolagem horizontal. */}
+              <div className="overflow-x-auto border-[3px] border-ink-950 bg-paper-50 shadow-[9px_9px_0_var(--color-ink-950)]">
                 <div
-                  className={`hidden gap-3 bg-ink-950 px-5 py-3.5 font-mono text-lg tracking-wide text-flame-400 lg:grid ${COLUNAS}`}
+                  className="grid gap-3 bg-ink-950 px-5 py-3.5 font-mono text-lg tracking-wide text-flame-400"
+                  style={{ gridTemplateColumns: COLUNAS, minWidth: LARGURA_MINIMA_DA_TABELA }}
                 >
                   <div>FILME</div>
                   <div>SALA</div>
@@ -149,11 +141,12 @@ export function GerenciarSessoesPage() {
                   return (
                     <div
                       key={sessao.id}
-                      className={`grid grid-cols-2 gap-3 border-b-2 border-paper-line px-4 py-4 text-sm font-semibold sm:grid-cols-3 lg:items-center lg:px-5 ${COLUNAS} ${
+                      className={`grid items-center gap-3 border-b-2 border-paper-line px-5 py-4 text-sm font-semibold ${
                         emFoco ? 'bg-flame-400/15' : ''
                       }`}
+                      style={{ gridTemplateColumns: COLUNAS, minWidth: LARGURA_MINIMA_DA_TABELA }}
                     >
-                      <div className="col-span-2 flex flex-wrap items-center gap-2 font-display text-sm leading-tight sm:col-span-3 lg:col-span-1">
+                      <div className="flex flex-wrap items-center gap-2 font-display text-sm leading-tight">
                         {sessao.titulo}
                         {!sessao.editavel && (
                           <span className="border-2 border-flame-600 px-2 py-0.5 text-xs tracking-wide text-flame-600">
@@ -161,18 +154,14 @@ export function GerenciarSessoesPage() {
                           </span>
                         )}
                       </div>
-                      <Celula rotulo="SALA">{sessao.salaNome}</Celula>
-                      <Celula rotulo="DATA">{data.toLocaleDateString('pt-BR')}</Celula>
-                      <Celula rotulo="HORA">
+                      <div className="font-mono text-base text-ink-950/60">{sessao.salaNome}</div>
+                      <div className="font-mono text-base">{data.toLocaleDateString('pt-BR')}</div>
+                      <div className="font-mono text-base">
                         {data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </Celula>
-                      <Celula rotulo="LUGARES">{sessao.capacidade}</Celula>
-                      <Celula rotulo="R$">
-                        <span className="font-display text-flame-600">
-                          {sessao.preco.toFixed(2).replace('.', ',')}
-                        </span>
-                      </Celula>
-                      <div className="col-span-2 sm:col-span-1">
+                      </div>
+                      <div className="font-mono text-base text-ink-950/60">{sessao.capacidade}</div>
+                      <div className="font-display text-flame-600">{sessao.preco.toFixed(2).replace('.', ',')}</div>
+                      <div>
                         {sessao.editavel ? (
                           <button type="button" onClick={() => setEmEdicao(sessao)} className={buttonClass('discreto')}>
                             ✎ EDITAR
