@@ -122,9 +122,9 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
     **`reserva.confirmar()`/`.recusar()` exigem que `Reserva` (Story 3.2) ganhe esses métodos de transição** — ou, se a 3.2 já tiver sido implementada só com `@Getter`/construtor completo (sem setters, mesmo padrão de `AssentoSessao`), usar `reservaRepository.save(reserva.toBuilder().status(StatusReserva.CONFIRMADA).build())` **se** `Reserva` tiver `@Builder`/`toBuilder` (como `Sessao` já tem), ou adicionar 2 métodos mutadores estreitos (`confirmar()`/`recusar()`, sem setter genérico de `status`) diretamente na entidade — decisão a bater com o que a Story 3.2 realmente implementou (ver Dev Notes, dependência viva). `assentoSessaoRepository.reivindicarVendido()`/`.liberar()` são métodos novos em `AssentoSessaoRepository` (pacote `sessoes.repository`, mesmo `@Modifying @Query` de UPDATE em lote já usado por `reivindicar()` na Story 3.2 — não reinventar o padrão). `findByIdForUpdate` em `ReservaRepository` segue o mesmo `@Lock(PESSIMISTIC_WRITE)` de `SalaRepository`/`SessaoRepository`. Rodar o teste até passar.
   - [x] Commit: `feat(pagamentos): PagamentoService.confirmar() com lock pessimista e idempotência (AC1-5)`
 
-- [ ] **Task 4 — `POST /api/pagamentos/confirmar` restrito a `CLIENTE` (AC1-4)**
-  - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/controller/PagamentoControllerTest.java` (`@WebMvcTest`, service mockado, mesmo padrão de `ReservaControllerTest`): corpo válido + token `CLIENTE` → `200` + shape de `PagamentoDto`; `resultadoSimulado` ausente/inválido → `400 PARAMETRO_INVALIDO`; service lança `NaoAutorizadoException` → `403 NAO_AUTORIZADO`; service lança `ReservaExpiradaException` → `409 RESERVA_EXPIRADA`. Criar `PagamentoSecurityTest.java` (mesmo padrão de `ReservaSecurityTest`): sem token → `403`; `ORGANIZADOR`/`PORTARIA` → `403`; `CLIENTE` → passa pro service mockado. Rodar e confirmar que falha.
-  - [ ] **[GREEN]** Criar `pagamentos/controller/PagamentoController.java`:
+- [x] **Task 4 — `POST /api/pagamentos/confirmar` restrito a `CLIENTE` (AC1-4)**
+  - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/controller/PagamentoControllerTest.java` (`@WebMvcTest`, service mockado, mesmo padrão de `ReservaControllerTest`): corpo válido + token `CLIENTE` → `200` + shape de `PagamentoDto`; `resultadoSimulado` ausente/inválido → `400 PARAMETRO_INVALIDO`; service lança `NaoAutorizadoException` → `403 NAO_AUTORIZADO`; service lança `ReservaExpiradaException` → `409 RESERVA_EXPIRADA`. Criar `PagamentoSecurityTest.java` (mesmo padrão de `ReservaSecurityTest`): sem token → `403`; `ORGANIZADOR`/`PORTARIA` → `403`; `CLIENTE` → passa pro service mockado. Rodar e confirmar que falha.
+  - [x] **[GREEN]** Criar `pagamentos/controller/PagamentoController.java`:
     ```java
     @RestController
     @RequestMapping("/api/pagamentos")
@@ -137,7 +137,7 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
     }
     ```
     Mesmo padrão de `ReservaController` — **sem mudança em `SecurityConfig`**, cai no `.anyRequest().authenticated()` já existente. Adicionar em `GlobalExceptionHandler`: `handleNaoAutorizado` (pagamentos) → `403 NAO_AUTORIZADO` (reaproveitar a mesma constante de código já usada por `handleAcessoNegado`/`handleSessaoNaoPertenceAoOrganizador` — mesmo `codigo`, é o mesmo conceito de negação de acesso, só a exceção Java é de outro pacote); `handleReservaExpirada` → `409 RESERVA_EXPIRADA` (código já estava na lista não-exaustiva de AD-11). Rodar os testes até passar.
-  - [ ] Commit: `feat(pagamentos): POST /api/pagamentos/confirmar restrito a CLIENTE (AC1-4)`
+  - [x] Commit: `feat(pagamentos): POST /api/pagamentos/confirmar restrito a CLIENTE (AC1-4)`
 
 - [ ] **Task 5 — Teste de concorrência real com parâmetros conflitantes via Testcontainers (AC5)**
   - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoConcorrenciaConflitanteTest.java` (`@SpringBootTest` + Testcontainers, mesmo padrão de `ReservaConcorrenciaConflitoTest` da Story 3.2 — ler antes de escrever): criar uma `Reserva` `ATIVA` real (via `ReservaService.reservar()`, não fixture direta — garante que o estado de `assento_sessao` também está coerente); disparar duas chamadas reais a `pagamentoService.confirmar()` em threads separadas pra mesma `reservaId`, uma com `APROVADO` e outra com `RECUSADO`, simultaneamente; assert que as duas respostas têm o **mesmo** `status` (uma delas "venceu", a outra ecoa); assert no banco que só existe um estado final coerente: se `CONFIRMADA`, existem `Ingresso`s e `assento_sessao=VENDIDO`; se `RECUSADA`, não existe nenhum `Ingresso` pra essa reserva e `assento_sessao=LIVRE`. Rodar e confirmar que passa (prova final de AC5, não deveria exigir código novo se a Task 3 fez o lock certo).
@@ -205,6 +205,9 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
   `AssentoSessaoRepository.reivindicarVendido()`/`.liberar()` novos, mesmo padrão de lock/
   `@Modifying @Query` já usado na Story 3.2. `ClienteNaoEncontradoException` (pacote
   `reservas`, já mapeada para 401) reaproveitada em vez de recriada em `pagamentos`.
+- Task 4: `PagamentoController`/`PagamentoSecurityTest` seguem exatamente o padrão de
+  `ReservaController`/`ReservaSecurityTest` — sem mudança em `SecurityConfig`, rota cai no
+  `.anyRequest().authenticated()` já existente. Suíte completa (148 testes) verde.
 
 ### File List
 
@@ -228,3 +231,7 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
 - `api/src/main/java/br/com/rolo35/api/reservas/Reserva.java` (update — `confirmar()`/`recusar()`)
 - `api/src/main/java/br/com/rolo35/api/reservas/repository/ReservaRepository.java` (update — `findByIdForUpdate()`)
 - `api/src/main/java/br/com/rolo35/api/sessoes/repository/AssentoSessaoRepository.java` (update — `reivindicarVendido()`/`liberar()`)
+- `api/src/main/java/br/com/rolo35/api/pagamentos/controller/PagamentoController.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/pagamentos/controller/PagamentoControllerTest.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/pagamentos/PagamentoSecurityTest.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` (update — handlers de `NaoAutorizadoException`/`ReservaExpiradaException`)

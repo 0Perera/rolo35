@@ -1,6 +1,8 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
+import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
@@ -199,6 +201,20 @@ public class GlobalExceptionHandler {
         log.warn("Lock de assento não obtido dentro do timeout da transação", exception);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("ASSENTO_EM_DISPUTA", "Assento em disputa no momento — tente novamente"));
+    }
+
+    // Mesmo codigo/status de handleSessaoNaoPertenceAoOrganizador — é o mesmo conceito de
+    // negação de acesso, só a exceção Java é de outro pacote (pagamentos, não sessoes).
+    @ExceptionHandler(NaoAutorizadoException.class)
+    public ResponseEntity<ApiError> handlePagamentoNaoAutorizado() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError("NAO_AUTORIZADO", "Você não tem permissão para acessar este recurso"));
+    }
+
+    @ExceptionHandler(ReservaExpiradaException.class)
+    public ResponseEntity<ApiError> handleReservaExpirada() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("RESERVA_EXPIRADA", "Reserva expirada — refaça a seleção de assentos"));
     }
 
     @ExceptionHandler(Exception.class)
