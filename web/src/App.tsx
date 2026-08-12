@@ -23,6 +23,15 @@ function App() {
         />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/cadastro"
+            element={
+              <PapelPlaceholderPage
+                titulo="Ficha nova"
+                mensagem="O autocadastro de cliente chega na Story 1.3. Por enquanto, as contas vêm do seed."
+              />
+            }
+          />
           <Route element={<Layout />}>
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />

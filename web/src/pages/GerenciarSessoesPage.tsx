@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { listarMinhasSessoes, type SessaoGestao } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
+import { SectionTitle } from '../components/SectionTitle';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
@@ -38,13 +39,17 @@ export function GerenciarSessoesPage() {
     <PageShell>
       <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <div className="font-mono text-xl tracking-[3px] text-navy-700">PAINEL DO ORGANIZADOR</div>
-            <h1 className="mt-1.5 font-display text-[clamp(26px,4cqw,40px)] text-ink-950">MINHAS SESSÕES</h1>
-          </div>
-          <div className="border-[3px] border-ink-950 bg-paper-50 px-[18px] py-3 shadow-[5px_5px_0_var(--color-ink-950)]">
-            <div className="font-mono text-base tracking-wide text-ink-950/60">SESSÕES ATIVAS</div>
-            <div className="font-display text-2xl">{sessoes.length}</div>
+          <SectionTitle kicker="PAINEL DO ORGANIZADOR" tone="ink" rule={false}>
+            MINHAS SESSÕES
+          </SectionTitle>
+          <div className="flex flex-wrap items-center gap-3.5">
+            <div className="border-[3px] border-ink-950 bg-paper-50 px-[18px] py-3 shadow-[5px_5px_0_var(--color-ink-950)]">
+              <div className="font-mono text-base tracking-wide text-ink-950/60">SESSÕES ATIVAS</div>
+              <div className="font-display text-2xl">{sessoes.length}</div>
+            </div>
+            <Link to="/organizador" className={buttonClass('primary', 'px-4 py-3')}>
+              + NOVA SESSÃO
+            </Link>
           </div>
         </div>
 

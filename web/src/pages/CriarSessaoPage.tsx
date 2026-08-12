@@ -7,6 +7,7 @@ import { Alert } from '../components/Alert';
 import { Button, buttonClass } from '../components/Button';
 import { Card } from '../components/Card';
 import { PageShell } from '../components/PageShell';
+import { SectionTitle } from '../components/SectionTitle';
 import { SelectField, TextField } from '../components/TextField';
 
 type EstadoSalas = 'loading' | 'vazio' | 'erro' | 'pronto';
@@ -135,10 +136,9 @@ export function CriarSessaoPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto flex max-w-md flex-col gap-6">
-        <h1 className="font-display text-3xl text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
-          Criar sessão — {filme.titulo}
-        </h1>
+      <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-10">
+        <SectionTitle kicker="PAINEL DO ORGANIZADOR">NOVA SESSÃO</SectionTitle>
+        <p className="-mt-2 font-mono text-xl tracking-wide text-ink-950/60">{filme.titulo}</p>
 
         {estadoSalas === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando salas…</p>}
         {estadoSalas === 'vazio' && <p className="font-mono text-lg text-ink-950/60">Nenhuma sala cadastrada.</p>}

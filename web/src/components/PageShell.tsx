@@ -2,6 +2,10 @@ import type { ReactNode } from 'react';
 
 type Variant = 'public' | 'auth';
 
+const authBackground = {
+  backgroundImage: 'radial-gradient(115% 80% at 50% 0%, #2A2130 0%, var(--color-ink-950) 55%, var(--color-ink-900) 100%)',
+};
+
 const gridBackground = {
   backgroundImage:
     'linear-gradient(var(--color-paper-line) 1px, transparent 1px), linear-gradient(90deg, var(--color-paper-line) 1px, transparent 1px)',
@@ -18,7 +22,8 @@ export function PageShell({ variant = 'public', children, className = '' }: Page
   if (variant === 'auth') {
     return (
       <main
-        className={`flex min-h-screen items-center justify-center bg-ink-950 px-4 py-10 font-body text-paper-100 ${className}`}
+        className={`flex min-h-screen items-center justify-center px-4 py-10 font-body text-paper-100 ${className}`}
+        style={authBackground}
       >
         {children}
       </main>
@@ -26,7 +31,7 @@ export function PageShell({ variant = 'public', children, className = '' }: Page
   }
 
   return (
-    <main className={`min-h-screen bg-paper-100 px-4 py-10 font-body text-ink-950 ${className}`} style={gridBackground}>
+    <main className={`min-h-screen bg-paper-100 font-body text-ink-950 ${className}`} style={gridBackground}>
       {children}
     </main>
   );

@@ -8,6 +8,12 @@ function lerSessao(): { token: string | null; papel: Papel | null } {
   };
 }
 
+function linkClass(ativo: boolean): string {
+  return `border-b-2 pb-0.5 ${
+    ativo ? 'border-flame-400 text-paper-100' : 'border-transparent text-paper-100/50 hover:text-flame-400'
+  }`;
+}
+
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -32,21 +38,34 @@ export function Header() {
         </Link>
 
         <nav className="flex flex-wrap gap-4 text-xs font-bold tracking-[1.6px]">
-          <Link
-            to="/"
-            className={`border-b-2 pb-0.5 ${
-              location.pathname === '/' ? 'border-flame-400 text-paper-100' : 'border-transparent text-paper-100/50'
-            }`}
-          >
+          <Link to="/" className={linkClass(location.pathname === '/')}>
             EM CARTAZ
           </Link>
-          <Link
-            to="/em-construcao"
-            state={{ titulo: 'Meus Ingressos', mensagem: 'A carteira de ingressos chega numa próxima entrega.' }}
-            className="border-b-2 border-transparent pb-0.5 text-paper-100/50 hover:text-flame-400"
-          >
-            MEUS INGRESSOS
-          </Link>
+
+          {papel === 'ORGANIZADOR' && (
+            <Link
+              to="/organizador/sessoes"
+              className={linkClass(location.pathname.startsWith('/organizador'))}
+            >
+              PAINEL
+            </Link>
+          )}
+
+          {papel === 'PORTARIA' && (
+            <Link to="/portaria" className={linkClass(location.pathname.startsWith('/portaria'))}>
+              PORTARIA
+            </Link>
+          )}
+
+          {papel !== 'ORGANIZADOR' && papel !== 'PORTARIA' && (
+            <Link
+              to="/em-construcao"
+              state={{ titulo: 'Meus Ingressos', mensagem: 'A carteira de ingressos chega numa próxima entrega.' }}
+              className={linkClass(false)}
+            >
+              MEUS INGRESSOS
+            </Link>
+          )}
         </nav>
 
         <div className="flex-1" />

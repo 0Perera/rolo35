@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
+import { SectionTitle } from '../components/SectionTitle';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
@@ -192,14 +193,7 @@ export function ListagemSessoesPage() {
       )}
 
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="flex items-end justify-between gap-5">
-          <div>
-            <h1 className="font-display text-[clamp(26px,4.2cqw,42px)] text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
-              O QUE TÁ PASSANDO?
-            </h1>
-            <div className="mt-2.5 h-[5px] w-56 bg-gradient-to-r from-flame-600 to-flame-400" />
-          </div>
-        </div>
+        <SectionTitle>O QUE TÁ PASSANDO?</SectionTitle>
 
         {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
         {estado === 'vazio' && (
