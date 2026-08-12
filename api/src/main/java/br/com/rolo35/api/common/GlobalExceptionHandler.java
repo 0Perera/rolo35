@@ -1,6 +1,9 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.reservas.AssentoIndisponivelException;
+import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
+import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
 import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
 import br.com.rolo35.api.sessoes.OrganizadorNaoEncontradoException;
@@ -157,6 +160,24 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OrganizadorNaoEncontradoException.class)
     public ResponseEntity<ApiError> handleOrganizadorNaoEncontrado() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError("NAO_AUTENTICADO", "Usuário do token não existe mais"));
+    }
+
+    @ExceptionHandler(SelecaoAssentosInvalidaException.class)
+    public ResponseEntity<ApiError> handleSelecaoAssentosInvalida() {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiError("PARAMETRO_INVALIDO", "Seleção precisa ter de 1 a 6 assentos, sem duplicados"));
+    }
+
+    @ExceptionHandler(AssentoIndisponivelException.class)
+    public ResponseEntity<ApiError> handleAssentoIndisponivel() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "ASSENTO_INDISPONIVEL", "Um ou mais assentos selecionados não estão mais disponíveis"));
+    }
+
+    @ExceptionHandler(ClienteNaoEncontradoException.class)
+    public ResponseEntity<ApiError> handleClienteNaoEncontrado() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiError("NAO_AUTENTICADO", "Usuário do token não existe mais"));
     }
