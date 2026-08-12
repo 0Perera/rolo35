@@ -53,12 +53,7 @@ export function FilmeDetalhePage() {
   }, [tmdbId]);
 
   function escolherHorario(sessao: SessaoPublicada) {
-    navigate('/em-construcao', {
-      state: {
-        titulo: 'Mapa de assentos',
-        mensagem: `A seleção de assentos pra "${sessao.titulo}" chega numa próxima entrega.`,
-      },
-    });
+    navigate(`/sessoes/${sessao.id}/assentos`);
   }
 
   const preco = sessoesDoFilme.length > 0 ? precoDoFilme(sessoesDoFilme) : null;

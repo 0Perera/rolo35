@@ -6,6 +6,7 @@ import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
 import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
 import { ListagemSessoesPage } from './pages/ListagemSessoesPage';
 import { FilmeDetalhePage } from './pages/FilmeDetalhePage';
+import { MapaAssentosPage } from './pages/MapaAssentosPage';
 import { SobrePage } from './pages/SobrePage';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />
+            <Route path="/sessoes/:id/assentos" element={<MapaAssentosPage />} />
             <Route path="/sobre" element={<SobrePage />} />
             {/* O painel cria e edita sessão na própria tela; as rotas antigas de
                 busca/criação/edição em telas separadas caíram junto com elas. */}

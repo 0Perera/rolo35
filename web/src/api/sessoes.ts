@@ -66,6 +66,23 @@ export interface EditarSessaoRequest {
   preco: number;
 }
 
+export interface AssentoMapa {
+  id: number;
+  fileira: string;
+  numero: number;
+  status: 'LIVRE' | 'RESERVADO' | 'VENDIDO';
+}
+
+export interface MapaAssentos {
+  sessaoId: number;
+  titulo: string;
+  posterUrl: string | null;
+  salaNome: string;
+  dataHora: string;
+  preco: number;
+  assentos: AssentoMapa[];
+}
+
 export function listarSalas(): Promise<Sala[]> {
   return apiFetch<Sala[]>('/api/salas');
 }
@@ -94,4 +111,8 @@ export function editarSessao(id: number, request: EditarSessaoRequest): Promise<
     method: 'PUT',
     body: JSON.stringify(request),
   });
+}
+
+export function buscarMapaAssentos(id: number): Promise<MapaAssentos> {
+  return apiFetch<MapaAssentos>(`/api/sessoes/${id}/mapa-assentos`);
 }
