@@ -4,7 +4,14 @@ import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
-import { contagemDeSessoes, precoMinimo, resumoDeSalas, rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
+import {
+  contagemDeSessoes,
+  formatarPreco,
+  precoDoFilme,
+  resumoDeSalas,
+  rotuloDeDia,
+  rotuloDeHora,
+} from '../lib/sessoes';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
@@ -17,8 +24,14 @@ interface FilmeAgrupado {
 }
 
 const MAXIMO_DE_CANAIS = 6;
+const TROCA_DE_CANAL_MS = 7000;
 
 const PALETA_ACENTO =['#F26522', '#E32B21', '#2E7D46', '#7ED9F2', '#FFC414', '#E85D9E', '#8A8F98', '#123A5C'];
+
+/** `matchMedia` não existe no jsdom, então a checagem é defensiva. */
+function prefereMenosAnimacao(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 function corPorFilme(tmdbId: number): string {
   return PALETA_ACENTO[Math.abs(tmdbId) % PALETA_ACENTO.length];
@@ -47,6 +60,12 @@ function agruparPorFilme(sessoes: SessaoPublicada[]): FilmeAgrupado[] {
   }
 
   return Array.from(porFilme.values());
+}
+
+/** "A partir de" só entra quando o filme tem sessões com preços diferentes. */
+function precoDoCard(sessoes: SessaoPublicada[]): string {
+  const preco = precoDoFilme(sessoes);
+  return preco.aPartirDe ? `A PARTIR DE ${preco.texto}` : preco.texto;
 }
 
 /** Ano de estreia, sala e nº de sessões — o que o snapshot do TMDb em `sessoes` permite mostrar. */
@@ -82,6 +101,18 @@ export function ListagemSessoesPage() {
       ativo = false;
     };
   }, [tentativa]);
+
+  const totalDeCanais = Math.min(agruparPorFilme(sessoes).length, MAXIMO_DE_CANAIS);
+
+  // A TV troca de canal sozinha, como uma vitrine de cinema. Fica parada quando só há um
+  // filme em cartaz e quando o sistema pede menos animação.
+  useEffect(() => {
+    if (totalDeCanais < 2 || prefereMenosAnimacao()) {
+      return;
+    }
+    const intervalo = setInterval(() => setHeroIdx((atual) => atual + 1), TROCA_DE_CANAL_MS);
+    return () => clearInterval(intervalo);
+  }, [totalDeCanais]);
 
   const filmes = agruparPorFilme(sessoes);
   // O hero do protótipo tem seis canais; com mais filmes em cartaz a fileira de bolinhas
@@ -153,7 +184,7 @@ export function ListagemSessoesPage() {
                         <span className="text-white/30">/</span>
                         <span>{new Date(proximaSessaoDestaque.dataHora).toLocaleString('pt-BR')}</span>
                         <span className="text-white/30">/</span>
-                        <span>R$ {proximaSessaoDestaque.preco.toFixed(2).replace('.', ',')}</span>
+                        <span>{formatarPreco(proximaSessaoDestaque.preco)}</span>
                       </div>
                     )}
                     {proximaSessaoDestaque?.sinopse && (
@@ -278,7 +309,7 @@ export function ListagemSessoesPage() {
                   </p>
                   <p className="mb-3 font-mono text-base leading-snug tracking-wide text-navy-700">
                     {rotuloDeDia(filme.sessoes[0].dataHora)} · {rotuloDeHora(filme.sessoes[0].dataHora)} ·{' '}
-                    {precoMinimo(filme.sessoes)}
+                    {precoDoCard(filme.sessoes)}
                   </p>
 
                   <Link to={`/filmes/${filme.tmdbId}`} className={buttonClass('ticket', 'mt-auto w-full')}>

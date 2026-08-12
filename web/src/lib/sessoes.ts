@@ -14,9 +14,19 @@ export function rotuloDeHora(dataHora: string): string {
   return new Date(dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export function precoMinimo(sessoes: SessaoPublicada[]): string {
-  const menor = Math.min(...sessoes.map((sessao) => sessao.preco));
-  return `R$ ${menor.toFixed(2).replace('.', ',')}`;
+export function formatarPreco(valor: number): string {
+  return `R$ ${valor.toFixed(2).replace('.', ',')}`;
+}
+
+/**
+ * Preço a mostrar pro filme inteiro. Cada sessão tem o seu (o organizador define por sessão),
+ * então só faz sentido dizer "a partir de" quando os preços de fato divergem — com um valor
+ * único isso viraria ruído em cima do próprio preço.
+ */
+export function precoDoFilme(sessoes: SessaoPublicada[]): { texto: string; aPartirDe: boolean } {
+  const valores = sessoes.map((sessao) => sessao.preco);
+  const menor = Math.min(...valores);
+  return { texto: formatarPreco(menor), aPartirDe: new Set(valores).size > 1 };
 }
 
 /** Nome da sala quando só existe uma; "N SALAS" quando o filme passa em mais de uma. */

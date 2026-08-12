@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
-import { contagemDeSessoes, precoMinimo, resumoDeSalas, rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
+import { contagemDeSessoes, precoDoFilme, resumoDeSalas, rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
 type Estado = 'loading' | 'erro' | 'pronto' | 'nao-encontrado';
 
@@ -61,6 +61,8 @@ export function FilmeDetalhePage() {
     });
   }
 
+  const preco = sessoesDoFilme.length > 0 ? precoDoFilme(sessoesDoFilme) : null;
+
   return (
     <PageShell>
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -78,7 +80,7 @@ export function FilmeDetalhePage() {
         <p className="mt-6 font-mono text-lg text-ink-950/60">Nenhuma sessão em cartaz pra esse filme.</p>
       )}
 
-      {estado === 'pronto' && (
+      {estado === 'pronto' && preco && (
         <div className="mt-6 flex flex-wrap items-start gap-9">
           <div className="w-full flex-[0_1_300px] border-[3px] border-ink-950 bg-ink-950 shadow-[9px_9px_0_rgba(23,18,25,0.85)]">
             <div className="relative aspect-[2/3]">
@@ -109,7 +111,9 @@ export function FilmeDetalhePage() {
               <span className="text-ink-950/30">/</span>
               <span>{contagemDeSessoes(sessoesDoFilme.length)}</span>
               <span className="text-ink-950/30">/</span>
-              <span className="text-flame-600">A PARTIR DE {precoMinimo(sessoesDoFilme)}</span>
+              <span className="text-flame-600">
+                {preco.aPartirDe ? `A PARTIR DE ${preco.texto}` : preco.texto}
+              </span>
             </div>
 
             {sessoesDoFilme[0].sinopse && (
