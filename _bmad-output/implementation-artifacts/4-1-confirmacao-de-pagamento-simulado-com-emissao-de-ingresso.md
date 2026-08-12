@@ -70,10 +70,10 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
     `MessageDigest.isEqual` (não `Arrays.equals`/`.equals()` de String) é o que garante tempo constante — comparação byte-a-byte sem short-circuit no primeiro byte diferente, evita timing attack na validação da assinatura (mesmo raciocínio de qualquer comparação de segredo/hash). Adicionar `ticket.hmac.secret=${TICKET_HMAC_SECRET}` em `application.properties` (seção nova `### Ticket HMAC ###`, mesmo padrão de `security.jwt.secret=${JWT_SECRET}` — sem fallback, obrigatório) e `TICKET_HMAC_SECRET=troque-por-um-segredo-aleatorio-de-verdade-so-pra-dev-local` em `.env.example`, com comentário explícito que é **distinto** do `JWT_SECRET` (non-negotiable da arquitetura, AD-8) — nunca derivar um do outro nem reaproveitar. Rodar o teste até passar.
   - [x] Commit: `feat(ingressos): CodigoIngressoService com HMAC-SHA256 e comparação em tempo constante (AC1, AC6)`
 
-- [ ] **Task 2 — `Ingresso` entity + `IngressoRepository` (setup, suporta AC1)**
-  - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/IngressoRepositorySmokeTest.java` (`@Import(TestcontainersConfiguration.class) @SpringBootTest`, mesmo padrão de `ReservaRepositorySmokeTest` da Story 3.2): salvar um `Ingresso` (`id` gerado como `UUID`, `reservaId`, `assentoId`, `sessaoId`, `status=StatusIngresso.VALIDO`, `createdAt`), recarregar por id, assert de round-trip. Rodar e confirmar que falha.
-  - [ ] **[GREEN]** Criar `ingressos/StatusIngresso.java` (`enum { VALIDO, UTILIZADO }`, `@Enumerated(EnumType.STRING)` — bate com o `CHECK` de `V1__schema.sql`). Criar `ingressos/Ingresso.java` (`@Entity @Table(name = "ingressos")`, `@Id @GeneratedValue(strategy = GenerationType.UUID) UUID id` — Hibernate 6/Spring Boot 4 gera `UUID` nativamente via `GenerationType.UUID`, sem precisar de `@GenericGenerator` legado; `Long reservaId`, `Long assentoId`, `Long sessaoId`, `StatusIngresso status`, `LocalDateTime validatedAt` nullable, `Instant createdAt`). Criar `ingressos/repository/IngressoRepository.java extends JpaRepository<Ingresso, UUID>` com `List<Ingresso> findByReservaId(Long reservaId)` (usado no Task 3 pra montar a resposta idempotente). Rodar o teste até passar.
-  - [ ] Commit: `feat(ingressos): entidade Ingresso e IngressoRepository (setup, AC1)`
+- [x] **Task 2 — `Ingresso` entity + `IngressoRepository` (setup, suporta AC1)**
+  - [x] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/ingressos/IngressoRepositorySmokeTest.java` (`@Import(TestcontainersConfiguration.class) @SpringBootTest`, mesmo padrão de `ReservaRepositorySmokeTest` da Story 3.2): salvar um `Ingresso` (`id` gerado como `UUID`, `reservaId`, `assentoId`, `sessaoId`, `status=StatusIngresso.VALIDO`, `createdAt`), recarregar por id, assert de round-trip. Rodar e confirmar que falha.
+  - [x] **[GREEN]** Criar `ingressos/StatusIngresso.java` (`enum { VALIDO, UTILIZADO }`, `@Enumerated(EnumType.STRING)` — bate com o `CHECK` de `V1__schema.sql`). Criar `ingressos/Ingresso.java` (`@Entity @Table(name = "ingressos")`, `@Id @GeneratedValue(strategy = GenerationType.UUID) UUID id` — Hibernate 6/Spring Boot 4 gera `UUID` nativamente via `GenerationType.UUID`, sem precisar de `@GenericGenerator` legado; `Long reservaId`, `Long assentoId`, `Long sessaoId`, `StatusIngresso status`, `LocalDateTime validatedAt` nullable, `Instant createdAt`). Criar `ingressos/repository/IngressoRepository.java extends JpaRepository<Ingresso, UUID>` com `List<Ingresso> findByReservaId(Long reservaId)` (usado no Task 3 pra montar a resposta idempotente). Rodar o teste até passar.
+  - [x] Commit: `feat(ingressos): entidade Ingresso e IngressoRepository (setup, AC1)`
 
 - [ ] **Task 3 — `PagamentoService.confirmar()`: lock pessimista + write path idempotente (AC1-5)**
   - [ ] **[RED]** Criar `api/src/test/java/br/com/rolo35/api/pagamentos/service/PagamentoServiceTest.java` (Mockito puro, mocka `ReservaRepository`, `AssentoSessaoRepository` (de `sessoes.repository`, reaproveitado da Story 3.2), `IngressoRepository`, `CodigoIngressoService`, `EntityManager`): cobrir (a) reserva `ATIVA` não vencida + `APROVADO` → `reserva.status=CONFIRMADA` salvo, N `Ingresso` salvos (um por assento da reserva — a lista de `assentoId`s vem das linhas de `assento_sessao` com aquele `reservaId`, não de um campo novo em `Reserva`), `assentoSessaoRepository` chamado pra marcar `VENDIDO`, resposta com `status=CONFIRMADA` e `ingressos` não-vazio; (b) mesma reserva + `RECUSADO` → `reserva.status=RECUSADA`, nenhum `Ingresso` salvo, `assentoSessaoRepository` chamado pra voltar `LIVRE` limpando `reservaId`/`expiresAt`; (c) reserva de outro `clienteId` → `NaoAutorizadoException` (nome distinto de `SessaoNaoPertenceAoOrganizadorException` — este domínio é `reservas`/`pagamentos`, não `sessoes`), sem tocar `save`; (d) reserva inexistente → mesma `NaoAutorizadoException` (não uma `NaoEncontrada` — AC3 exige não revelar a diferença); (e) reserva `ATIVA` mas `expiresAt` vencido → `ReservaExpiradaException`, sem `save`; (f) reserva já `CONFIRMADA`/`RECUSADA` (não-`ATIVA`) → **não** lança exceção, devolve a resposta já persistida (busca os `Ingresso`s existentes via `findByReservaId` se `CONFIRMADA`, lista vazia se `RECUSADA`) sem chamar `save` de novo em nada — este é o caminho que a Task 4 (concorrência) prova de ponta a ponta. Rodar e confirmar que falha.
@@ -195,6 +195,10 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
   (`MessageDigest.isEqual`). Secret `TICKET_HMAC_SECRET` adicionado em
   `application.properties`/`.env.example` (distinto de `JWT_SECRET`) e no `pom.xml`
   (env var de teste do surefire, mesmo padrão de `JWT_SECRET`/`TMDB_API_TOKEN`).
+- Task 2: `Ingresso`/`StatusIngresso`/`IngressoRepository` criados usando
+  `GenerationType.UUID` (Hibernate 6/Spring Boot 4, sem `@GenericGenerator`). Smoke test
+  cria uma `Reserva` real (seed `cliente_id=1`/`sessao_id=1`) e usa `assento_id=1` do seed
+  pra satisfazer as FKs de `ingressos`.
 
 ### File List
 
@@ -203,3 +207,7 @@ so that eu recebo meu(s) ingresso(s) com QR assinado se aprovado, ou tenho os as
 - `api/src/main/resources/application.properties` (update)
 - `.env.example` (update)
 - `api/pom.xml` (update)
+- `api/src/main/java/br/com/rolo35/api/ingressos/StatusIngresso.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/ingressos/Ingresso.java` (novo)
+- `api/src/main/java/br/com/rolo35/api/ingressos/repository/IngressoRepository.java` (novo)
+- `api/src/test/java/br/com/rolo35/api/ingressos/IngressoRepositorySmokeTest.java` (novo)
