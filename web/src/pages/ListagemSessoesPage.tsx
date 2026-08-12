@@ -4,6 +4,7 @@ import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
+import { contagemDeSessoes, precoMinimo, resumoDeSalas, rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
@@ -11,6 +12,7 @@ interface FilmeAgrupado {
   tmdbId: number;
   titulo: string;
   posterUrl: string | null;
+  dataEstreia: string | null;
   sessoes: SessaoPublicada[];
 }
 
@@ -32,12 +34,24 @@ function agruparPorFilme(sessoes: SessaoPublicada[]): FilmeAgrupado[] {
         tmdbId: sessao.tmdbId,
         titulo: sessao.titulo,
         posterUrl: sessao.posterUrl,
+        dataEstreia: sessao.dataEstreia,
         sessoes: [sessao],
       });
     }
   }
 
+  for (const filme of porFilme.values()) {
+    filme.sessoes.sort((a, b) => a.dataHora.localeCompare(b.dataHora));
+  }
+
   return Array.from(porFilme.values());
+}
+
+/** Ano de estreia, sala e nº de sessões — o que o snapshot do TMDb em `sessoes` permite mostrar. */
+function metaDoFilme(filme: FilmeAgrupado): string {
+  return [filme.dataEstreia?.slice(0, 4), resumoDeSalas(filme.sessoes), contagemDeSessoes(filme.sessoes.length)]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export function ListagemSessoesPage() {
@@ -214,7 +228,7 @@ export function ListagemSessoesPage() {
         {estado === 'pronto' && (
           <div
             data-testid="grade-filmes"
-            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-7"
+            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-8"
           >
             {filmes.map((filme) => {
               const esgotado = filme.sessoes.every((sessao) => sessao.esgotada);
@@ -254,8 +268,12 @@ export function ListagemSessoesPage() {
                   </Link>
 
                   <h2 className="mt-3.5 font-display text-sm leading-tight tracking-[0.3px]">{filme.titulo}</h2>
-                  <p className="mt-1.5 mb-3 font-mono text-base tracking-wide text-ink-950/50">
-                    {filme.sessoes.length === 1 ? '1 sessão' : `${filme.sessoes.length} sessões`}
+                  <p className="mt-1.5 font-mono text-base leading-snug tracking-wide text-ink-950/50">
+                    {metaDoFilme(filme)}
+                  </p>
+                  <p className="mb-3 font-mono text-base leading-snug tracking-wide text-navy-700">
+                    {rotuloDeDia(filme.sessoes[0].dataHora)} · {rotuloDeHora(filme.sessoes[0].dataHora)} ·{' '}
+                    {precoMinimo(filme.sessoes)}
                   </p>
 
                   <Link to={`/filmes/${filme.tmdbId}`} className={buttonClass('ticket', 'mt-auto w-full')}>

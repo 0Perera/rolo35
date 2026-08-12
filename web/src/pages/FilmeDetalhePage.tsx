@@ -3,18 +3,16 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
+import { contagemDeSessoes, precoMinimo, resumoDeSalas, rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
 type Estado = 'loading' | 'erro' | 'pronto' | 'nao-encontrado';
 
 function agruparPorDia(sessoes: SessaoPublicada[]): { dia: string; sessoes: SessaoPublicada[] }[] {
   const porDia = new Map<string, SessaoPublicada[]>();
+  const ordenadas = [...sessoes].sort((a, b) => a.dataHora.localeCompare(b.dataHora));
 
-  for (const sessao of sessoes) {
-    const dia = new Date(sessao.dataHora).toLocaleDateString('pt-BR', {
-      weekday: 'short',
-      day: '2-digit',
-      month: '2-digit',
-    });
+  for (const sessao of ordenadas) {
+    const dia = rotuloDeDia(sessao.dataHora);
     const lista = porDia.get(dia);
     if (lista) {
       lista.push(sessao);
@@ -100,6 +98,20 @@ export function FilmeDetalhePage() {
             <h1 className="font-display text-[clamp(28px,4.4cqw,52px)] leading-none text-flame-600 [text-shadow:4px_4px_0_var(--color-flame-400)]">
               {sessoesDoFilme[0].titulo}
             </h1>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-bold tracking-[1.4px] text-ink-950/70">
+              {sessoesDoFilme[0].dataEstreia && (
+                <span className="border-2 border-navy-700 px-2 py-0.5 text-navy-700">
+                  {sessoesDoFilme[0].dataEstreia.slice(0, 4)}
+                </span>
+              )}
+              <span>{resumoDeSalas(sessoesDoFilme)}</span>
+              <span className="text-ink-950/30">/</span>
+              <span>{contagemDeSessoes(sessoesDoFilme.length)}</span>
+              <span className="text-ink-950/30">/</span>
+              <span className="text-flame-600">A PARTIR DE {precoMinimo(sessoesDoFilme)}</span>
+            </div>
+
             {sessoesDoFilme[0].sinopse && (
               <p className="mt-5 max-w-xl text-base leading-relaxed">{sessoesDoFilme[0].sinopse}</p>
             )}
@@ -108,8 +120,11 @@ export function FilmeDetalhePage() {
             <h2 className="mb-4 font-display text-xl">ESCOLHA A SESSÃO</h2>
 
             {agruparPorDia(sessoesDoFilme).map(({ dia, sessoes: sessoesDoDia }) => (
-              <div key={dia} className="flex flex-wrap items-center gap-5 border-t-2 border-dashed border-paper-line py-4">
-                <div className="w-[150px] font-mono text-xl tracking-wide">{dia}</div>
+              <div
+                key={dia}
+                className="flex flex-wrap items-center gap-5 border-t-2 border-dashed border-[#C7B694] py-4"
+              >
+                <div className="w-[150px] font-mono text-xl tracking-wide uppercase">{dia}</div>
                 <div className="flex flex-wrap gap-3">
                   {sessoesDoDia.map((sessao) => (
                     <button
@@ -117,18 +132,12 @@ export function FilmeDetalhePage() {
                       type="button"
                       disabled={sessao.esgotada}
                       onClick={() => escolherHorario(sessao)}
-                      className={buttonClass(
-                        sessao.esgotada ? 'secondary' : 'primary',
-                        'px-4 py-2.5 text-left disabled:hover:translate-x-0 disabled:hover:translate-y-0',
-                      )}
+                      className={buttonClass('horario')}
                     >
-                      <div className="font-display text-base">
-                        {new Date(sessao.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                      <div className="font-mono text-sm tracking-wide opacity-75">
-                        {sessao.salaNome}
-                        {sessao.esgotada ? ' · esgotada' : ''}
-                      </div>
+                      <span className="font-display text-[17px] leading-tight">{rotuloDeHora(sessao.dataHora)}</span>
+                      <span className="font-mono text-[15px] tracking-wide text-ink-950/60">
+                        {sessao.esgotada ? 'ESGOTADA' : sessao.salaNome.toUpperCase()}
+                      </span>
                     </button>
                   ))}
                 </div>
