@@ -4,7 +4,7 @@ baseline_commit: e255202
 
 # Story 4.1: Confirmação de Pagamento Simulado com Emissão de Ingresso
 
-Status: review
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
