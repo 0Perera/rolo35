@@ -59,6 +59,15 @@ class IngressoSecurityTest {
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }
 
+    @Test
+    void minhasReturns403ForPortariaToken() throws Exception {
+        String token = jwtService.generateToken("portaria@rolo35.com.br", "PORTARIA");
+
+        mockMvc.perform(get("/api/ingressos/minhas").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
     // Sem token nenhum, ao contrário de /minhas: rota pública de propósito (AC3/AD-9). Passa
     // pro service mockado — prova a lacuna de autenticação, mesmo padrão de
     // SessaoSecurityTest/ReservaSecurityTest pras suas rotas públicas equivalentes.
