@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" width="920" height="600" role="img" aria-label="Fluxo ponta a ponta: organizador busca filme e cria sessão; cliente vê em cartaz, abre o mapa de assentos, cria hold de 10 minutos, paga de forma simulada e recebe ingresso com QR e link público; portaria seleciona a sessão do turno e valida o código (ainda não implementado)">
+  <defs>
+    <linearGradient id="chama" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E32B21"/>
+      <stop offset="52%" stop-color="#F26522"/>
+      <stop offset="100%" stop-color="#FFC414"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="3" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#F4E9D4" opacity="0.05"/>
+    </pattern>
+    <pattern id="perf" width="46" height="26" patternUnits="userSpaceOnUse">
+      <rect x="10" y="6" width="26" height="14" rx="4" fill="#0C0910"/>
+    </pattern>
+    <marker id="setaChama" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 L11 6 L1 11 z" fill="#F26522"/>
+    </marker>
+    <marker id="setaCiano" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 L11 6 L1 11 z" fill="#7ED9F2"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="600" fill="#0C0910"/>
+
+  <!-- faixas de película -->
+  <rect x="0" y="0" width="920" height="26" fill="#171219"/>
+  <rect x="0" y="0" width="920" height="26" fill="url(#perf)"/>
+  <rect x="0" y="574" width="920" height="26" fill="#171219"/>
+  <rect x="0" y="574" width="920" height="26" fill="url(#perf)"/>
+
+  <!-- ============ LANE 1 — ORGANIZADOR ============ -->
+  <rect x="28" y="72" width="864" height="100" rx="4" fill="#171219" stroke="#F4E9D4" stroke-opacity="0.08"/>
+  <rect x="40" y="44" width="164" height="24" fill="#FFC414"/>
+  <text x="52" y="61" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="2" fill="#0C0910">ORGANIZADOR</text>
+
+  <g>
+    <rect x="45" y="93" width="250" height="70" fill="#F26522"/>
+    <rect x="40" y="88" width="250" height="70" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="165" y="119" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0C0910">BUSCA O FILME</text>
+    <text x="165" y="141" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">proxy TMDb no back-end</text>
+  </g>
+  <line x1="296" y1="123" x2="334" y2="123" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <g>
+    <rect x="345" y="93" width="250" height="70" fill="#F26522"/>
+    <rect x="340" y="88" width="250" height="70" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="465" y="119" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#0C0910">CRIA A SESSÃO</text>
+    <text x="465" y="141" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">sala · data/hora · preço</text>
+  </g>
+  <text x="628" y="119" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.55">capacidade vem do</text>
+  <text x="628" y="137" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.55">mapa real da sala</text>
+
+  <!-- conector lane 1 -> lane 2 -->
+  <path d="M465 163 V190 H54 V226" fill="none" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <text x="262" y="183" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.6">sessão publicada</text>
+
+  <!-- ============ LANE 2 — CLIENTE ============ -->
+  <rect x="28" y="230" width="864" height="196" rx="4" fill="#171219" stroke="#F4E9D4" stroke-opacity="0.08"/>
+  <rect x="100" y="196" width="120" height="24" fill="#F26522"/>
+  <text x="112" y="213" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="2" fill="#0C0910">CLIENTE</text>
+
+  <!-- 1 -->
+  <g>
+    <rect x="45" y="245" width="142" height="88" fill="#F26522"/>
+    <rect x="40" y="240" width="142" height="88" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="111" y="272" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">EM CARTAZ</text>
+    <text x="111" y="304" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">sem login</text>
+  </g>
+  <line x1="188" y1="284" x2="208" y2="284" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <!-- 2 -->
+  <g>
+    <rect x="219" y="245" width="142" height="88" fill="#F26522"/>
+    <rect x="214" y="240" width="142" height="88" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="285" y="270" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">MAPA DE</text>
+    <text x="285" y="288" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">ASSENTOS</text>
+    <text x="285" y="314" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">3 estados</text>
+  </g>
+  <line x1="362" y1="284" x2="382" y2="284" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <!-- 3 -->
+  <g>
+    <rect x="393" y="245" width="142" height="88" fill="#F26522"/>
+    <rect x="388" y="240" width="142" height="88" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="459" y="270" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">HOLD DE</text>
+    <text x="459" y="288" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">10 MINUTOS</text>
+    <text x="459" y="314" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">1 a 6 assentos</text>
+  </g>
+  <line x1="536" y1="284" x2="556" y2="284" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <!-- 4 -->
+  <g>
+    <rect x="567" y="245" width="142" height="88" fill="#F26522"/>
+    <rect x="562" y="240" width="142" height="88" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="633" y="270" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">PAGAMENTO</text>
+    <text x="633" y="288" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">SIMULADO</text>
+    <text x="633" y="314" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">aprova/recusa</text>
+  </g>
+  <line x1="710" y1="284" x2="730" y2="284" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <!-- 5 -->
+  <g>
+    <rect x="741" y="245" width="142" height="88" fill="#F26522"/>
+    <rect x="736" y="240" width="142" height="88" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="807" y="270" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">INGRESSO</text>
+    <text x="807" y="288" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">COM QR</text>
+    <text x="807" y="314" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">código HMAC</text>
+  </g>
+  <!-- ramo do link público -->
+  <line x1="807" y1="330" x2="807" y2="352" stroke="url(#chama)" stroke-width="3" marker-end="url(#setaChama)"/>
+  <g>
+    <rect x="741" y="363" width="142" height="52" fill="#F26522"/>
+    <rect x="736" y="358" width="142" height="52" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="807" y="381" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0C0910">LINK PÚBLICO</text>
+    <text x="807" y="400" text-anchor="middle" font-family="'Courier New', monospace" font-size="12" fill="#171219" fill-opacity="0.7">somente leitura</text>
+  </g>
+  <text x="300" y="378" font-family="'Courier New', monospace" font-size="13" fill="#7ED9F2" fill-opacity="0.85">recusa devolve o assento ao mapa na hora</text>
+  <text x="300" y="399" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.5">hold vencido volta a livre sozinho</text>
+
+  <!-- ============ LANE 3 — PORTARIA ============ -->
+  <rect x="28" y="482" width="864" height="80" rx="4" fill="#171219" stroke="#F4E9D4" stroke-opacity="0.08"/>
+  <rect x="40" y="448" width="132" height="24" fill="#7ED9F2"/>
+  <text x="52" y="465" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="2" fill="#0C0910">PORTARIA</text>
+  <rect x="182" y="448" width="286" height="24" fill="none" stroke="#E32B21" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="194" y="465" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="1" fill="#E32B21">AINDA NÃO IMPLEMENTADO</text>
+
+  <g opacity="0.62">
+    <rect x="40" y="494" width="250" height="56" fill="#F4E9D4" fill-opacity="0.28" stroke="#F4E9D4" stroke-width="3" stroke-dasharray="8 5"/>
+    <text x="165" y="516" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#F4E9D4">SESSÃO DO TURNO</text>
+    <text x="165" y="536" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.8">selecionada antes de validar</text>
+  </g>
+  <line x1="296" y1="522" x2="334" y2="522" stroke="#7ED9F2" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#setaCiano)"/>
+  <g opacity="0.62">
+    <rect x="340" y="494" width="280" height="56" fill="#F4E9D4" fill-opacity="0.28" stroke="#F4E9D4" stroke-width="3" stroke-dasharray="8 5"/>
+    <text x="480" y="516" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#F4E9D4">VALIDA O CÓDIGO</text>
+    <text x="480" y="536" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.8">válido · usado · evento errado</text>
+  </g>
+
+  <!-- ingresso -> portaria -->
+  <path d="M884 300 H902 V522 H632" fill="none" stroke="#7ED9F2" stroke-width="3" marker-end="url(#setaCiano)"/>
+  <text x="654" y="500" font-family="'Courier New', monospace" font-size="13" fill="#7ED9F2" fill-opacity="0.85">código assinado na entrada</text>
+
+  <rect x="0" y="26" width="920" height="548" fill="url(#scan)"/>
+  <rect x="1.5" y="1.5" width="917" height="597" fill="none" stroke="#F4E9D4" stroke-opacity="0.16" stroke-width="3"/>
+</svg>

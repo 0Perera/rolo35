@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: 2026-08-12 (Story 4.3 implementada e pronta pra review; AC8 — retomada da compra depois do login — incorporada ao escopo)
+last_updated: 2026-08-13 (Epic 4 fechado: 4.1, 4.2 e 4.3 done — fluxo de pagamento, ingresso e link público completos ponta a ponta)
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
@@ -65,10 +65,10 @@ development_status:
   3-2-reserva-de-assentos-com-hold-temporario: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
-  4-1-confirmacao-de-pagamento-simulado-com-emissao-de-ingresso: in-progress
-  4-2-meus-ingressos-e-link-publico: review
-  4-3-checkout-de-pagamento-no-front: review
+  epic-4: done
+  4-1-confirmacao-de-pagamento-simulado-com-emissao-de-ingresso: done
+  4-2-meus-ingressos-e-link-publico: done
+  4-3-checkout-de-pagamento-no-front: done
   epic-4-retrospective: optional
 
   epic-5: backlog
