@@ -2,22 +2,27 @@ package br.com.rolo35.api.reservas.service;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.NaoAutorizadoException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
 import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
 import br.com.rolo35.api.reservas.StatusReserva;
+import br.com.rolo35.api.reservas.dto.AssentoReservadoDto;
+import br.com.rolo35.api.reservas.dto.ReservaCheckoutDto;
 import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
+import br.com.rolo35.api.sessoes.repository.ReservaCheckoutProjection;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -85,6 +90,46 @@ public class ReservaService {
         }
 
         return new ReservaDto(reserva.getId(), request.sessaoId(), reserva.getStatus(), expiraEm, assentoIds);
+    }
+
+    /**
+     * Leitura pura pra retomar o checkout: reserva de outro cliente e reserva inexistente caem na
+     * mesma exceção, pelo mesmo motivo de PagamentoService.confirmar() — a resposta não pode servir
+     * de oráculo de quais reservaId existem.
+     *
+     * <p>Sem {@code findByIdForUpdate} de propósito: travar a reserva a cada abertura da tela (e a
+     * cada F5) criaria contenção contra o POST de pagamento do próprio cliente, que é o gargalo do
+     * fluxo. Aqui não há escrita nenhuma pra proteger.
+     */
+    @Transactional(readOnly = true)
+    public ReservaCheckoutDto buscarParaCheckout(Long reservaId, String clienteEmail) {
+        Usuario cliente =
+                usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
+
+        Reserva reserva = reservaRepository
+                .findById(reservaId)
+                .filter(r -> r.getClienteId().equals(cliente.getId()))
+                .orElseThrow(NaoAutorizadoException::new);
+
+        // Reserva recusada não tem mais assentos: liberar() zera reserva_id das linhas. O contexto
+        // da sessão vem junto de cada assento, então nesse caso ele simplesmente não existe — quem
+        // consome decide o que mostrar pelo status, não pela lista.
+        List<ReservaCheckoutProjection> assentos = assentoSessaoRepository.buscarAssentosDaReserva(reservaId);
+        Optional<ReservaCheckoutProjection> contexto = assentos.stream().findFirst();
+
+        return new ReservaCheckoutDto(
+                reserva.getId(),
+                reserva.getSessaoId(),
+                reserva.getStatus(),
+                reserva.getExpiresAt(),
+                contexto.map(ReservaCheckoutProjection::getSessaoTitulo).orElse(null),
+                contexto.map(ReservaCheckoutProjection::getSalaNome).orElse(null),
+                contexto.map(ReservaCheckoutProjection::getDataHora).orElse(null),
+                contexto.map(ReservaCheckoutProjection::getPreco).orElse(null),
+                assentos.stream()
+                        .map(assento -> new AssentoReservadoDto(
+                                assento.getAssentoId(), assento.getFileira(), assento.getNumero()))
+                        .toList());
     }
 
     // Duplica a regra de TTL lazy já usada em SessaoService.statusEfetivo (AD-4) em vez de

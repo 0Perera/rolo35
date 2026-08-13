@@ -1,20 +1,27 @@
 package br.com.rolo35.api.reservas.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
+import br.com.rolo35.api.common.NaoAutorizadoException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
 import br.com.rolo35.api.reservas.StatusReserva;
+import br.com.rolo35.api.reservas.dto.AssentoReservadoDto;
+import br.com.rolo35.api.reservas.dto.ReservaCheckoutDto;
 import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.service.ReservaService;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -112,6 +119,46 @@ class ReservaControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("PARAMETRO_INVALIDO"));
+    }
+
+    @Test
+    void returns200WithCheckoutShapeWhenReadingOwnReserva() throws Exception {
+        ReservaCheckoutDto dto = new ReservaCheckoutDto(
+                99L,
+                1L,
+                StatusReserva.ATIVA,
+                LocalDateTime.of(2030, 1, 1, 19, 55),
+                "Clube da Luta",
+                "Sala 1",
+                LocalDateTime.of(2030, 1, 1, 20, 0),
+                new BigDecimal("25.00"),
+                List.of(new AssentoReservadoDto(10L, "A", 1), new AssentoReservadoDto(20L, "A", 2)));
+        given(reservaService.buscarParaCheckout(eq(99L), anyString())).willReturn(dto);
+
+        mockMvc.perform(get("/api/reservas/99")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(99))
+                .andExpect(jsonPath("$.sessaoId").value(1))
+                .andExpect(jsonPath("$.status").value("ATIVA"))
+                .andExpect(jsonPath("$.expiresAt").exists())
+                .andExpect(jsonPath("$.sessaoTitulo").value("Clube da Luta"))
+                .andExpect(jsonPath("$.salaNome").value("Sala 1"))
+                .andExpect(jsonPath("$.preco").value(25.00))
+                .andExpect(jsonPath("$.assentos[0].fileira").value("A"))
+                .andExpect(jsonPath("$.assentos[0].numero").value(1))
+                .andExpect(jsonPath("$.assentos[1].numero").value(2));
+    }
+
+    @Test
+    void returns403WithNaoAutorizadoEnvelopeWhenReservaIsNotTheClientes() throws Exception {
+        given(reservaService.buscarParaCheckout(anyLong(), anyString())).willThrow(new NaoAutorizadoException());
+
+        mockMvc.perform(get("/api/reservas/99")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"))
+                .andExpect(jsonPath("$.mensagem").exists());
     }
 
     @Test

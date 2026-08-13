@@ -1,4 +1,4 @@
-package br.com.rolo35.api.pagamentos;
+package br.com.rolo35.api.common;
 
 public class NaoAutorizadoException extends RuntimeException {
 

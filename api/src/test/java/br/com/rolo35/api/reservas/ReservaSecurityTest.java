@@ -1,8 +1,10 @@
 package br.com.rolo35.api.reservas;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,9 +13,12 @@ import br.com.rolo35.api.auth.JwtService;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.config.SecurityConfig;
 import br.com.rolo35.api.reservas.controller.ReservaController;
+import br.com.rolo35.api.reservas.dto.AssentoReservadoDto;
+import br.com.rolo35.api.reservas.dto.ReservaCheckoutDto;
 import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.service.ReservaService;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -87,6 +92,51 @@ class ReservaSecurityTest {
         mockMvc.perform(post("/api/reservas")
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTENTICADO"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    @Test
+    void buscarParaCheckoutReturns200ForClienteToken() throws Exception {
+        ReservaCheckoutDto dto = new ReservaCheckoutDto(
+                99L,
+                1L,
+                StatusReserva.ATIVA,
+                LocalDateTime.now().plusMinutes(10),
+                "Clube da Luta",
+                "Sala 1",
+                LocalDateTime.now().plusDays(1),
+                new BigDecimal("25.00"),
+                List.of(new AssentoReservadoDto(10L, "A", 1)));
+        given(reservaService.buscarParaCheckout(anyLong(), anyString())).willReturn(dto);
+        String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
+
+        mockMvc.perform(get("/api/reservas/99").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void buscarParaCheckoutReturns403WithNaoAutorizadoEnvelopeForOrganizadorToken() throws Exception {
+        String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
+
+        mockMvc.perform(get("/api/reservas/99").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void buscarParaCheckoutReturns403WithNaoAutorizadoEnvelopeForPortariaToken() throws Exception {
+        String token = jwtService.generateToken("portaria@rolo35.com.br", "PORTARIA");
+
+        mockMvc.perform(get("/api/reservas/99").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void buscarParaCheckoutReturns401WithNaoAutenticadoEnvelopeWithoutToken() throws Exception {
+        mockMvc.perform(get("/api/reservas/99"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTENTICADO"))
                 .andExpect(jsonPath("$.mensagem").exists());

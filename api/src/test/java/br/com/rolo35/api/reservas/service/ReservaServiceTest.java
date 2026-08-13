@@ -6,25 +6,32 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.NaoAutorizadoException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
 import br.com.rolo35.api.reservas.SelecaoAssentosInvalidaException;
 import br.com.rolo35.api.reservas.StatusReserva;
+import br.com.rolo35.api.reservas.dto.AssentoReservadoDto;
+import br.com.rolo35.api.reservas.dto.ReservaCheckoutDto;
 import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
+import br.com.rolo35.api.sessoes.repository.ReservaCheckoutProjection;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -237,6 +244,89 @@ class ReservaServiceTest {
         assertThatThrownBy(
                         () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL))
                 .isInstanceOf(AssentoIndisponivelException.class);
+    }
+
+    private ReservaCheckoutProjection assentoDaReserva(Long assentoId, String fileira, int numero) {
+        ReservaCheckoutProjection projecao = mock(ReservaCheckoutProjection.class);
+        given(projecao.getAssentoId()).willReturn(assentoId);
+        given(projecao.getFileira()).willReturn(fileira);
+        given(projecao.getNumero()).willReturn(numero);
+        return projecao;
+    }
+
+    // O contexto da sessão vem repetido em toda linha da projeção, mas quem monta o DTO lê de uma
+    // só — stubar as demais seria stub morto, e o Mockito estrito reclama com razão.
+    private ReservaCheckoutProjection comContextoDaSessao(ReservaCheckoutProjection projecao) {
+        given(projecao.getSessaoTitulo()).willReturn("Clube da Luta");
+        given(projecao.getSalaNome()).willReturn("Sala 1");
+        given(projecao.getDataHora()).willReturn(LocalDateTime.of(2030, 1, 1, 20, 0));
+        given(projecao.getPreco()).willReturn(new BigDecimal("25.00"));
+        return projecao;
+    }
+
+    private Reserva reservaDe(Long id, Long clienteId, StatusReserva status) {
+        Reserva reserva = new Reserva(
+                id, clienteId, SESSAO_ID, status, Instant.now(), LocalDateTime.of(2030, 1, 1, 19, 55));
+        ReflectionTestUtils.setField(reserva, "id", id);
+        return reserva;
+    }
+
+    @Test
+    void buscarParaCheckoutMontaODtoComOsDadosDaReservaEDaProjecao() {
+        stubCliente();
+        given(reservaRepository.findById(55L)).willReturn(Optional.of(reservaDe(55L, 7L, StatusReserva.ATIVA)));
+        // Os mocks da projeção nascem fora do given() de baixo: stubar um mock enquanto outro
+        // stubbing está aberto é UnfinishedStubbing pro Mockito.
+        List<ReservaCheckoutProjection> projecoes =
+                List.of(comContextoDaSessao(assentoDaReserva(10L, "A", 1)), assentoDaReserva(20L, "A", 2));
+        given(assentoSessaoRepository.buscarAssentosDaReserva(55L)).willReturn(projecoes);
+
+        ReservaCheckoutDto dto = reservaService.buscarParaCheckout(55L, CLIENTE_EMAIL);
+
+        assertThat(dto.id()).isEqualTo(55L);
+        assertThat(dto.sessaoId()).isEqualTo(SESSAO_ID);
+        assertThat(dto.status()).isEqualTo(StatusReserva.ATIVA);
+        assertThat(dto.expiresAt()).isEqualTo(LocalDateTime.of(2030, 1, 1, 19, 55));
+        assertThat(dto.sessaoTitulo()).isEqualTo("Clube da Luta");
+        assertThat(dto.salaNome()).isEqualTo("Sala 1");
+        assertThat(dto.dataHora()).isEqualTo(LocalDateTime.of(2030, 1, 1, 20, 0));
+        assertThat(dto.preco()).isEqualByComparingTo(new BigDecimal("25.00"));
+        assertThat(dto.assentos())
+                .containsExactly(new AssentoReservadoDto(10L, "A", 1), new AssentoReservadoDto(20L, "A", 2));
+    }
+
+    @Test
+    void buscarParaCheckoutDeReservaDeOutroClienteNaoAutorizaNemLeOsAssentos() {
+        stubCliente();
+        given(reservaRepository.findById(55L)).willReturn(Optional.of(reservaDe(55L, 999L, StatusReserva.ATIVA)));
+
+        assertThatThrownBy(() -> reservaService.buscarParaCheckout(55L, CLIENTE_EMAIL))
+                .isInstanceOf(NaoAutorizadoException.class);
+
+        verify(assentoSessaoRepository, never()).buscarAssentosDaReserva(anyLong());
+    }
+
+    @Test
+    void buscarParaCheckoutDeReservaInexistenteFalhaIgualAReservaDeOutroCliente() {
+        stubCliente();
+        given(reservaRepository.findById(404L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reservaService.buscarParaCheckout(404L, CLIENTE_EMAIL))
+                .isInstanceOf(NaoAutorizadoException.class);
+
+        verify(assentoSessaoRepository, never()).buscarAssentosDaReserva(anyLong());
+    }
+
+    @Test
+    void buscarParaCheckoutNaoTravaNemMutaAReserva() {
+        stubCliente();
+        given(reservaRepository.findById(55L)).willReturn(Optional.of(reservaDe(55L, 7L, StatusReserva.ATIVA)));
+        given(assentoSessaoRepository.buscarAssentosDaReserva(55L)).willReturn(List.of());
+
+        reservaService.buscarParaCheckout(55L, CLIENTE_EMAIL);
+
+        verify(reservaRepository, never()).findByIdForUpdate(any());
+        verify(reservaRepository, never()).save(any());
     }
 
     @Test

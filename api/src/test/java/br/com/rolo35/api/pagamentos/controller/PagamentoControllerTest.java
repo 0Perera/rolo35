@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
-import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
+import br.com.rolo35.api.common.NaoAutorizadoException;
 import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;

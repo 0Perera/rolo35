@@ -2,7 +2,6 @@ package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
-import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
 import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
@@ -205,10 +204,12 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("ASSENTO_EM_DISPUTA", "Assento em disputa no momento — tente novamente"));
     }
 
-    // Mesmo codigo/status de handleSessaoNaoPertenceAoOrganizador — é o mesmo conceito de
-    // negação de acesso, só a exceção Java é de outro pacote (pagamentos, não sessoes).
+    // Mesmo codigo/status de handleSessaoNaoPertenceAoOrganizador — é o mesmo conceito de negação
+    // de acesso, sem o significado de domínio que o nome daquela exceção carrega no throw site.
+    // Mora em common porque já atende pagamentos e reservas: uma cópia por domínio seria a
+    // terceira classe Java pro mesmo par 403/NAO_AUTORIZADO.
     @ExceptionHandler(NaoAutorizadoException.class)
-    public ResponseEntity<ApiError> handlePagamentoNaoAutorizado() {
+    public ResponseEntity<ApiError> handleNaoAutorizado() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiError("NAO_AUTORIZADO", "Você não tem permissão para acessar este recurso"));
     }

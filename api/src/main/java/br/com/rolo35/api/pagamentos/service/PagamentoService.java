@@ -2,11 +2,11 @@ package br.com.rolo35.api.pagamentos.service;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.NaoAutorizadoException;
 import br.com.rolo35.api.ingressos.Ingresso;
 import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.repository.IngressoRepository;
 import br.com.rolo35.api.ingressos.service.CodigoIngressoService;
-import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
 import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;
