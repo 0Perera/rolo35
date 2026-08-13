@@ -13,6 +13,7 @@ import { IngressoPublicoPage } from './pages/IngressoPublicoPage';
 import { SalasPage } from './pages/SalasPage';
 import { SelecaoTurnoPortariaPage } from './pages/SelecaoTurnoPortariaPage';
 import { SobrePage } from './pages/SobrePage';
+import { ValidacaoPortariaPage } from './pages/ValidacaoPortariaPage';
 
 function App() {
   return (
@@ -52,6 +53,7 @@ function App() {
             <Route path="/organizador" element={<GerenciarSessoesPage />} />
             <Route path="/organizador/sessoes" element={<Navigate to="/organizador" replace />} />
             <Route path="/portaria" element={<SelecaoTurnoPortariaPage />} />
+            <Route path="/portaria/validar" element={<ValidacaoPortariaPage />} />
             <Route path="/em-construcao" element={<PapelPlaceholderPage />} />
           </Route>
         </Routes>

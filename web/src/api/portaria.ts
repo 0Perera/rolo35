@@ -7,6 +7,13 @@ export interface SessaoAtiva {
   dataHora: string;
 }
 
+export interface ResultadoValidacao {
+  resultado: 'VALIDO' | 'INVALIDO' | 'JA_UTILIZADO' | 'EVENTO_ERRADO';
+  assentoFileira: string | null;
+  assentoNumero: number | null;
+  sessaoTitulo: string | null;
+}
+
 export function selecionarSessaoTurno(sessaoId: number): Promise<SessaoAtiva> {
   return apiFetch<SessaoAtiva>('/api/portaria/turno', {
     method: 'POST',
@@ -23,4 +30,11 @@ export async function buscarSessaoAtiva(): Promise<SessaoAtiva | null> {
     }
     throw erro;
   }
+}
+
+export function validarIngresso(codigo: string): Promise<ResultadoValidacao> {
+  return apiFetch<ResultadoValidacao>('/api/portaria/validacoes', {
+    method: 'POST',
+    body: JSON.stringify({ codigo }),
+  });
 }

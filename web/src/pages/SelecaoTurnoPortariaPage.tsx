@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { buscarSessaoAtiva, selecionarSessaoTurno, type SessaoAtiva } from '../api/portaria';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
+import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { SeletorDeOpcao } from '../components/SeletorDeOpcao';
@@ -59,6 +61,9 @@ export function SelecaoTurnoPortariaPage() {
             <p className="mt-1 font-mono text-base text-ink-950/70">
               {sessaoAtiva.salaNome} · {new Date(sessaoAtiva.dataHora).toLocaleString('pt-BR')}
             </p>
+            <Link to="/portaria/validar" className={buttonClass('primary', 'mt-4')}>
+              VALIDAR INGRESSOS
+            </Link>
           </div>
         )}
 
