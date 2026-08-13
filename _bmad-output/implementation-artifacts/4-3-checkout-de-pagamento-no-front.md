@@ -4,7 +4,7 @@ baseline_commit: b5ff78e
 
 # Story 4.3: Checkout de Pagamento no Front-End
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -42,6 +42,11 @@ Isso conflita com SM-1 e com o §"Fluxo vertical completo" do PRD, que exigem *l
 6. **Given** uma reserva que pertence a outro cliente, **ou** um `reservaId` que não existe **When** `GET /api/reservas/{id}` é chamado com token válido de `CLIENTE` **Then** as duas situações devolvem exatamente a mesma resposta `403 {codigo: "NAO_AUTORIZADO"}` — não é possível diferenciar "não é sua" de "não existe", mesmo raciocínio (e mesmo par status/código) da AC3 da Story 4.1.
 
 7. **Given** os campos de cartão da tela (nome, número, validade, CVV) **When** o pagamento é confirmado **Then** o corpo da requisição contém **somente** `{reservaId, resultadoSimulado}` — nenhum dado de cartão é transmitido, nem gravado em `localStorage`/`sessionStorage`/cookie, nem incluído em log. Os campos são obrigatórios e validados no cliente antes do POST (formulário incompleto não dispara requisição nenhuma), mas servem só pra fidelidade da simulação.
+
+8. **Given** um visitante sem sessão iniciada (ou com token que a API recusa) que escolheu assentos no mapa **When** ele clica em ir para o pagamento **Then** ele é levado pra tela de login em vez de receber uma mensagem que não oferece saída — e, ao autenticar como `CLIENTE`, volta pro mapa **da mesma sessão** com **os mesmos assentos já selecionados**, podendo concluir a reserva sem refazer a escolha. A seleção viaja pelo `state` de navegação, nunca por storage, e o mapa é recarregado do servidor na volta: assento que outra pessoa levou nesse meio-tempo não pode voltar selecionado.
+
+   <!-- AC8 incorporada durante a implementação, a pedido do autor da story: mesma jornada de
+        compra das AC1-AC7 (o caminho até o checkout), não um fluxo separado. -->
 
 ## Tasks / Subtasks
 
@@ -129,9 +134,14 @@ Isso conflita com SM-1 e com o §"Fluxo vertical completo" do PRD, que exigem *l
   - [ ] A rota `/em-construcao` **continua existindo** — ainda é destino de `/cadastro` e da área da portaria; só deixa de ser destino do fluxo de pagamento.
   - [ ] Commit: `feat(reservas): mapa de assentos leva pro checkout em vez de /em-construcao (AC1)`
 
-- [ ] **Task 7 — Confirmação final (sem código novo, checklist de saída)**
+- [ ] **Task 7 — Retomada da compra depois do login (AC8)**
+  - [ ] **[RED]** Estender `web/src/pages/MapaAssentosPage.test.tsx`: reserva recusada com `401` (e com `403`) → navega pra `/login`, **sem** chamar `reservarAssentos` de novo, levando no `state` a sessão de origem e os assentos escolhidos; e, ao montar o mapa com esse `state` de volta, os assentos daquela lista aparecem selecionados e o total já reflete a seleção — mas um assento que voltou do servidor como `RESERVADO`/`VENDIDO` **não** é reselecionado. Estender `web/src/pages/LoginPage.test.tsx`: login bem-sucedido com `state` de retorno → navega pro caminho de origem repassando a seleção, em vez do destino padrão do papel.
+  - [ ] **[GREEN]** `MapaAssentosPage`: no `401/403` de `reservarAssentos`, `navigate('/login', { state: { retomarEm, assentoIds } })`; no mount, semear `selecionados` a partir do `state`, filtrando pelo mapa recém-carregado. `LoginPage`: depois de autenticar, honrar `retomarEm` quando existir. Nada em `localStorage`/`sessionStorage` — a seleção é estado de navegação, e a autoridade sobre disponibilidade continua sendo o mapa que o servidor devolve.
+  - [ ] Commit: `feat(reservas): retoma a compra no mapa depois do login (AC8)`
+
+- [ ] **Task 8 — Confirmação final (sem código novo, checklist de saída)**
   - [ ] Rodar a suíte completa (back `mvn test`; front `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
-  - [ ] Registrar em `docs/decisions.md`: (a) por que `GET /api/reservas/{id}` existe — retomada de checkout depois de F5, e por que ele **não** usa `findByIdForUpdate` como todo o resto do domínio (leitura pura, AD-4 não se aplica); (b) por que o contador de hold é informativo e a autoridade sobre expiração é sempre o `409` do servidor (clock skew); (c) por que `ApiRequestError` passou a carregar `codigo` (dois `409` distintos no mesmo fluxo); (d) por que `NaoAutorizadoException` subiu pra `common` e por que `SessaoNaoPertenceAoOrganizadorException` ficou onde estava.
+  - [ ] Registrar em `docs/decisions.md`: (a) por que `GET /api/reservas/{id}` existe — retomada de checkout depois de F5, e por que ele **não** usa `findByIdForUpdate` como todo o resto do domínio (leitura pura, AD-4 não se aplica); (b) por que o contador de hold é informativo e a autoridade sobre expiração é sempre o `409` do servidor (clock skew); (c) por que `ApiRequestError` passou a carregar `codigo` (dois `409` distintos no mesmo fluxo); (d) por que `NaoAutorizadoException` subiu pra `common` e por que `SessaoNaoPertenceAoOrganizadorException` ficou onde estava; (e) por que a seleção de assentos sobrevive ao login pelo `state` de navegação e não por storage, e por que ela ainda passa pelo filtro do mapa recarregado (AC8).
   - [ ] Registrar em `deferred-work.md`: `MapaAssentosPage` continua tratando `ASSENTO_INDISPONIVEL` e `ASSENTO_EM_DISPUTA` como o mesmo `409`, embora o `codigo` agora esteja disponível pra distinguir — fora do escopo desta story.
   - [ ] Atualizar o Status desta story pra `review` e `sprint-status.yaml`.
   - [ ] Commit: `docs(pagamentos): confirmação final e fecha Story 4.3 pra review`
