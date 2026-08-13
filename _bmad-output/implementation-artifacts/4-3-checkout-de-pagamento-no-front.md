@@ -4,7 +4,7 @@ baseline_commit: b5ff78e
 
 # Story 4.3: Checkout de Pagamento no Front-End
 
-Status: in-progress
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -144,12 +144,12 @@ Isso conflita com SM-1 e com o §"Fluxo vertical completo" do PRD, que exigem *l
   - [x] **[GREEN]** Criar `web/src/lib/cartao.ts` com os formatadores puros e a validação; `PagamentoPage` passa a formatar no `onChange` e a usar `cartaoCompleto` no lugar da checagem de campo não-vazio. O corpo da requisição continua sendo só `{reservaId, resultadoSimulado}` — a máscara é da tela, não vira dado transmitido.
   - [x] Commit: `feat(pagamentos): máscara e validação de formato dos campos de cartão (AC7)`
 
-- [ ] **Task 8 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa (back `mvn test`; front `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
-  - [ ] Registrar em `docs/decisions.md`: (a) por que `GET /api/reservas/{id}` existe — retomada de checkout depois de F5, e por que ele **não** usa `findByIdForUpdate` como todo o resto do domínio (leitura pura, AD-4 não se aplica); (b) por que o contador de hold é informativo e a autoridade sobre expiração é sempre o `409` do servidor (clock skew); (c) por que `ApiRequestError` passou a carregar `codigo` (dois `409` distintos no mesmo fluxo); (d) por que `NaoAutorizadoException` subiu pra `common` e por que `SessaoNaoPertenceAoOrganizadorException` ficou onde estava; (e) por que a seleção de assentos sobrevive ao login pelo `state` de navegação e não por storage, e por que ela ainda passa pelo filtro do mapa recarregado (AC8).
-  - [ ] Registrar em `deferred-work.md`: `MapaAssentosPage` continua tratando `ASSENTO_INDISPONIVEL` e `ASSENTO_EM_DISPUTA` como o mesmo `409`, embora o `codigo` agora esteja disponível pra distinguir — fora do escopo desta story.
-  - [ ] Atualizar o Status desta story pra `review` e `sprint-status.yaml`.
-  - [ ] Commit: `docs(pagamentos): confirmação final e fecha Story 4.3 pra review`
+- [x] **Task 8 — Confirmação final (sem código novo, checklist de saída)**
+  - [x] Rodar a suíte completa (back `mvn test`; front `npm test`, `npm run build`, `npm run lint`) e confirmar tudo verde.
+  - [x] Registrar em `docs/decisions.md`: (a) por que `GET /api/reservas/{id}` existe — retomada de checkout depois de F5, e por que ele **não** usa `findByIdForUpdate` como todo o resto do domínio (leitura pura, AD-4 não se aplica); (b) por que o contador de hold é informativo e a autoridade sobre expiração é sempre o `409` do servidor (clock skew); (c) por que `ApiRequestError` passou a carregar `codigo` (dois `409` distintos no mesmo fluxo); (d) por que `NaoAutorizadoException` subiu pra `common` e por que `SessaoNaoPertenceAoOrganizadorException` ficou onde estava; (e) por que a seleção de assentos sobrevive ao login pelo `state` de navegação e não por storage, e por que ela ainda passa pelo filtro do mapa recarregado (AC8).
+  - [x] Registrar em `deferred-work.md`: `MapaAssentosPage` continua tratando `ASSENTO_INDISPONIVEL` e `ASSENTO_EM_DISPUTA` como o mesmo `409`, embora o `codigo` agora esteja disponível pra distinguir — fora do escopo desta story.
+  - [x] Atualizar o Status desta story pra `review` e `sprint-status.yaml`.
+  - [x] Commit: `docs(pagamentos): confirmação final e fecha Story 4.3 pra review`
 
 ## Dev Notes
 
@@ -197,8 +197,94 @@ Isso conflita com SM-1 e com o §"Fluxo vertical completo" do PRD, que exigem *l
 
 ### Agent Model Used
 
+claude-opus-5 (Claude Code), persona de dev do BMAD. Tooling `dev-story` indisponível nesta
+máquina: as Tasks foram executadas manualmente, na ordem escrita, com o ciclo RED/GREEN de cada
+uma verificado por execução real da suíte.
+
 ### Debug Log References
+
+- Baseline confirmado antes do primeiro commit: back 178 testes, front 63, ambos verdes. O build
+  exige Java 21+; o `JAVA_HOME` da máquina aponta pra um JDK 17 e o Maven precisou rodar apontado
+  pro JDK 23 instalado.
+- `npm test` usa prefixo de variável de ambiente no estilo POSIX e falha no PowerShell; a suíte do
+  front foi executada com a variável definida na sessão + `npx vitest run`.
+- Task 2: com o teste RED presente, o `javac` barra a compilação inteira e impede rodar a suíte
+  isolando o refactor de pacote. A verificação exigida pela task (mover `NaoAutorizadoException`
+  sem mudar comportamento) foi feita com o teste RED temporariamente fora da árvore: 180 testes,
+  0 falhas, nenhum ajuste além de import.
+- Task 2 (RED): dois erros de teste meus, corrigidos no próprio teste e não na implementação —
+  stubbing aninhado dentro de `given()` (`UnfinishedStubbing`) e stub morto do contexto de sessão
+  nas linhas seguintes da projeção (`UnnecessaryStubbing` do Mockito estrito).
+- Task 5 (RED): o assert do código do ingresso casava também com o `<title>` do SVG do QR, que
+  carrega a URL pública; o padrão passou a incluir o rótulo `CÓDIGO` pra provar que o canhoto
+  mostra o código, não só o QR.
+- Task 7 (RED): o teste do contador precisou de timers falsos desde antes da montagem — o
+  `setInterval` é criado no mount e um relógio trocado depois deixaria o intervalo já agendado
+  correndo no tempo real.
+- Task 6: `PagamentoPage` ficou sem import no `App.tsx` e o `tsc` não acusou; quem pegou foi o
+  `oxlint` (`jsx-no-undef`).
 
 ### Completion Notes List
 
+- **AC8 não estava na story original.** Foi incorporada durante a implementação, a pedido do autor:
+  um visitante que escolhia assentos sem estar logado batia num aviso sem saída, o que interrompe a
+  mesma jornada de compra que as AC1-AC7 descrevem. Entrou como AC8 + Task 7 pra que o código
+  tivesse AC pra rastrear, em vez de ficar órfão no diff.
+- **Task 9 também não estava na story original.** A AC7 exige campos "validados no cliente antes do
+  POST"; a primeira implementação só checava campo não-vazio, e o formulário aceitava letras no
+  número, na validade e no CVV. A máscara e a validação de forma fecham a AC como ela está escrita.
+- Nenhuma divergência em relação aos Dev Notes: o contador usa o `expiresAt` do servidor (o
+  protótipo simula com o relógio do cliente) e o QR é o real do `CanhotoIngresso`.
+- Estado da suíte no fechamento: back **190** testes (178 + 12), front **98** (63 + 35), build e
+  lint limpos. O lint mantém as duas advertências pré-existentes de `only-export-components`
+  (`Button.tsx`, `LoginPage.tsx`), não introduzidas aqui.
+- Fora de escopo, registrado em `deferred-work.md`: os dois `409` do mapa de assentos continuam
+  tratados igual, `PagamentoService` continua montando `assentoIds` em memória, e `/pagamento/:id`
+  não tem guarda de rota no front.
+
 ### File List
+
+**Back-end (novo)**
+- `api/src/main/java/br/com/rolo35/api/reservas/dto/ReservaCheckoutDto.java`
+- `api/src/main/java/br/com/rolo35/api/reservas/dto/AssentoReservadoDto.java`
+- `api/src/main/java/br/com/rolo35/api/sessoes/repository/ReservaCheckoutProjection.java`
+- `api/src/main/resources/db/migration/V5__indice_assento_sessao_reserva.sql`
+- `api/src/test/java/br/com/rolo35/api/reservas/repository/ReservaCheckoutRepositoryTest.java`
+
+**Back-end (movido)**
+- `api/src/main/java/br/com/rolo35/api/pagamentos/NaoAutorizadoException.java` →
+  `api/src/main/java/br/com/rolo35/api/common/NaoAutorizadoException.java`
+
+**Back-end (alterado)**
+- `api/src/main/java/br/com/rolo35/api/sessoes/repository/AssentoSessaoRepository.java`
+- `api/src/main/java/br/com/rolo35/api/reservas/service/ReservaService.java`
+- `api/src/main/java/br/com/rolo35/api/reservas/controller/ReservaController.java`
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java`
+- `api/src/main/java/br/com/rolo35/api/pagamentos/service/PagamentoService.java`
+- `api/src/test/java/br/com/rolo35/api/reservas/service/ReservaServiceTest.java`
+- `api/src/test/java/br/com/rolo35/api/reservas/controller/ReservaControllerTest.java`
+- `api/src/test/java/br/com/rolo35/api/reservas/ReservaSecurityTest.java`
+- `api/src/test/java/br/com/rolo35/api/pagamentos/service/PagamentoServiceTest.java`
+- `api/src/test/java/br/com/rolo35/api/pagamentos/controller/PagamentoControllerTest.java`
+
+**Front-end (novo)**
+- `web/src/api/pagamentos.ts`
+- `web/src/pages/PagamentoPage.tsx`
+- `web/src/pages/PagamentoPage.test.tsx`
+- `web/src/lib/cartao.ts`
+- `web/src/lib/cartao.test.ts`
+
+**Front-end (alterado)**
+- `web/src/api/client.ts`
+- `web/src/api/client.test.ts`
+- `web/src/api/reservas.ts`
+- `web/src/App.tsx`
+- `web/src/pages/MapaAssentosPage.tsx`
+- `web/src/pages/MapaAssentosPage.test.tsx`
+- `web/src/pages/LoginPage.tsx`
+- `web/src/pages/LoginPage.test.tsx`
+
+**Documentação**
+- `docs/decisions.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`

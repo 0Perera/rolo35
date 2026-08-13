@@ -459,3 +459,38 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Decisão**: o QR do canhoto (`CanhotoIngresso`, `web/src/components`) é renderizado no navegador com `qrcode.react`, a partir do código assinado que a própria resposta da API já traz. Não existe rota do tipo `GET /api/ingressos/{codigo}/qr` devolvendo PNG/SVG.
 - **Por quê**: o QR é função pura do texto que ele carrega, e esse texto (`urlPublicaDoIngresso(codigo)`, montado sobre o código `uuid.assinatura` de AD-8) já chega no cliente em `GET /api/ingressos/minhas` e `GET /api/ingressos/{codigo}`. A parte que exige o servidor — assinar o código com o `TICKET_HMAC_SECRET` — já aconteceu antes; o QR não acrescenta segredo nenhum. Gerar no back custaria um round-trip por ingresso (a carteira lista N), mais cache/CORS pra imagem, sem ganho de segurança nem de correção. O cenário que inverteria a decisão é o ingresso virar PDF ou e-mail, onde não há navegador pra renderizar — não é o caso hoje.
 - **Nota pra Story 5.2**: o handoff desenha um QR decorativo de 21x21 módulos; a implementação real precisa de zona de silêncio própria dentro do SVG (`marginSize` em módulos, não o padding em pixels da borda amarela do desenho), senão o leitor de portaria falha em parte dos aparelhos.
+
+---
+
+## `GET /api/reservas/{id}` existe pra retomar o checkout, e é a única leitura de reserva sem lock (Story 4.3)
+
+- **Decisão**: a tela de pagamento se reconstrói inteira a partir de `GET /api/reservas/{id}`, e esse método usa `findById()` — não `findByIdForUpdate()`, como todo o resto do domínio `reservas`/`pagamentos`.
+- **Por quê**: sem a rota, a tela de pagamento só existiria enquanto a navegação que a criou estivesse viva — um F5, um "voltar" do navegador ou um link colado descartariam um checkout cuja reserva ainda vale, com o hold de 10 minutos correndo. Sobre o lock: o `PESSIMISTIC_WRITE` do resto do domínio existe porque aqueles caminhos estão prestes a escrever na `Reserva`; este não escreve nada. Travar a linha a cada abertura da tela (e a cada refresh) criaria fila justamente contra o `POST /api/pagamentos/confirmar` do mesmo cliente, que é o gargalo do fluxo — o AD-4 protege escrita concorrente, e não há escrita aqui pra proteger. `ReservaServiceTest` prova por `verify(never())` que nem `findByIdForUpdate` nem `save` são chamados.
+
+---
+
+## O contador de hold é informativo; quem decide se a reserva expirou é o servidor (Story 4.3)
+
+- **Decisão**: a tela de pagamento mostra uma contagem regressiva baseada no `expiresAt` que o servidor devolve, mas o tratamento do `409 RESERVA_EXPIRADA` continua obrigatório e é ele que manda; o contador zerar apenas desabilita a ação e leva ao estado de expirada.
+- **Por quê**: a contagem roda contra o relógio do navegador, que pode estar adiantado ou atrasado em relação ao da API. Isso é aceitável pro que o contador faz — dar noção de urgência e parar de oferecer uma ação que o servidor vai recusar —, mas não como decisão de negócio: quem decide se o hold venceu é a checagem dentro do lock, no back. O caminho inverso (contador ainda positivo e servidor recusando) precisa funcionar igual, e por isso os dois estados são testados separadamente — um com `409`, outro só com o avanço do relógio, sem nenhuma requisição.
+
+---
+
+## `ApiRequestError` carrega o `codigo` do envelope, não só o status (Story 4.3)
+
+- **Decisão**: `ApiRequestError` ganhou um terceiro parâmetro opcional `codigo`, preenchido a partir do `codigo` do `ApiError` quando ele existe.
+- **Por quê**: o fluxo de pagamento tem dois erros distintos no mesmo `409` — `RESERVA_EXPIRADA` é terminal (os assentos já foram liberados, é preciso refazer a seleção) e `RESERVA_EM_DISPUTA` é transitório (o `lock_timeout` de 3s estourou; a mesma ação tende a funcionar na sequência). Só com o status não dá pra separar os dois, e tratá-los igual manda o cliente refazer uma seleção que nunca precisou ser refeita, liberando um hold que ainda era dele. Opcional e em terceira posição pra que nenhum call site existente precisasse mudar. A mesma colisão existe latente em `MapaAssentosPage` (`ASSENTO_INDISPONIVEL` vs `ASSENTO_EM_DISPUTA`) e está registrada em `deferred-work.md`.
+
+---
+
+## `NaoAutorizadoException` subiu pra `common`; `SessaoNaoPertenceAoOrganizadorException` ficou onde estava (Story 4.3)
+
+- **Decisão**: `pagamentos.NaoAutorizadoException` virou `common.NaoAutorizadoException`, passando a atender também `reservas`. `sessoes.SessaoNaoPertenceAoOrganizadorException` **não** entrou no movimento.
+- **Por quê**: já existiam quatro origens do mesmo par `403 NAO_AUTORIZADO`, e uma classe nova em `reservas` seria a segunda cópia de uma exceção que nasceu com nome genérico; a alternativa — `reservas` importar de `pagamentos` — inverteria a direção de dependência registrada pra Story 4.1. `common` é onde `GlobalExceptionHandler` e `ApiError` já moram, então nada se inverte. A exceção de sessão ficou porque o nome carrega significado no throw site e nos testes (é ownership de sessão, não papel errado): colapsá-la numa genérica perderia informação. O objetivo era parar de multiplicar cópias de uma exceção sem significado próprio, não uniformizar tudo.
+
+---
+
+## A seleção de assentos sobrevive ao login pelo `state` de navegação, e ainda passa pelo filtro do mapa recarregado (Story 4.3, AC8)
+
+- **Decisão**: quando a API recusa a reserva por falta de autenticação (`401`/`403`), o mapa manda pro login levando no `state` de navegação a sessão de origem e os assentos escolhidos; o login devolve a pessoa ao mapa com esse mesmo `state`, e o mapa só reseleciona os assentos que voltaram `LIVRE` na carga seguinte. Nada disso passa por `localStorage`/`sessionStorage`.
+- **Por quê**: sem isso o visitante batia num aviso pedindo login sem caminho até ele e, se entrasse por conta própria, voltava com a escolha perdida — a compra morria antes do checkout que esta story existe pra entregar. O `state` de navegação é o lugar certo porque a seleção é dado de uma compra em andamento, não preferência que deva sobreviver à aba ou vazar pra outra sessão do mesmo navegador. E ela não pode ser tratada como reserva: durante o login outra pessoa pode ter reservado o mesmo assento, então a autoridade é o mapa que o servidor devolve na volta — o `state` só propõe, o servidor dispõe. O login honra a retomada apenas pra papel `CLIENTE`: entrar como organizador ou portaria não continua compra nenhuma, e mandar esse usuário pro mapa só adiaria a mesma negação pro clique seguinte.
