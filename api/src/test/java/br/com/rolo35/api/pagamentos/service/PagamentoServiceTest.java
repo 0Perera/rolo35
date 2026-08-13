@@ -16,6 +16,7 @@ import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.repository.IngressoRepository;
 import br.com.rolo35.api.ingressos.service.CodigoIngressoService;
 import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
+import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -213,6 +215,20 @@ class PagamentoServiceTest {
         assertThatThrownBy(() -> pagamentoService.confirmar(
                         new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL))
                 .isInstanceOf(NaoAutorizadoException.class);
+
+        verify(reservaRepository, never()).save(any());
+    }
+
+    @Test
+    void timeoutDeLockAoTravarReservaViraReservaEmDisputaNaoErroGenerico() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID)).willThrow(new PessimisticLockingFailureException("lock timeout"));
+
+        assertThatThrownBy(() -> pagamentoService.confirmar(
+                        new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL))
+                .isInstanceOf(ReservaEmDisputaException.class);
 
         verify(reservaRepository, never()).save(any());
     }

@@ -7,6 +7,7 @@ import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.repository.IngressoRepository;
 import br.com.rolo35.api.ingressos.service.CodigoIngressoService;
 import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
+import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;
 import br.com.rolo35.api.pagamentos.dto.ConfirmarPagamentoRequest;
@@ -22,6 +23,7 @@ import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,11 +55,21 @@ public class PagamentoService {
                 usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
-        // Reserva de outro cliente e reserva inexistente caem na mesma exceção/resposta (AC3) —
-        // por design, não revelar se o reservaId existe ou de quem é.
-        Reserva reserva = reservaRepository.findByIdForUpdate(request.reservaId())
-                .filter(r -> r.getClienteId().equals(cliente.getId()))
-                .orElseThrow(NaoAutorizadoException::new);
+        Reserva reserva;
+        try {
+            // Reserva de outro cliente e reserva inexistente caem na mesma exceção/resposta
+            // (AC3) — por design, não revelar se o reservaId existe ou de quem é.
+            reserva = reservaRepository.findByIdForUpdate(request.reservaId())
+                    .filter(r -> r.getClienteId().equals(cliente.getId()))
+                    .orElseThrow(NaoAutorizadoException::new);
+        } catch (PessimisticLockingFailureException e) {
+            // Mesmo raciocínio de ReservaService.reservar(): o lock_timeout de 3s estourando não
+            // significa reserva indisponível, só que outra transação segurava a linha — cliente
+            // pode tentar de novo. Sem este catch, a exceção cairia no handler genérico de
+            // PessimisticLockingFailureException (503 SALA_OCUPADA, mensagem de criação de
+            // sessão), sem nada a ver com pagamento.
+            throw new ReservaEmDisputaException();
+        }
 
         if (reserva.getStatus() != StatusReserva.ATIVA) {
             // Idempotência: já decidido por uma chamada anterior (ou concorrente que venceu o

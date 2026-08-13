@@ -3,6 +3,7 @@ package br.com.rolo35.api.common;
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
+import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
 import br.com.rolo35.api.reservas.AssentoIndisponivelException;
@@ -216,6 +217,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleReservaExpirada() {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("RESERVA_EXPIRADA", "Reserva expirada — refaça a seleção de assentos"));
+    }
+
+    // Distinto de PessimisticLockingFailureException genérico (handleSalaOcupada, 503): aqui o
+    // lock_timeout estourou travando uma Reserva específica pra pagamento, não uma Sala pra
+    // criação de sessão — 409 com mensagem própria, mesmo raciocínio de handleAssentoEmDisputa.
+    @ExceptionHandler(ReservaEmDisputaException.class)
+    public ResponseEntity<ApiError> handleReservaEmDisputa(ReservaEmDisputaException exception) {
+        log.warn("Lock de reserva não obtido dentro do timeout da transação", exception);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("RESERVA_EM_DISPUTA", "Reserva em disputa no momento — tente novamente"));
     }
 
     // Não existe / assinatura HMAC inválida devolvem a mesma resposta (AC5 da Story 4.2) — não

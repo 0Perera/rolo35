@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
+import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;
 import br.com.rolo35.api.pagamentos.dto.ConfirmarPagamentoRequest;
@@ -95,5 +96,18 @@ class PagamentoControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("RESERVA_EXPIRADA"));
+    }
+
+    @Test
+    void returns409WithReservaEmDisputaWhenServiceRejects() throws Exception {
+        given(pagamentoService.confirmar(any(ConfirmarPagamentoRequest.class), anyString()))
+                .willThrow(new ReservaEmDisputaException());
+
+        mockMvc.perform(post("/api/pagamentos/confirmar")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("RESERVA_EM_DISPUTA"));
     }
 }
