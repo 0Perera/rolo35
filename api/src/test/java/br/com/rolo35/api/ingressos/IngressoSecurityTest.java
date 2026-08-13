@@ -72,7 +72,7 @@ class IngressoSecurityTest {
     // pro service mockado — prova a lacuna de autenticação, mesmo padrão de
     // SessaoSecurityTest/ReservaSecurityTest pras suas rotas públicas equivalentes.
     @Test
-    void buscarPublicoReturns200WithoutTokenNenhum() throws Exception {
+    void buscarPublicoReturns200WithoutToken() throws Exception {
         given(ingressoService.buscarPublico(anyString()))
                 .willReturn(new IngressoPublicoDto("Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), null));
 
