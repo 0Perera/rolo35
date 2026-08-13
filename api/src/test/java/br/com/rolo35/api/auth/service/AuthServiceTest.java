@@ -99,4 +99,47 @@ class AuthServiceTest {
         verify(passwordEncoder, times(1)).matches(anyString(), anyString());
         verify(jwtService, never()).generateToken(any(), any());
     }
+
+    // O e-mail é identidade, não texto livre: o seed grava tudo minúsculo e `=` no Postgres é
+    // case-sensitive, então sem normalizar o servidor um teclado de celular (que capitaliza a
+    // primeira letra por padrão) ou um autofill que cola espaço derrubam o login com a mesma
+    // mensagem de "senha inválida" — indistinguível de senha errada, pro usuário e pro suporte.
+    // Normalizar no service, não só no front, porque a rota atende qualquer cliente HTTP.
+    @Test
+    void normalizesEmailCasingBeforeLookup() {
+        Usuario usuario = usuarioCom("cliente1@rolo35.com.br", "hash-valido", "CLIENTE");
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(usuario));
+        given(passwordEncoder.matches("cliente123", "hash-valido")).willReturn(true);
+        given(jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE")).willReturn("token-abc");
+
+        var resposta = authService.login(new LoginRequest("Cliente1@Rolo35.com.BR", "cliente123"));
+
+        assertThat(resposta.token()).isEqualTo("token-abc");
+    }
+
+    @Test
+    void normalizesSurroundingWhitespaceInEmailBeforeLookup() {
+        Usuario usuario = usuarioCom("cliente1@rolo35.com.br", "hash-valido", "CLIENTE");
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(usuario));
+        given(passwordEncoder.matches("cliente123", "hash-valido")).willReturn(true);
+        given(jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE")).willReturn("token-abc");
+
+        var resposta = authService.login(new LoginRequest("  cliente1@rolo35.com.br  ", "cliente123"));
+
+        assertThat(resposta.token()).isEqualTo("token-abc");
+    }
+
+    // Contraprova das duas acima: a senha é segredo, não identidade — normalizar espaço nela
+    // mudaria silenciosamente o que o usuário escolheu e reduziria o espaço de senhas válidas.
+    @Test
+    void doesNotTrimPassword() {
+        Usuario usuario = usuarioCom("cliente1@rolo35.com.br", "hash-valido", "CLIENTE");
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(usuario));
+        given(passwordEncoder.matches(" cliente123 ", "hash-valido")).willReturn(false);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("cliente1@rolo35.com.br", " cliente123 ")))
+                .isInstanceOf(CredenciaisInvalidasException.class);
+
+        verify(passwordEncoder).matches(" cliente123 ", "hash-valido");
+    }
 }

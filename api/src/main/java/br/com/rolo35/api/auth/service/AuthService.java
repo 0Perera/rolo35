@@ -6,6 +6,7 @@ import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.dto.LoginResponse;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +30,15 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        var usuarioOpt = usuarioRepository.findByEmail(request.email());
+        // E-mail é identidade, não texto livre: `=` no Postgres é case-sensitive e o cadastro
+        // grava minúsculo, então sem normalizar aqui um teclado de celular (que capitaliza a
+        // primeira letra) ou um autofill que cola espaço derrubam o login com a mensagem de
+        // credencial inválida — indistinguível de senha errada pra quem está tentando entrar.
+        // No service, não só no front, porque a rota atende qualquer cliente HTTP.
+        // Locale.ROOT e não o default da JVM: em turco, "I".toLowerCase() vira "ı" (sem ponto),
+        // o que quebraria o login de qualquer e-mail com I maiúsculo num servidor nessa locale.
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        var usuarioOpt = usuarioRepository.findByEmail(email);
         String senhaHashParaComparar = usuarioOpt.map(Usuario::getSenhaHash).orElse(DUMMY_HASH);
         boolean senhaConfere = passwordEncoder.matches(request.senha(), senhaHashParaComparar);
 

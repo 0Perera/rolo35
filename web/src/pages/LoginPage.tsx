@@ -72,6 +72,9 @@ export function LoginPage() {
               id="email"
               label="E-MAIL"
               type="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required

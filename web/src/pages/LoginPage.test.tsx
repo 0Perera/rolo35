@@ -53,4 +53,22 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: /entrar/i })).toBeEnabled();
     expect(localStorage.getItem('rolo35.token')).toBeNull();
   });
+
+  // Teclado de celular capitaliza a primeira letra por padrão. O servidor já normaliza o e-mail
+  // antes de consultar, então o login funciona de qualquer forma — mas ver "Cliente1@..." no
+  // campo faz quem está tentando entrar achar que digitou errado, e corrigir à mão o que já
+  // estava certo. Correção de percepção, não de funcionamento.
+  it('does not let the keyboard autocapitalize or autocorrect the email field', () => {
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    const campoEmail = screen.getByLabelText(/e-mail/i);
+
+    expect(campoEmail).toHaveAttribute('autocapitalize', 'none');
+    expect(campoEmail).toHaveAttribute('autocorrect', 'off');
+    expect(campoEmail).toHaveAttribute('spellcheck', 'false');
+  });
 });
