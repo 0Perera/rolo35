@@ -72,8 +72,8 @@ class IngressoServiceTest {
                 return id;
             }
 
-            public String getStatus() {
-                return "VALIDO";
+            public StatusIngresso getStatus() {
+                return StatusIngresso.VALIDO;
             }
 
             public String getAssentoFileira() {

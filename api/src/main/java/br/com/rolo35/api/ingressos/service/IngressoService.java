@@ -4,7 +4,6 @@ import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.ingressos.Ingresso;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
-import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.dto.IngressoPublicoDto;
 import br.com.rolo35.api.ingressos.dto.IngressoResumoDto;
 import br.com.rolo35.api.ingressos.repository.IngressoRepository;
@@ -44,7 +43,7 @@ public class IngressoService {
                 usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
         return ingressoRepository.buscarPorCliente(cliente.getId()).stream()
                 .map(p -> new IngressoResumoDto(
-                        p.getId(), StatusIngresso.valueOf(p.getStatus()), p.getAssentoFileira(), p.getAssentoNumero(),
+                        p.getId(), p.getStatus(), p.getAssentoFileira(), p.getAssentoNumero(),
                         p.getSessaoTitulo(), p.getSessaoPosterUrl(), p.getSalaNome(), p.getDataHora(),
                         codigoIngressoService.gerar(p.getId())))
                 .toList();

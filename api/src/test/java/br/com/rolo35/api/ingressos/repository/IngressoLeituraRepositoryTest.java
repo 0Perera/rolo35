@@ -135,6 +135,6 @@ class IngressoLeituraRepositoryTest {
         assertThat(projecao.getAssentoNumero()).isEqualTo(1);
         assertThat(projecao.getSessaoTitulo()).isEqualTo("Sessão ingressos leitura (fixture)");
         assertThat(projecao.getSalaNome()).isEqualTo("Sala ingressos leitura (fixture)");
-        assertThat(projecao.getStatus()).isEqualTo("VALIDO");
+        assertThat(projecao.getStatus()).isEqualTo(StatusIngresso.VALIDO);
     }
 }
