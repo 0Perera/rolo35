@@ -101,8 +101,8 @@ Isso conflita com SM-1 e com o §"Fluxo vertical completo" do PRD, que exigem *l
   - [x] **Por que isto é pré-requisito e não escopo inflado**: o pagamento tem **dois** erros distintos no mesmo status `409` — `RESERVA_EXPIRADA` (terminal: refazer a seleção) e `RESERVA_EM_DISPUTA` (transitório: tentar de novo). Sem o `codigo`, o front não consegue distinguir e trataria uma contenção momentânea como reserva perdida. A mesma colisão já existe latente na Story 3.2 (`ASSENTO_INDISPONIVEL` vs `ASSENTO_EM_DISPUTA`, ambos `409`, hoje tratados igual em `MapaAssentosPage`) — **não** corrigir aquele call site nesta story; só registrar em `deferred-work.md` que a ferramenta pra corrigir passou a existir.
   - [x] Commit: `feat(web): ApiRequestError carrega o codigo do envelope de erro`
 
-- [ ] **Task 4 — Módulos de API do front: `pagamentos.ts` e `buscarReserva()` (AC2, AC3, AC5, AC7)**
-  - [ ] Criar `web/src/api/pagamentos.ts` (novo módulo por domínio, AD-2):
+- [x] **Task 4 — Módulos de API do front: `pagamentos.ts` e `buscarReserva()` (AC2, AC3, AC5, AC7)**
+  - [x] Criar `web/src/api/pagamentos.ts` (novo módulo por domínio, AD-2):
     ```ts
     export type ResultadoSimulado = 'APROVADO' | 'RECUSADO';
     export interface IngressoEmitido { id: string; assentoId: number; codigo: string }
@@ -110,8 +110,8 @@ Isso conflita com SM-1 e com o §"Fluxo vertical completo" do PRD, que exigem *l
     export function confirmarPagamento(request: { reservaId: number; resultadoSimulado: ResultadoSimulado }): Promise<Pagamento>
     ```
     A assinatura de `confirmarPagamento` é a prova estrutural da AC7: não existe parâmetro onde dado de cartão caiba.
-  - [ ] Em `web/src/api/reservas.ts`, adicionar `AssentoReservado`/`ReservaCheckout` e `buscarReserva(id: number): Promise<ReservaCheckout>` (`GET /api/reservas/${id}`). Manter `Reserva`/`reservarAssentos` como estão — o `POST` continua devolvendo o `ReservaDto` enxuto.
-  - [ ] Commit: `feat(web): api de pagamentos e leitura de reserva pro checkout`
+  - [x] Em `web/src/api/reservas.ts`, adicionar `AssentoReservado`/`ReservaCheckout` e `buscarReserva(id: number): Promise<ReservaCheckout>` (`GET /api/reservas/${id}`). Manter `Reserva`/`reservarAssentos` como estão — o `POST` continua devolvendo o `ReservaDto` enxuto.
+  - [x] Commit: `feat(web): api de pagamentos e leitura de reserva pro checkout`
 
 - [ ] **Task 5 — `PagamentoPage`: checkout, aprovação, recusa e expiração (AC1-AC5, AC7)**
   - [ ] **[RED]** Criar `web/src/pages/PagamentoPage.test.tsx` (vitest + testing-library, mesmo estilo de `MapaAssentosPage.test.tsx`), um teste por comportamento, todos com `buscarReserva`/`confirmarPagamento` mockados via `vi.spyOn`:
