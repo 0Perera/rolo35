@@ -140,7 +140,7 @@ describe('PagamentoPage', () => {
 
     expect(screen.getByLabelText(/número do cartão/i)).toHaveValue('4111 1111 1111 1111');
     expect(screen.getByLabelText(/validade/i)).toHaveValue('12/30');
-    expect(screen.getByLabelText(/cvv/i)).toHaveValue('1234');
+    expect(screen.getByLabelText(/cvv/i)).toHaveValue('123');
   });
 
   it('does not send a card number that is still incomplete', async () => {

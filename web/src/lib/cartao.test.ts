@@ -55,9 +55,9 @@ describe('formatarValidade', () => {
 });
 
 describe('formatarCvv', () => {
-  it('takes digits only, up to four', () => {
+  it('takes digits only, up to three', () => {
     expect(formatarCvv('1a2b3')).toBe('123');
-    expect(formatarCvv('12345')).toBe('1234');
+    expect(formatarCvv('1111')).toBe('111');
   });
 });
 

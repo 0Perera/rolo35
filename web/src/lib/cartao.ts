@@ -17,8 +17,9 @@ export interface DadosDoCartao {
 
 const DIGITOS_DO_NUMERO = 16;
 const DIGITOS_DA_VALIDADE = 4;
-const MAX_DIGITOS_CVV = 4;
-const MIN_DIGITOS_CVV = 3;
+// Três dígitos, e não os quatro do CVV de Amex: o formulário não detecta bandeira nenhuma, então
+// aceitar o quarto dígito só produziria um campo que às vezes parece incompleto e nunca reclama.
+const DIGITOS_CVV = 3;
 
 function somenteDigitos(valor: string, limite: number): string {
   return valor.replace(/\D/g, '').slice(0, limite);
@@ -42,7 +43,7 @@ export function formatarValidade(valor: string): string {
 }
 
 export function formatarCvv(valor: string): string {
-  return somenteDigitos(valor, MAX_DIGITOS_CVV);
+  return somenteDigitos(valor, DIGITOS_CVV);
 }
 
 export function formatarNomeNoCartao(valor: string): string {
@@ -75,8 +76,8 @@ export function problemaNoCartao(
   if (ultimoDiaDoMes < hoje) {
     return 'Cartão vencido — confira a validade.';
   }
-  if (cvv.length < MIN_DIGITOS_CVV) {
-    return 'CVV incompleto — são 3 ou 4 dígitos.';
+  if (cvv.length < DIGITOS_CVV) {
+    return 'CVV incompleto — são 3 dígitos.';
   }
   return null;
 }
