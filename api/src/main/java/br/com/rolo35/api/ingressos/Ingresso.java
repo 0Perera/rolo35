@@ -59,4 +59,9 @@ public class Ingresso {
         this.validatedAt = validatedAt;
         this.createdAt = createdAt;
     }
+
+    public void validar() {
+        this.status = StatusIngresso.UTILIZADO;
+        this.validatedAt = LocalDateTime.now();
+    }
 }
