@@ -9,6 +9,14 @@ import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { TextField } from '../components/TextField';
+import {
+  cartaoCompleto,
+  formatarCvv,
+  formatarNomeNoCartao,
+  formatarNumeroCartao,
+  formatarValidade,
+  type DadosDoCartao,
+} from '../lib/cartao';
 import { urlPublicaDoIngresso } from '../lib/ingressos';
 import { formatarPreco, rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
@@ -29,7 +37,7 @@ const OPCOES_RESULTADO: { valor: ResultadoSimulado; rotulo: string }[] = [
   { valor: 'RECUSADO', rotulo: 'RECUSAR' },
 ];
 
-const CARTAO_VAZIO = { nome: '', numero: '', validade: '', cvv: '' };
+const CARTAO_VAZIO: DadosDoCartao = { nome: '', numero: '', validade: '', cvv: '' };
 
 function rotuloDoContador(restanteMs: number | null): string {
   if (restanteMs === null) {
@@ -136,16 +144,19 @@ export function PagamentoPage() {
 
   const assentos = reserva?.assentos ?? [];
   const total = (reserva?.preco ?? 0) * assentos.length;
-  const cartaoCompleto = Object.values(cartao).every((campo) => campo.trim() !== '');
   const linkDoMapa = reserva ? `/sessoes/${reserva.sessaoId}/assentos` : '/';
 
-  function alterarCartao(campo: keyof typeof CARTAO_VAZIO, valor: string) {
-    setCartao((atual) => ({ ...atual, [campo]: valor }));
-    setAviso('');
+  // A máscara é aplicada no onChange, não só na validação do envio: o campo recusa o caractere no
+  // instante em que ele é digitado, em vez de aceitar qualquer coisa e reclamar no fim.
+  function alterarCartao(campo: keyof DadosDoCartao, formatar: (valor: string) => string) {
+    return (valor: string) => {
+      setCartao((atual) => ({ ...atual, [campo]: formatar(valor) }));
+      setAviso('');
+    };
   }
 
   async function handleConfirmar() {
-    if (!cartaoCompleto) {
+    if (!cartaoCompleto(cartao)) {
       setAviso('Preencha todos os dados do cartão pra continuar.');
       return;
     }
@@ -357,7 +368,7 @@ export function PagamentoPage() {
               label="NOME NO CARTÃO"
               autoComplete="off"
               value={cartao.nome}
-              onChange={(evento) => alterarCartao('nome', evento.target.value)}
+              onChange={(evento) => alterarCartao('nome', formatarNomeNoCartao)(evento.target.value)}
             />
             <div className="mt-4">
               <TextField
@@ -367,17 +378,18 @@ export function PagamentoPage() {
                 placeholder="0000 0000 0000 0000"
                 autoComplete="off"
                 value={cartao.numero}
-                onChange={(evento) => alterarCartao('numero', evento.target.value)}
+                onChange={(evento) => alterarCartao('numero', formatarNumeroCartao)(evento.target.value)}
               />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3.5">
               <TextField
                 id="pagamento-validade"
                 label="VALIDADE"
+                inputMode="numeric"
                 placeholder="MM/AA"
                 autoComplete="off"
                 value={cartao.validade}
-                onChange={(evento) => alterarCartao('validade', evento.target.value)}
+                onChange={(evento) => alterarCartao('validade', formatarValidade)(evento.target.value)}
               />
               <TextField
                 id="pagamento-cvv"
@@ -386,7 +398,7 @@ export function PagamentoPage() {
                 placeholder="000"
                 autoComplete="off"
                 value={cartao.cvv}
-                onChange={(evento) => alterarCartao('cvv', evento.target.value)}
+                onChange={(evento) => alterarCartao('cvv', formatarCvv)(evento.target.value)}
               />
             </div>
 

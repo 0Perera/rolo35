@@ -129,6 +129,36 @@ describe('PagamentoPage', () => {
     expect(screen.queryByText(/escaneie na portaria/i)).not.toBeInTheDocument();
   });
 
+  it('masks the card fields as they are typed, refusing anything that is not a digit', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.type(await screen.findByLabelText(/número do cartão/i), 'abc4111111111111111999');
+    await user.type(screen.getByLabelText(/validade/i), '12x30');
+    await user.type(screen.getByLabelText(/cvv/i), '1a2b3c4d5');
+
+    expect(screen.getByLabelText(/número do cartão/i)).toHaveValue('4111 1111 1111 1111');
+    expect(screen.getByLabelText(/validade/i)).toHaveValue('12/30');
+    expect(screen.getByLabelText(/cvv/i)).toHaveValue('1234');
+  });
+
+  it('does not send a card number that is still incomplete', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    const confirmarSpy = vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.type(await screen.findByLabelText(/nome no cartão/i), 'Fulano de Tal');
+    await user.type(screen.getByLabelText(/número do cartão/i), '411111');
+    await user.type(screen.getByLabelText(/validade/i), '1230');
+    await user.type(screen.getByLabelText(/cvv/i), '123');
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    expect(confirmarSpy).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/dados do cartão/i);
+  });
+
   it('does not send anything while the card form is incomplete', async () => {
     vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
     const confirmarSpy = vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);
