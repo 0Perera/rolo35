@@ -99,4 +99,20 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
             ORDER BY a.fileira, a.numero
             """)
     List<AssentoMapaProjection> buscarMapaPorSessao(Long sessaoId);
+
+    // Leitura pura do contexto de checkout: os assentos de uma reserva já com título, sala, horário
+    // e preço resolvidos. Uma query só, pelo mesmo motivo de buscarMapaPorSessao() — carregar as
+    // linhas e resolver a sessão de cada uma depois seria N+1 numa tela que abre a cada F5.
+    @Query(
+            """
+            SELECT a.id AS assentoId, a.fileira AS fileira, a.numero AS numero,
+                   s.titulo AS sessaoTitulo, sa.nome AS salaNome, s.dataHora AS dataHora, s.preco AS preco
+            FROM AssentoSessao asx
+            JOIN Assento a ON a.id = asx.id.assentoId
+            JOIN Sessao s ON s.id = asx.id.sessaoId
+            JOIN Sala sa ON sa.id = s.salaId
+            WHERE asx.reservaId = :reservaId
+            ORDER BY a.fileira, a.numero
+            """)
+    List<ReservaCheckoutProjection> buscarAssentosDaReserva(Long reservaId);
 }
