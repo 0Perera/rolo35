@@ -1,6 +1,7 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.ingressos.IngressoEmDisputaException;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
 import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
@@ -251,6 +252,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handlePortariaNaoEncontrada() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiError("NAO_AUTENTICADO", "Usuário do token não existe mais"));
+    }
+
+    // Mesmo racional de handleAssentoEmDisputa/handleReservaEmDisputa: lock_timeout estourou
+    // travando um Ingresso especifico pra validacao, 409 com codigo de erro proprio.
+    @ExceptionHandler(IngressoEmDisputaException.class)
+    public ResponseEntity<ApiError> handleIngressoEmDisputa(IngressoEmDisputaException exception) {
+        log.warn("Lock de ingresso não obtido dentro do timeout da transação", exception);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("INGRESSO_EM_DISPUTA", "Ingresso em disputa no momento — tente novamente"));
     }
 
     @ExceptionHandler(Exception.class)

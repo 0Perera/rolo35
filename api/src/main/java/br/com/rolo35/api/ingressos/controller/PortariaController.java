@@ -2,6 +2,8 @@ package br.com.rolo35.api.ingressos.controller;
 
 import br.com.rolo35.api.ingressos.dto.SelecionarSessaoRequest;
 import br.com.rolo35.api.ingressos.dto.SessaoAtivaDto;
+import br.com.rolo35.api.ingressos.dto.ValidacaoIngressoDto;
+import br.com.rolo35.api.ingressos.dto.ValidarIngressoRequest;
 import br.com.rolo35.api.ingressos.service.PortariaService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -34,5 +36,12 @@ public class PortariaController {
     @PreAuthorize("hasRole('PORTARIA')")
     public ResponseEntity<SessaoAtivaDto> sessaoAtiva(Authentication authentication) {
         return ResponseEntity.ok(portariaService.sessaoAtiva(authentication.getName()));
+    }
+
+    @PostMapping("/validacoes")
+    @PreAuthorize("hasRole('PORTARIA')")
+    public ResponseEntity<ValidacaoIngressoDto> validar(
+            @Valid @RequestBody ValidarIngressoRequest request, Authentication authentication) {
+        return ResponseEntity.ok(portariaService.validar(authentication.getName(), request.codigo()));
     }
 }
