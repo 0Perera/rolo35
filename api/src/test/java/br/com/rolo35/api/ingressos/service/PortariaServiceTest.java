@@ -13,12 +13,15 @@ import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
 import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
 import br.com.rolo35.api.ingressos.TurnoPortaria;
 import br.com.rolo35.api.ingressos.dto.SessaoAtivaDto;
+import br.com.rolo35.api.ingressos.repository.IngressoRepository;
 import br.com.rolo35.api.ingressos.repository.TurnoPortariaRepository;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
+import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -48,10 +51,24 @@ class PortariaServiceTest {
     @Mock
     private TurnoPortariaRepository turnoPortariaRepository;
 
+    @Mock
+    private IngressoRepository ingressoRepository;
+
+    @Mock
+    private AssentoRepository assentoRepository;
+
+    @Mock
+    private CodigoIngressoService codigoIngressoService;
+
+    @Mock
+    private EntityManager entityManager;
+
     private PortariaService portariaService;
 
     private void setUp() {
-        portariaService = new PortariaService(usuarioRepository, sessaoRepository, salaRepository, turnoPortariaRepository);
+        portariaService = new PortariaService(
+                usuarioRepository, sessaoRepository, salaRepository, turnoPortariaRepository, ingressoRepository,
+                assentoRepository, codigoIngressoService, entityManager);
     }
 
     private void stubPortaria() {
