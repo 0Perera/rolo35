@@ -1,9 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MapaAssentosPage } from './MapaAssentosPage';
-import { PapelPlaceholderPage } from './PapelPlaceholderPage';
 import * as sessoesApi from '../api/sessoes';
 import * as reservasApi from '../api/reservas';
 import { ApiRequestError } from '../api/client';
@@ -24,12 +23,17 @@ const mapa: MapaAssentos = {
   ],
 };
 
+function PaginaDePagamentoFalsa() {
+  const { reservaId } = useParams<{ reservaId: string }>();
+  return <p>página de pagamento da reserva {reservaId}</p>;
+}
+
 function renderPage(id = '5') {
   return render(
     <MemoryRouter initialEntries={[`/sessoes/${id}/assentos`]}>
       <Routes>
         <Route path="/sessoes/:id/assentos" element={<MapaAssentosPage />} />
-        <Route path="/em-construcao" element={<PapelPlaceholderPage />} />
+        <Route path="/pagamento/:reservaId" element={<PaginaDePagamentoFalsa />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -166,10 +170,10 @@ describe('MapaAssentosPage', () => {
     expect(screen.getByText(/máximo de 6 assentos/i)).toBeInTheDocument();
   });
 
-  it('reserves the selected seats and navigates on success', async () => {
+  it('reserves the selected seats and goes to the checkout of the created reserva', async () => {
     vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
     const reserva: Reserva = {
-      id: 1,
+      id: 77,
       sessaoId: 5,
       status: 'ATIVA',
       expiresAt: '2030-01-01T20:10:00',
@@ -185,7 +189,7 @@ describe('MapaAssentosPage', () => {
     await waitFor(() => {
       expect(reservarSpy).toHaveBeenCalledWith({ sessaoId: 5, assentoIds: [1] });
     });
-    expect(await screen.findByText(/reserva confirmada/i)).toBeInTheDocument();
+    expect(await screen.findByText('página de pagamento da reserva 77')).toBeInTheDocument();
   });
 
   it('shows an error and reloads the map, clearing the selection, on a 409 conflict', async () => {

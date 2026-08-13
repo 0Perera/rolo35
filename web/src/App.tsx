@@ -39,6 +39,7 @@ function App() {
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />
             <Route path="/sessoes/:id/assentos" element={<MapaAssentosPage />} />
+            <Route path="/pagamento/:reservaId" element={<PagamentoPage />} />
             <Route path="/meus-ingressos" element={<MeusIngressosPage />} />
             <Route path="/ingressos/:codigo" element={<IngressoPublicoPage />} />
             <Route path="/sobre" element={<SobrePage />} />

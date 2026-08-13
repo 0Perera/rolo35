@@ -128,13 +128,8 @@ export function MapaAssentosPage() {
     setReservando(true);
     setMensagemErro('');
     try {
-      await reservarAssentos({ sessaoId, assentoIds: Array.from(selecionados) });
-      navigate('/em-construcao', {
-        state: {
-          titulo: 'Reserva confirmada',
-          mensagem: 'Seus assentos estão reservados por 10 minutos. O pagamento ainda está sendo montado.',
-        },
-      });
+      const reserva = await reservarAssentos({ sessaoId, assentoIds: Array.from(selecionados) });
+      navigate(`/pagamento/${reserva.id}`);
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 409) {
         setMensagemErro('Um ou mais assentos selecionados não estão mais disponíveis. O mapa foi atualizado.');
