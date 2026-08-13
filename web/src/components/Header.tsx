@@ -14,6 +14,11 @@ function linkClass(ativo: boolean): string {
   }`;
 }
 
+/** A borda de destaque é só cor; `aria-current` é o que diz a mesma coisa pro leitor de tela. */
+function paginaAtual(ativo: boolean): 'page' | undefined {
+  return ativo ? 'page' : undefined;
+}
+
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -40,13 +45,18 @@ export function Header() {
         </Link>
 
         <nav className="order-3 -mx-4 flex w-[calc(100%+2rem)] gap-4 overflow-x-auto px-4 text-xs font-bold tracking-[1.6px] whitespace-nowrap sm:order-2 sm:mx-0 sm:w-auto sm:overflow-visible sm:px-0">
-          <Link to="/" className={linkClass(location.pathname === '/')}>
+          <Link
+            to="/"
+            aria-current={paginaAtual(location.pathname === '/')}
+            className={linkClass(location.pathname === '/')}
+          >
             EM CARTAZ
           </Link>
 
           {papel === 'ORGANIZADOR' && (
             <Link
               to="/organizador"
+              aria-current={paginaAtual(location.pathname.startsWith('/organizador'))}
               className={linkClass(location.pathname.startsWith('/organizador'))}
             >
               PAINEL
@@ -54,16 +64,20 @@ export function Header() {
           )}
 
           {papel === 'PORTARIA' && (
-            <Link to="/portaria" className={linkClass(location.pathname.startsWith('/portaria'))}>
+            <Link
+              to="/portaria"
+              aria-current={paginaAtual(location.pathname.startsWith('/portaria'))}
+              className={linkClass(location.pathname.startsWith('/portaria'))}
+            >
               PORTARIA
             </Link>
           )}
 
           {papel !== 'ORGANIZADOR' && papel !== 'PORTARIA' && (
             <Link
-              to="/em-construcao"
-              state={{ titulo: 'Meus Ingressos', mensagem: 'A carteira de ingressos chega numa próxima entrega.' }}
-              className={linkClass(false)}
+              to="/meus-ingressos"
+              aria-current={paginaAtual(location.pathname === '/meus-ingressos')}
+              className={linkClass(location.pathname === '/meus-ingressos')}
             >
               MEUS INGRESSOS
             </Link>
