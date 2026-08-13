@@ -12,6 +12,7 @@ import br.com.rolo35.api.pagamentos.ResultadoSimulado;
 import br.com.rolo35.api.pagamentos.dto.ConfirmarPagamentoRequest;
 import br.com.rolo35.api.pagamentos.dto.IngressoDto;
 import br.com.rolo35.api.pagamentos.dto.PagamentoDto;
+import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
 import br.com.rolo35.api.reservas.StatusReserva;
@@ -80,13 +81,20 @@ public class PagamentoService {
                             null, reserva.getId(), assentoId, reserva.getSessaoId(), StatusIngresso.VALIDO, null,
                             Instant.now())))
                     .toList();
-            assentoSessaoRepository.reivindicarVendido(reserva.getSessaoId(), assentoIds);
+            int linhasAfetadas =
+                    assentoSessaoRepository.reivindicarVendido(reserva.getSessaoId(), assentoIds, reserva.getId());
+            if (linhasAfetadas != assentoIds.size()) {
+                throw new AssentoIndisponivelException();
+            }
             return new PagamentoDto(StatusReserva.CONFIRMADA, paraDto(ingressos));
         }
 
         reserva.recusar();
         reservaRepository.save(reserva);
-        assentoSessaoRepository.liberar(reserva.getSessaoId(), assentoIds);
+        int linhasLiberadas = assentoSessaoRepository.liberar(reserva.getSessaoId(), assentoIds, reserva.getId());
+        if (linhasLiberadas != assentoIds.size()) {
+            throw new AssentoIndisponivelException();
+        }
         return new PagamentoDto(StatusReserva.RECUSADA, List.of());
     }
 

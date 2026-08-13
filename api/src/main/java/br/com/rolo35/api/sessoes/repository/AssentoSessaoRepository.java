@@ -58,8 +58,11 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
     int reivindicar(Long sessaoId, List<Long> assentoIds, Long reservaId, LocalDateTime expiresAt, LocalDateTime agora);
 
     // Write path do pagamento aprovado (Story 4.1): a Reserva já foi travada via
-    // ReservaRepository.findByIdForUpdate antes desta chamada, então não precisa de guarda de
-    // status/expiresAt como reivindicar() — só marca VENDIDO as linhas da reserva confirmada.
+    // ReservaRepository.findByIdForUpdate antes desta chamada. O WHERE por reservaId é defesa
+    // em profundidade (achado do code review) — mesmo a Reserva já estando travada, o UPDATE em
+    // si não confiava nisso; sem essa condição, um assentoIds calculado errado em algum call
+    // site futuro sobrescreveria silenciosamente o assento de outra reserva. O retorno int
+    // (linhas afetadas) deixa o chamador perceber quando a guarda recusou parte da atualização.
     //
     // flushAutomatically = true é obrigatório aqui: PagamentoService muta Reserva.status em
     // memória (reserva.confirmar()/recusar()) e chama save() ANTES deste método. Sem o flush
@@ -72,20 +75,20 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
     @Query(
             """
             UPDATE AssentoSessao a SET a.status = 'VENDIDO'
-            WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds
+            WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds AND a.reservaId = :reservaId
             """)
-    int reivindicarVendido(Long sessaoId, List<Long> assentoIds);
+    int reivindicarVendido(Long sessaoId, List<Long> assentoIds, Long reservaId);
 
     // Write path do pagamento recusado (Story 4.1): libera a linha imediatamente, sem esperar o
-    // TTL lazy de AD-4 — este caminho é escrita imediata, por decisão explícita da AC2.
-    // flushAutomatically = true pelo mesmo motivo de reivindicarVendido() acima.
+    // TTL lazy de AD-4 — este caminho é escrita imediata, por decisão explícita da AC2. WHERE
+    // por reservaId e flushAutomatically = true pelo mesmo motivo de reivindicarVendido() acima.
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
             """
             UPDATE AssentoSessao a SET a.status = 'LIVRE', a.reservaId = null, a.expiresAt = null
-            WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds
+            WHERE a.id.sessaoId = :sessaoId AND a.id.assentoId IN :assentoIds AND a.reservaId = :reservaId
             """)
-    int liberar(Long sessaoId, List<Long> assentoIds);
+    int liberar(Long sessaoId, List<Long> assentoIds, Long reservaId);
 
     @Query(
             """

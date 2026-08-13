@@ -18,6 +18,7 @@ import br.com.rolo35.api.ingressos.service.CodigoIngressoService;
 import br.com.rolo35.api.pagamentos.NaoAutorizadoException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;
+import br.com.rolo35.api.reservas.AssentoIndisponivelException;
 import br.com.rolo35.api.pagamentos.dto.ConfirmarPagamentoRequest;
 import br.com.rolo35.api.pagamentos.dto.PagamentoDto;
 import br.com.rolo35.api.reservas.Reserva;
@@ -112,6 +113,7 @@ class PagamentoServiceTest {
             return ingresso;
         });
         given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
+        given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(2);
 
         PagamentoDto dto = pagamentoService.confirmar(
                 new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL);
@@ -119,7 +121,31 @@ class PagamentoServiceTest {
         assertThat(dto.status()).isEqualTo(StatusReserva.CONFIRMADA);
         assertThat(dto.ingressos()).hasSize(2);
         verify(reservaRepository).save(any(Reserva.class));
-        verify(assentoSessaoRepository).reivindicarVendido(SESSAO_ID, assentoIds);
+        verify(assentoSessaoRepository).reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID);
+    }
+
+    @Test
+    void aprovadoComLinhasAfetadasMenorQueEsperadoLancaAssentoIndisponivel() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        List<Long> assentoIds = List.of(10L, 20L);
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID))
+                .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
+        given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
+                .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
+        given(ingressoRepository.save(any(Ingresso.class))).willAnswer(invocation -> {
+            Ingresso ingresso = invocation.getArgument(0);
+            ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID());
+            return ingresso;
+        });
+        // UPDATE afetou só 1 das 2 linhas esperadas — o WHERE de defesa em profundidade
+        // (reservaId) recusou parte da atualização, mesmo já sob o lock pessimista de Reserva.
+        given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(1);
+
+        assertThatThrownBy(() -> pagamentoService.confirmar(
+                        new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL))
+                .isInstanceOf(AssentoIndisponivelException.class);
     }
 
     @Test
@@ -132,6 +158,7 @@ class PagamentoServiceTest {
                 .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
         given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
                 .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
+        given(assentoSessaoRepository.liberar(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(2);
 
         PagamentoDto dto = pagamentoService.confirmar(
                 new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.RECUSADO), CLIENTE_EMAIL);
@@ -140,7 +167,24 @@ class PagamentoServiceTest {
         assertThat(dto.ingressos()).isEmpty();
         verify(ingressoRepository, never()).save(any());
         verify(reservaRepository).save(any(Reserva.class));
-        verify(assentoSessaoRepository).liberar(SESSAO_ID, assentoIds);
+        verify(assentoSessaoRepository).liberar(SESSAO_ID, assentoIds, RESERVA_ID);
+    }
+
+    @Test
+    void recusadoComLinhasAfetadasMenorQueEsperadoLancaAssentoIndisponivel() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        List<Long> assentoIds = List.of(10L, 20L);
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID))
+                .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
+        given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
+                .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
+        given(assentoSessaoRepository.liberar(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(1);
+
+        assertThatThrownBy(() -> pagamentoService.confirmar(
+                        new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.RECUSADO), CLIENTE_EMAIL))
+                .isInstanceOf(AssentoIndisponivelException.class);
     }
 
     @Test
@@ -207,8 +251,8 @@ class PagamentoServiceTest {
         assertThat(dto.status()).isEqualTo(StatusReserva.CONFIRMADA);
         assertThat(dto.ingressos()).hasSize(1);
         verify(reservaRepository, never()).save(any());
-        verify(assentoSessaoRepository, never()).reivindicarVendido(anyLong(), anyList());
-        verify(assentoSessaoRepository, never()).liberar(anyLong(), anyList());
+        verify(assentoSessaoRepository, never()).reivindicarVendido(anyLong(), anyList(), anyLong());
+        verify(assentoSessaoRepository, never()).liberar(anyLong(), anyList(), anyLong());
         verify(ingressoRepository, never()).save(any());
     }
 
