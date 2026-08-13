@@ -2,6 +2,8 @@ package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
+import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
+import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
 import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
@@ -237,6 +239,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleIngressoNaoEncontrado() {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiError("INGRESSO_NAO_ENCONTRADO", "Ingresso não encontrado"));
+    }
+
+    @ExceptionHandler(SessaoAtivaNaoSelecionadaException.class)
+    public ResponseEntity<ApiError> handleSessaoAtivaNaoSelecionada() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "SESSAO_ATIVA_NAO_SELECIONADA", "Selecione a sessão do turno antes de continuar"));
+    }
+
+    @ExceptionHandler(PortariaNaoEncontradaException.class)
+    public ResponseEntity<ApiError> handlePortariaNaoEncontrada() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiError("NAO_AUTENTICADO", "Usuário do token não existe mais"));
     }
 
     @ExceptionHandler(Exception.class)
