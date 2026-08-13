@@ -142,6 +142,15 @@ export function PagamentoPage() {
     return () => clearInterval(timer);
   }, [estado, expiresAt]);
 
+  // Aprovação, recusa e expiração trocam a tela inteira sem trocar de rota, então o scroll-to-top
+  // que existe pra mudança de rota não age aqui — e a tela nova abriria na altura em que o botão
+  // de confirmar estava.
+  useEffect(() => {
+    if (estado === 'aprovada' || estado === 'recusada' || estado === 'expirada') {
+      window.scrollTo(0, 0);
+    }
+  }, [estado]);
+
   const assentos = reserva?.assentos ?? [];
   const total = (reserva?.preco ?? 0) * assentos.length;
   const linkDoMapa = reserva ? `/sessoes/${reserva.sessaoId}/assentos` : '/';

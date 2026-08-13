@@ -22,14 +22,17 @@ export function CanhotoIngresso({ urlPublica, children }: CanhotoIngressoProps) 
         aria-hidden="true"
         className="w-[3px] bg-[repeating-linear-gradient(180deg,var(--color-ink-950)_0_10px,transparent_10px_18px)]"
       />
-      <div className="flex flex-[1_1_200px] flex-col items-center justify-center gap-3 bg-ink-950 p-6">
+      {/* A base do painel acompanha o QR: 196px de código + moldura + padding. Com uma base menor
+          que isso, o QR estoura o painel nas larguras intermediárias em vez de descer pra linha
+          de baixo. */}
+      <div className="flex flex-[1_1_270px] flex-col items-center justify-center gap-3 bg-ink-950 p-6">
         <div className="border-[3px] border-flame-400 bg-paper-50 p-2.5">
           {/* marginSize em módulos, não pixels: a zona de silêncio precisa existir dentro do
               próprio SVG pra leitura confiável — a borda amarela do handoff é decoração, não
               margem de QR. */}
           <QRCodeSVG
             value={urlPublica}
-            size={147}
+            size={196}
             marginSize={4}
             bgColor="#FFFDF6"
             fgColor="#171219"

@@ -110,6 +110,22 @@ describe('PagamentoPage', () => {
     expect(screen.getByText(/CÓDIGO bbbb-2222\.assinatura2/)).toBeInTheDocument();
   });
 
+  // Aprovar e recusar trocam a tela sem trocar de rota, então RolarAoTrocarDeRota não age: sem
+  // isto, quem rolou até o botão de confirmar cai no meio do canhoto em vez do "TICKET NA MÃO".
+  it('takes the page back to the top when the checkout turns into a result screen', async () => {
+    const rolar = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);
+    const user = userEvent.setup();
+
+    renderPage();
+    await preencherCartao(user);
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    await screen.findByText(/ticket na mão/i);
+    expect(rolar).toHaveBeenCalled();
+  });
+
   it('renders the refusal screen and no ticket when the simulated result is RECUSADO', async () => {
     vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
     const confirmarSpy = vi
