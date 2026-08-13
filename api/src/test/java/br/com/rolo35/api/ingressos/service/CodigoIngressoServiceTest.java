@@ -1,6 +1,7 @@
 package br.com.rolo35.api.ingressos.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -68,5 +69,20 @@ class CodigoIngressoServiceTest {
     @Test
     void extrairIdDevolveVazioParaUuidMalformado() {
         assertThat(service.extrairId("nao-e-um-uuid.assinatura")).isEqualTo(Optional.empty());
+    }
+
+    @Test
+    void construtorLancaExcecaoParaSecretVazio() {
+        assertThatThrownBy(() -> new CodigoIngressoService("")).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void construtorLancaExcecaoParaSecretSoComEspacos() {
+        assertThatThrownBy(() -> new CodigoIngressoService("   ")).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void construtorLancaExcecaoParaSecretNulo() {
+        assertThatThrownBy(() -> new CodigoIngressoService(null)).isInstanceOf(IllegalStateException.class);
     }
 }

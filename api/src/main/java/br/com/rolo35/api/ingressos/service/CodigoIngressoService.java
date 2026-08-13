@@ -19,6 +19,13 @@ public class CodigoIngressoService {
     private final SecretKey signingKey;
 
     public CodigoIngressoService(@Value("${ticket.hmac.secret}") String secret) {
+        // Falha rápida no boot: SecretKeySpec puro (ao contrário de Keys.hmacShaKeyFor() da lib
+        // jjwt, usada por JwtService) não valida a chave — um TICKET_HMAC_SECRET em branco
+        // construiria uma chave HMAC degenerada silenciosamente, só falhando (ou pior, não
+        // falhando) na primeira assinatura.
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("TICKET_HMAC_SECRET não pode ser vazio");
+        }
         this.signingKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     }
 
