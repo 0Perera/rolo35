@@ -239,21 +239,31 @@ implementadas estão marcadas explicitamente como pendentes.
   `sessoes (sala_id, data_hora)` (`V3__indice_sessoes_sala_data_hora.sql`)
   que serve exatamente a query de conflito de horário acima.
 
-## Pendente (especificado, ainda não em código)
+## Portaria (épico 5, implementado)
 
-O épico 5 (portaria) tem story escrita com critério de aceitação
-(`_bmad-output/implementation-artifacts/5-1-*`, `5-2-*`) mas **não existe
-`PortariaService`/`PortariaController` neste checkout**:
+`PortariaService`/`PortariaController` existem neste checkout, com as regras
+abaixo:
 
-- Seleção da sessão do turno pela portaria; validação sem sessão selecionada
-  recusada.
+- Seleção da sessão do turno pela portaria (`turno_portaria`, uma linha por
+  usuário, PK `usuario_id` — reselecionar é update na mesma linha); validação
+  sem sessão selecionada recusada com `409 SESSAO_ATIVA_NAO_SELECIONADA`.
 - Retorno inequívoco da validação (`VALIDO` / `INVALIDO` / `JA_UTILIZADO` /
   `EVENTO_ERRADO`) como `200` + campo `resultado`, com sessão checada antes do
   status.
-- Não-validação-duplicada do mesmo ingresso sob concorrência real
-  (lock de banco + teste com threads) — as colunas
-  `ingressos.status`/`validated_at` já existem no schema
-  (`V1__schema.sql:63-71`), o caminho de escrita não.
+- Assinatura HMAC conferida **antes** de qualquer consulta ou lock: um código
+  forjado nunca chega a segurar uma linha de `ingressos`.
+- Não-validação-duplicada do mesmo ingresso sob concorrência real: lock
+  pessimista em `ingressos` (`findByIdForUpdate` + `SET LOCAL lock_timeout`),
+  provado por `PortariaValidacaoConcorrenciaTest` com duas threads contra
+  Postgres real — exatamente uma responde `VALIDO`.
+- O QR do ingresso carrega o **código assinado** (`uuid.assinatura`), que é o
+  payload que a validação espera — não o link público, que serve o botão de
+  compartilhar. A travessia entre as duas pontas é coberta por
+  `web/src/pages/ContratoQrPortaria.test.tsx`.
+
+Pendências conhecidas do épico: `POST /api/portaria/turno` não valida
+server-side se a sessão é futura/publicada (a restrição vive só na lista do
+front), e não há janela dedicada de "sessões em andamento agora".
 
 Lacunas conhecidas nas regras **já implementadas** (achados de revisão
 adversarial, ainda abertos) estão em

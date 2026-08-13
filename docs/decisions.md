@@ -543,3 +543,11 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 - **Decisão**: adicionado `qr-scanner` (npm) como única dependência nova do front nesta story, pra leitura de ingresso por câmera.
 - **Por quê**: wrapper leve sobre `getUserMedia` com API mínima (`start()`/`stop()`/callback `onDecode`), sem exigir infraestrutura própria de decodificação. Ativado só por clique explícito ("ligar câmera"), nunca automático no mount — evita pedir permissão de câmera sem contexto e mantém o teste do componente livre de mockar `getUserMedia` globalmente.
+
+---
+
+## O QR do ingresso carrega o código assinado, não o link público — emenda à decisão da Story 4.2 (code review do Epic 5)
+
+- **Decisão**: `CanhotoIngresso` recebe `codigo` e grava `uuid.assinatura` no QR. O link público (`urlPublicaDoIngresso()`) continua existindo, mas serve só o botão de compartilhar. Emenda explícita à decisão "QR do ingresso é gerado no front-end" (Story 4.2), que passou a gravar a URL no QR sem que isso fosse decidido separadamente.
+- **Por quê**: o QR existe pra ser lido na porta. Com a URL como payload, `CodigoIngressoService.extrairId()` fazia `split(".", 2)` e tentava `UUID.fromString("https://rolo35")` (ou `"http://localhost:5173/ingressos/<uuid>"` em dev) — os dois falham, e **toda leitura por câmera devolvia `INVALIDO`**. O PRD (linha 20, UJ-3, FR-18) trata QR e link de compartilhamento como coisas separadas, e o compartilhamento já tinha botão próprio, que nunca dependeu do QR. Custo da mudança: escanear o canhoto com a câmera nativa do celular não abre mais a página do ingresso — conveniência de compartilhamento, não a função do QR.
+- **Como não regride**: `web/src/pages/ContratoQrPortaria.test.tsx` cobre a *travessia*, não cada lado — renderiza o canhoto real, extrai o payload do QR e alimenta o `onDecode` da tela de portaria, exigindo que a string chegue intacta em `validarIngresso()` e que seu primeiro segmento seja um UUID (réplica fiel da regra do back-end). Antes existiam testes dos dois lados, e ambos passavam: o do canhoto afirmava que o QR *devia* apontar pro link público, e o da portaria nunca acionava o `onDecode`. Cada lado passava sozinho e o contrato entre eles não era de ninguém.

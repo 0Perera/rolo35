@@ -67,7 +67,7 @@ describe('MeusIngressosPage', () => {
     expect(screen.getByText('VALIDO')).toBeInTheDocument();
   });
 
-  it('opens the canhoto with the signed code and a QR of the public link', async () => {
+  it('opens the canhoto with the signed code and its QR', async () => {
     vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
 
     renderPage();
@@ -75,9 +75,9 @@ describe('MeusIngressosPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
 
     expect(screen.getByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
-    // O QR é o que a portaria lê: precisa apontar pro link público, não pro código cru.
-    expect(screen.getByTitle(`QR code do ingresso (${window.location.origin}/ingressos/abc-123.assinatura)`))
-      .toBeInTheDocument();
+    // O QR carrega o código assinado, não o link público — o payload em si é coberto por
+    // `ContratoQrPortaria.test.tsx`, que fecha a travessia até a chamada da portaria.
+    expect(screen.getByTitle(/QR code do ingresso/)).toBeInTheDocument();
     expect(screen.getByText(/escaneie na portaria/i)).toBeInTheDocument();
   });
 

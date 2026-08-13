@@ -77,9 +77,9 @@ conceito.
 ## 2. Estado da entrega
 
 O desafio tem prazo de 7 dias e foi construído em fatias verticais testadas, épico por épico. Este
-é o estado real do código nesta branch — o que está pendente está declarado, não escondido. **A
-jornada do cliente fecha inteira pela interface: buscar sessão → escolher assento → pagar → receber o
-ingresso com QR → compartilhar o link.** O que falta é a ponta da portaria.
+é o estado real do código nesta branch — o que está pendente está declarado, não escondido. **O fluxo
+fecha ponta a ponta pela interface: buscar sessão → escolher assento → pagar → receber o ingresso com
+QR → compartilhar o link → validar na portaria.**
 
 | Épico | Escopo | Estado |
 |---|---|---|
@@ -87,7 +87,7 @@ ingresso com QR → compartilhar o link.** O que falta é a ponta da portaria.
 | 2 | Criação/edição de sessão com bloqueio de conflito e trava pós-venda, listagem pública | ✅ implementado |
 | 3 | Mapa de assentos público, reserva com hold temporário | ✅ implementado |
 | 4 | Pagamento simulado (aprovação e recusa), emissão de ingresso com QR, "Meus ingressos", link público | ✅ implementado, ponta a ponta pela interface: checkout com cartão simulado, aprovação, recusa e expiração de hold; canhoto com QR escaneável; carteira do cliente e link público |
-| 5 | Portaria: seleção da sessão do turno e validação do ingresso | ⛔ **não implementado** — especificado, ainda sem código |
+| 5 | Portaria: seleção da sessão do turno e validação do ingresso | ✅ implementado: seleção de sessão do turno, validação por câmera (QR) e digitação manual, quatro desfechos inequívocos (`VALIDO`/`INVALIDO`/`JA_UTILIZADO`/`EVENTO_ERRADO`) e não-validação-dupla provada sob concorrência real |
 
 Detalhamento honesto de tudo que falta, com o motivo, em
 [17. O que não funciona / ficou de fora](#17-o-que-não-funciona--ficou-de-fora).
@@ -278,9 +278,9 @@ curl -s localhost:8080/api/pagamentos/confirmar -H "Authorization: Bearer $TOKEN
 # (os campos de cartão da tela existem para fidelidade da simulação e nunca saem do navegador)
 ```
 
-O passo que fecharia o ciclo — validar o ingresso na portaria — ainda não existe na aplicação; veja
-[10.7](#107-portaria) e [17](#17-o-que-não-funciona--ficou-de-fora). A superfície completa da API,
-com papel exigido e códigos de erro, está na seção seguinte.
+O passo que fecha o ciclo — validar o ingresso na portaria — está implementado; veja
+[10.7](#107-portaria). A superfície completa da API, com papel exigido e códigos de erro, está na
+seção seguinte.
 
 ---
 
@@ -518,12 +518,11 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | A assinatura é verificada **antes** de qualquer consulta ao banco na rota pública | Código com HMAC inválido nunca toca o repositório: sem isso, a diferença entre "não existe" e "assinatura errada" seria um oráculo pra enumerar UUIDs |
 | "Não existe" e "assinatura inválida" devolvem o mesmo `404 INGRESSO_NAO_ENCONTRADO` | Mesmo motivo acima, agora no nível da resposta |
 | O **QR é renderizado no front** a partir do código assinado, não servido por um endpoint de imagem | O QR é só uma representação visual de uma URL que o cliente já tem em mãos. Um endpoint de imagem adicionaria uma rota, um content-type e um cache para gerar zero informação nova — e a autenticidade continua vindo do HMAC, não do desenho |
-| O QR carrega exatamente o **link público** do ingresso, e a URL é montada num único lugar (`lib/ingressos.ts`) | Se a carteira e a página pública divergirem, o QR de uma leva para um lugar diferente do link da outra |
+| O QR carrega exatamente o **código assinado** (`uuid.assinatura`), não o link público | É o payload que `POST /api/portaria/validacoes` espera — o QR existe para ser validado na porta, e a digitação manual precisa produzir a mesma string. O link público continua sendo montado num único lugar (`lib/ingressos.ts`) e serve o botão de compartilhar. Já divergiu uma vez: com o QR carregando a URL, toda leitura por câmera devolvia `INVALIDO`; hoje a travessia entre as duas pontas é coberta por `ContratoQrPortaria.test.tsx` |
 
 ### 10.7 Portaria
 
-Requisitos especificados em `epics.md` (FR-17 a FR-20), **ainda não implementados**. As regras já
-decididas, para transparência do que falta:
+Requisitos FR-17 a FR-20, **implementados**. As regras que valem:
 
 - Portaria **seleciona a sessão do turno** antes de validar; validação sem sessão selecionada é
   recusada — é o que permite distinguir "evento errado" de "ingresso inválido".
@@ -550,7 +549,7 @@ aplicação — e cada uma tem teste com **threads reais** contra Postgres via T
 | Duas sessões conflitantes na mesma sala | Lock pessimista na linha da **sala** antes de checar sobreposição — duas criações simultâneas serializam, uma vence | `SessaoConcorrenciaConflitoTest` |
 | Confirmação de pagamento idempotente | Lock pessimista na linha da **reserva**; a segunda chamada encontra a reserva já decidida e devolve o estado persistido | `PagamentoConcorrenciaConflitanteTest` |
 | Editar sessão enquanto alguém reserva | `editar()` trava todas as linhas de `assento_sessao` da sessão antes de checar hold ativo — fecha a janela entre leitura e delete numa troca de sala | `ReservaEditarConcorrenciaTest` |
-| Não validar o mesmo ingresso duas vezes | Especificado, **pendente** junto com o épico da portaria | — |
+| Não validar o mesmo ingresso duas vezes | Lock pessimista na linha do **ingresso** (`findByIdForUpdate` + `SET LOCAL lock_timeout`); `POST /api/portaria/validacoes` é a única rota que transiciona `VALIDO → UTILIZADO` | `PortariaValidacaoConcorrenciaTest` |
 
 Dois detalhes que só aparecem lendo o código:
 
@@ -800,8 +799,8 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 
 | Item | Situação |
 |---|---|
-| **Tela e API de portaria** (FR-17 a FR-20) | Requisitos e critérios estão em `epics.md`, e as regras já decididas estão em [10.7](#107-portaria) — **mas não existe código**. A rota `/portaria` no front é um *placeholder* e não existe `PortariaService` no back. Consequência direta: o invariante "não validar o mesmo ingresso duas vezes" está desenhado, mas ainda não implementado nem testado. É a única ponta do fluxo que não fecha — a do cliente fecha inteira |
-| **Leitura do QR pela câmera** | O QR existe e é escaneável por qualquer leitor (o do celular abre o link público), mas a leitura *dentro da aplicação* pertence à tela de portaria — que não existe. A digitação manual do código, alternativa exigida pelo enunciado, também depende dela |
+| **Janela de seleção da sessão do turno** | A portaria escolhe a sessão do turno a partir da mesma listagem pública, que filtra `data_hora >= now()`. Sessões já iniciadas não aparecem na lista; a sessão ativa continua selecionável (é reinjetada no seletor), mas não existe uma janela dedicada do tipo "sessões em andamento agora". Simplificação consciente de escopo, não bug |
+| **Validação server-side da sessão do turno** | `POST /api/portaria/turno` aceita qualquer `sessaoId` existente, incluindo sessões passadas. A restrição a sessões futuras vive só na lista do front. Sem impacto de segurança sobre ingressos de terceiros (o operador só consegue transformar as próprias leituras em `EVENTO_ERRADO`), mas é validação que devia estar no servidor |
 | **Autocadastro de cliente** | Fora do sprint original; as contas vêm do seed. A rota `/cadastro` é um *placeholder* honesto, não um formulário que finge funcionar |
 | **Aplicação publicada** | Não publicada no momento desta escrita — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
 

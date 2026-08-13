@@ -1,6 +1,6 @@
 # Story 5.2: Validação de Ingresso na Portaria
 
-Status: review
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -123,7 +123,7 @@ so that eu decido se libero a entrada com confiança, sem depender de julgamento
   - [ ] Commit: `feat(portaria): leitura de ingresso por câmera e digitação manual (AC1-5)`
 
 - [ ] **Task 6 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa: backend `mvn test` (inclui os dois cenários de concorrência do projeto — Story 3.2/reservas e esta); front-end `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npx vitest run`. Confirmar tudo verde.
+  - [ ] Rodar a suíte completa: backend `mvn test` (inclui os dois cenários de concorrência do projeto — Story 3.2/reservas e esta); front-end `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npm test`. Confirmar tudo verde.
   - [ ] Registrar em `docs/decisions.md`: (a) por que os 4 resultados de validação (`VALIDO`/`INVALIDO`/`JA_UTILIZADO`/`EVENTO_ERRADO`) voltam como `200` + campo `resultado`, não como códigos HTTP de erro — são desfechos de negócio esperados, mesmo racional de `PagamentoDto` sempre `200` (AD-6), não "algo deu errado" no sentido HTTP; (b) por que `INVALIDO` não diferencia "não encontrado" de "assinatura errada" (mesma decisão da Story 4.2, AD-8, reaplicada aqui); (c) escolha de `qr-scanner` como dependência nova e por quê (leve, API mínima, decisão tomada com o usuário nesta criação de story).
   - [ ] Atualizar o Status desta story pra `review`.
   - [ ] Atualizar `_bmad-output/implementation-artifacts/sprint-status.yaml`: `5-2-validacao-de-ingresso-na-portaria: review`, `epic-5: done` (fecha o épico — última story).
@@ -185,9 +185,11 @@ concorrência (Task 4) passou de primeira e se manteve estável em execuções r
 - `PortariaServiceTest` (Story 5.1) precisou de ajuste mecânico pro construtor novo de
   `PortariaService` (4 dependências a mais); nenhum teste de comportamento da 5.1 mudou.
 - Suíte completa verde: `mvn test` (backend, inclui os dois cenários de concorrência do
-  projeto) e `npx tsc --noEmit && npm run lint && npm run build` (frontend). `npx vitest run`
-  mantém os mesmos 3 arquivos de teste pré-existentes falhando por ambiente
-  (`localStorage` indisponível), já documentados na Story 5.1 e confirmados não relacionados.
+  projeto) e `npx tsc --noEmit && npm run lint && npm run build` (frontend).
+- **Correção do code review (2026-08-13):** a alegação de "3 arquivos falhando por ambiente
+  (`localStorage` indisponível)" herdada da Story 5.1 era falsa — o comando do checklist estava
+  errado. Usar **`npm test`** (que carrega `NODE_OPTIONS=--no-experimental-webstorage`), nunca
+  `npx vitest run`. A suíte do front sempre esteve verde.
 - Decisões registradas em `docs/decisions.md`.
 - Epic 5 encerrado — fluxo ponta a ponta completo (buscar filme → sessão → assento → pagamento
   → ingresso → validar na portaria) implementado.
@@ -223,3 +225,34 @@ concorrência (Task 4) passou de primeira e se manteve estável em execuções r
 - `web/src/App.tsx` (update — rota `/portaria/validar`)
 - `docs/decisions.md` (update)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (update)
+
+### Review Findings
+
+Code review de 2026-08-13 (3 camadas adversariais + verificação empírica). Corrigidos nesta rodada
+marcados; o restante fica como action item — escopo reduzido a pedido, só blocker e `high`.
+
+- [x] [Review][Decision] **BLOCKER — AC1 não atendido.** O QR gravava `${origin}/ingressos/${codigo}` e a tela mandava o payload cru; `extrairId()` fazia `UUID.fromString("https://rolo35")` e **toda leitura por câmera devolvia `INVALIDO`**. Decidido: o QR passa a carregar o código assinado [web/src/components/CanhotoIngresso.tsx:38] — coberto por `ContratoQrPortaria.test.tsx`, que testa a travessia entre as duas pontas
+- [x] [Review][Patch] `onDecode` dispara ~25×/s sem parar o scanner: o mesmo ingresso era validado dezenas de vezes e o veredito invertia de `VALIDO` pra `JA_UTILIZADO` na frente do operador (AC1/AC5) [web/src/pages/ValidacaoPortariaPage.tsx:82] — scanner para na primeira leitura + guarda de in-flight
+- [x] [Review][Patch] `scanner.start()` era Promise não tratada e `setCameraLigada(true)` rodava incondicionalmente: permissão negada deixava a tela sem estado e sem volta [web/src/pages/ValidacaoPortariaPage.tsx:94] — `catch` com mensagem e botão preservado
+- [x] [Review][Patch] Veredito anterior nunca era limpo: o cartão verde "VÁLIDO — LIBERAR ENTRADA" sobrevivia embaixo do erro do ingresso seguinte (AC5) [web/src/pages/ValidacaoPortariaPage.tsx:49] — `setResultado(null)` no início de `validar()`
+- [x] [Review][Decision] `EVENTO_ERRADO` devolve o título da sessão *ativa*, e a UI renderizava cru — o operador lia "EVENTO ERRADO / Clube da Luta" segurando ingresso de outro filme. Decidido: rotular na UI ("Sessão do turno: X"), backend intocado [web/src/pages/ValidacaoPortariaPage.tsx:173]
+- [x] [Review][Patch] README e `docs/regras-de-negocio.md` declaravam o Epic 5 inexistente ("não existe código", "a rota `/portaria` é um placeholder") — corrigidos, incluindo a linha do README que documentava o QR carregando o link público
+- [ ] [Review][Patch] `AssentoNaoEncontradoException` é lançada sem `@ExceptionHandler` → `500 ERRO_INTERNO`; única exceção nova fora do envelope de erro [api/.../service/PortariaService.java:102]
+- [ ] [Review][Patch] Estouro de lock fora do `try` estreito (flush/commit do `save()`) cai no handler global `handleSalaOcupada` → `503 "Outra criação de sessão para essa sala está em andamento"` exibido a quem escaneia ingresso [api/.../service/PortariaService.java:93]
+- [ ] [Review][Patch] Teste de concorrência não afere que `validatedAt` não é sobrescrito pela segunda chamada, que a própria Task 4 exigia — é a única asserção que quebraria se o early-return de `JA_UTILIZADO` sumisse [api/.../PortariaValidacaoConcorrenciaTest.java:832]
+- [ ] [Review][Patch] `dtoNaoExpoeCampoDeCliente` é tautologia: reflete sobre nomes de campo de um record do mesmo commit e passaria com um campo `comprador`; o loop de métodos ainda perde a checagem de `nome` [api/.../service/PortariaServiceValidacaoTest.java:1585]
+- [ ] [Review][Patch] `assentoFileira && assentoNumero` esconde o assento quando `numero === 0` [web/src/pages/ValidacaoPortariaPage.tsx:178]
+- [ ] [Review][Patch] `#2E7D46` inventado fora da paleta fixa e aplicado por `style` inline [web/src/pages/ValidacaoPortariaPage.tsx:9]
+- [ ] [Review][Patch] Campo manual fora de `<form>`: Enter não submete, e leitor de código de barras keyboard-wedge (que emite Enter) não funciona. A tela também nunca mostra qual é a sessão ativa [web/src/pages/ValidacaoPortariaPage.tsx:121]
+- [ ] [Review][Patch] Tipo TS `ResultadoValidacao` nomeia o envelope enquanto o enum Java homônimo é só o resultado — obriga `ResultadoValidacao['resultado']` [web/src/api/portaria.ts:10]
+- [ ] [Review][Patch] Sem limite de tamanho em `codigo` [api/.../dto/ValidarIngressoRequest.java]
+- [ ] [Review][Patch] `setUp()` privado chamado à mão em todos os testes em vez de `@BeforeEach`; nome totalmente qualificado inline [api/.../PortariaSecurityTest.java:634]
+- [x] [Review][Defer] Caminho `IngressoEmDisputaException` nunca é realmente disparado — o teste de controller lança a exceção já traduzida e o de concorrência não estoura o `lock_timeout` de 3s — deferido, exigiria fixture de lock artificial
+
+**Verificação empírica desta rodada:** `./mvnw test` verde (inclui os 2 cenários de concorrência);
+`npx tsc --noEmit` limpo; `npm run build` ok; `npm test` **127/127** em 18 arquivos.
+
+**O que se sustentou no review:** o lock pessimista de AC8 é real — remover `@Lock(PESSIMISTIC_WRITE)`
+faz o teste falhar. Ordem AD-8 (assinatura antes do banco) preservada e asseverada. AD-9 se sustenta:
+`Ingresso.validar()` tem exatamente um chamador. Matriz 401/403 completa nos três endpoints × dois
+papéis errados. Nenhum vazamento de campo sensível, nenhuma regra de negócio no controller.

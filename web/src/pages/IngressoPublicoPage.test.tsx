@@ -63,14 +63,15 @@ describe('IngressoPublicoPage', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('renders the canhoto with the signed code and a QR of its own public link', async () => {
+  it('renders the canhoto with the signed code and its QR', async () => {
     vi.spyOn(ingressosApi, 'buscarIngressoPublico').mockResolvedValue(ingressoPublico);
 
     renderPage();
 
     expect(await screen.findByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
-    expect(screen.getByTitle(`QR code do ingresso (${window.location.origin}/ingressos/abc-123.assinatura)`))
-      .toBeInTheDocument();
+    // Payload do QR coberto em `ContratoQrPortaria.test.tsx` — aqui só interessa que o canhoto
+    // renderizou com o QR no lugar.
+    expect(screen.getByTitle(/QR code do ingresso/)).toBeInTheDocument();
     expect(screen.getByText(/escaneie na portaria/i)).toBeInTheDocument();
   });
 });

@@ -23,15 +23,30 @@ export function ValidacaoPortariaPage() {
   const [codigo, setCodigo] = useState('');
   const [validando, setValidando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [erroCamera, setErroCamera] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoValidacao | null>(null);
   const [cameraLigada, setCameraLigada] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
+  // Ref, não estado: o `onDecode` do qr-scanner dispara em loop e precisa enxergar o valor atual
+  // na hora, não o do render em que o callback foi criado.
+  const validandoRef = useRef(false);
+
+  function desligarCamera() {
+    scannerRef.current?.stop();
+    scannerRef.current?.destroy();
+    scannerRef.current = null;
+    setCameraLigada(false);
+  }
 
   async function validar(codigoLido: string) {
+    validandoRef.current = true;
     setValidando(true);
     setErro(null);
+    // O veredito anterior tem que sumir antes do próximo: numa tela de portaria, um "VÁLIDO"
+    // remanescente ao lado do erro do ingresso seguinte lê como liberação de quem não passou.
+    setResultado(null);
     try {
       const resultado = await validarIngresso(codigoLido);
       setResultado(resultado);
@@ -42,31 +57,51 @@ export function ValidacaoPortariaPage() {
         setErro('Não foi possível validar o ingresso agora. Tente novamente.');
       }
     } finally {
+      validandoRef.current = false;
       setValidando(false);
     }
   }
 
   function validarManual() {
-    if (codigo.trim().length === 0) {
+    if (codigo.trim().length === 0 || validandoRef.current) {
       return;
     }
     validar(codigo.trim());
   }
 
-  function ligarCamera() {
+  async function ligarCamera() {
     if (!videoRef.current) {
       return;
     }
+    setErroCamera(null);
+    // Liga antes do `start()` de propósito: o vídeo precisa estar visível pro getUserMedia
+    // acoplar nele. Se o start falhar, o catch abaixo desfaz.
+    setCameraLigada(true);
     const scanner = new QrScanner(
       videoRef.current,
       (resultadoLeitura) => {
+        // O qr-scanner decodifica ~25×/s enquanto o QR estiver no enquadramento. Sem parar aqui,
+        // o mesmo ingresso é validado dezenas de vezes: a 1ª volta VÁLIDO e as seguintes
+        // JÁ UTILIZADO, invertendo o veredito na cara do operador. Uma leitura por acionamento.
+        if (validandoRef.current) {
+          return;
+        }
+        desligarCamera();
         validar(resultadoLeitura.data);
       },
       { highlightScanRegion: true },
     );
     scannerRef.current = scanner;
-    scanner.start();
-    setCameraLigada(true);
+    try {
+      await scanner.start();
+    } catch {
+      scanner.destroy();
+      scannerRef.current = null;
+      setCameraLigada(false);
+      setErroCamera(
+        'Não foi possível abrir a câmera. Verifique a permissão do navegador ou digite o código manualmente.',
+      );
+    }
   }
 
   useEffect(() => {
@@ -105,14 +140,17 @@ export function ValidacaoPortariaPage() {
         </div>
 
         <div className="mt-8">
-          {!cameraLigada && (
-            <button
-              type="button"
-              onClick={ligarCamera}
-              className="border-[3px] border-ink-950 bg-paper-50 px-5 py-3 font-display text-sm tracking-wide shadow-[5px_5px_0_var(--color-ink-950)]"
-            >
-              LIGAR CÂMERA
-            </button>
+          <button
+            type="button"
+            onClick={cameraLigada ? desligarCamera : ligarCamera}
+            className="border-[3px] border-ink-950 bg-paper-50 px-5 py-3 font-display text-sm tracking-wide shadow-[5px_5px_0_var(--color-ink-950)]"
+          >
+            {cameraLigada ? 'DESLIGAR CÂMERA' : 'LIGAR CÂMERA'}
+          </button>
+          {erroCamera && (
+            <p role="alert" className="mt-3 font-mono text-lg text-flame-600">
+              {erroCamera}
+            </p>
           )}
           <video ref={videoRef} className={cameraLigada ? 'mt-4 w-full border-[3px] border-ink-950' : 'hidden'} />
         </div>
@@ -131,8 +169,13 @@ export function ValidacaoPortariaPage() {
             style={{ backgroundColor: CORES[resultado.resultado] }}
           >
             <p className="font-display text-2xl text-paper-50">{ROTULOS[resultado.resultado]}</p>
+            {/* Rotulado de propósito: o título aqui é o da sessão do *turno*, não a do ingresso.
+                Sem o rótulo, o operador lê "EVENTO ERRADO / Clube da Luta" segurando um ingresso
+                de outro filme e conclui o oposto do que a resposta quis dizer. */}
             {resultado.sessaoTitulo && (
-              <p className="mt-1 font-mono text-base text-paper-50">{resultado.sessaoTitulo}</p>
+              <p className="mt-1 font-mono text-base text-paper-50">
+                Sessão do turno: {resultado.sessaoTitulo}
+              </p>
             )}
             {resultado.assentoFileira && resultado.assentoNumero && (
               <p className="mt-1 font-mono text-base text-paper-50">

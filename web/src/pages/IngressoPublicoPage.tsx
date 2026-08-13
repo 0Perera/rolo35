@@ -6,7 +6,6 @@ import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { SeloStatusIngresso } from '../components/SeloStatusIngresso';
-import { urlPublicaDoIngresso } from '../lib/ingressos';
 import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
 type Estado = 'loading' | 'nao-encontrado' | 'erro' | 'pronto';
@@ -74,7 +73,7 @@ export function IngressoPublicoPage() {
           <div className="mt-8">
             {/* Página pública: só leitura. Nada de compartilhar aqui — quem abriu o link já está
                 nele, e o canhoto não pode oferecer ação de dono pra quem não é dono. */}
-            <CanhotoIngresso urlPublica={urlPublicaDoIngresso(codigo)}>
+            <CanhotoIngresso codigo={codigo}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
                   ROLO 35 · {ingresso.salaNome.toUpperCase()}

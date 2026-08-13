@@ -85,7 +85,7 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
       </button>
 
       <div className="mt-5">
-        <CanhotoIngresso urlPublica={urlPublicaDoIngresso(ingresso.codigo)}>
+        <CanhotoIngresso codigo={ingresso.codigo}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
               ROLO 35 · {ingresso.salaNome.toUpperCase()}

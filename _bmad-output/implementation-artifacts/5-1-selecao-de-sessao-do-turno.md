@@ -1,6 +1,6 @@
 # Story 5.1: Seleção de Sessão do Turno
 
-Status: review
+Status: in-progress
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -117,7 +117,7 @@ so that toda validação seguinte já sabe contra qual sessão comparar o códig
   - [ ] Commit: `feat(portaria): tela de seleção de sessão do turno (AC1, AC2, AC4, AC5)`
 
 - [ ] **Task 6 — Confirmação final (sem código novo, checklist de saída)**
-  - [ ] Rodar a suíte completa: backend `mvn test` (inclui o smoke test Testcontainers da Task 2); front-end `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npx vitest run`. Confirmar tudo verde.
+  - [ ] Rodar a suíte completa: backend `mvn test` (inclui o smoke test Testcontainers da Task 2); front-end `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npm test`. Confirmar tudo verde.
   - [ ] Registrar em `docs/decisions.md`: (a) por que `turno_portaria` é tabela própria em vez de coluna em `usuarios` (a arquitetura já veta campo papel-específico na tabela única de usuários); (b) por que a lista de seleção reaproveita `listarSessoesPublicadas()` (filtro `data_hora >= now()`) sem uma listagem dedicada "sessões de hoje/em andamento" — simplificação consciente dentro do prazo de 7 dias; (c) `PortariaService.obterSessaoAtivaOuLancar()` é o primitivo que a Story 5.2 vai reusar antes de validar qualquer ingresso, não é código especulativo.
   - [ ] Atualizar o Status desta story pra `review`.
   - [ ] Atualizar `_bmad-output/implementation-artifacts/sprint-status.yaml`: `5-1-selecao-de-sessao-do-turno: review`, `epic-5: in-progress`.
@@ -172,11 +172,14 @@ em `PortariaServiceTest` (stub de `turnoPortariaRepository.findById()` desnecess
 - Migration nomeada `V6__turno_portaria.sql` (não `V5` como o rascunho original da story
   sugeria) — `V5` já estava ocupado por `V5__indice_assento_sessao_reserva.sql`.
 - Suíte completa verde: `mvn test` (backend) e `npx tsc --noEmit && npm run lint && npm run
-  build` (frontend). `npx vitest run` tem 3 arquivos de teste pré-existentes falhando
-  (`client.test.ts`, `Header.test.tsx`, `LoginPage.test.tsx`) por um problema de ambiente
-  (`localStorage` indisponível) não relacionado a esta story — confirmado reproduzindo a
-  falha antes de qualquer mudança desta story (`git stash` + rerun). O arquivo de teste novo
-  desta story (`SelecaoTurnoPortariaPage.test.tsx`) passa integralmente.
+  build` (frontend).
+- **Correção do code review (2026-08-13):** esta nota afirmava que 3 arquivos de teste
+  (`client.test.ts`, `Header.test.tsx`, `LoginPage.test.tsx`) falhavam por "problema de ambiente
+  (`localStorage` indisponível)". **Era falso.** O comando do checklist estava errado: `npx vitest
+  run` descarta a flag que o script do projeto carrega — `web/package.json:11` define
+  `"test": "NODE_OPTIONS=--no-experimental-webstorage vitest run"`, e esse script já existia em
+  `main` desde `ef98404`. Rodando `npm test`, a suíte passa integralmente. Usar **`npm test`**,
+  nunca `npx vitest run`.
 - Decisões registradas em `docs/decisions.md`.
 
 ### File List
@@ -201,3 +204,21 @@ em `PortariaServiceTest` (stub de `turnoPortariaRepository.findById()` desnecess
 - `web/src/App.tsx` (update)
 - `docs/decisions.md` (update)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (update)
+
+### Review Findings
+
+Code review de 2026-08-13 (3 camadas adversariais + verificação empírica). Corrigidos nesta rodada
+marcados; o restante fica como action item — escopo reduzido a pedido, só blocker e `high`.
+
+- [x] [Review][Patch] `selecionar()` tem `finally` sem `catch` — troca de sessão falha em silêncio e o painel segue mostrando a sessão antiga, levando a portaria a validar contra o turno errado [web/src/pages/SelecaoTurnoPortariaPage.tsx:41] — corrigido, coberto por teste de rejeição
+- [x] [Review][Decision] Sessão ativa some do seletor quando a sessão começa (`listarPublicadas()` filtra `data_hora >= now()`), voltando ao placeholder com turno ativo — decidido: reinjetar a sessão ativa nas opções, mantendo o reuso da listagem pública [web/src/pages/SelecaoTurnoPortariaPage.tsx:88]
+- [ ] [Review][Patch] `buscarSessaoAtiva()` mapeia *qualquer* 409 pra "sem sessão", ignorando `erro.codigo` — contraria o racional documentado em `client.ts:11-14` [web/src/api/portaria.ts:28]
+- [ ] [Review][Patch] `Promise.all` acopla endpoint público e autenticado: 401/403 de `buscarSessaoAtiva()` é reportado como "não foi possível carregar as sessões" [web/src/pages/SelecaoTurnoPortariaPage.tsx:22]
+- [ ] [Review][Patch] `selecionarSessao()` aceita qualquer `sessaoId` (passada, não publicada) — o filtro vive só no front, contrariando o non-negotiable de não confiar no cliente como controle de acesso [api/.../service/PortariaService.java:60]
+- [ ] [Review][Patch] `turno_portaria.sessao_id`: FK sem índice e sem `ON DELETE` [api/src/main/resources/db/migration/V6__turno_portaria.sql:2]
+- [ ] [Review][Patch] Tabela `turno_portaria` no singular — a convenção do projeto é plural (`sessoes`, `salas`, `ingressos`) [api/src/main/resources/db/migration/V6__turno_portaria.sql:1]
+- [ ] [Review][Patch] `@Transactional(readOnly = true)` em `obterSessaoAtivaOuLancar()` é inerte (self-invocation não passa pelo proxy) e o método devolve a entidade `Sessao`, não um DTO [api/.../service/PortariaService.java:73]
+- [x] [Review][Patch] Completion Notes declaravam 14 testes de front falhando por "ambiente"; era o comando errado (`npx vitest run` em vez de `npm test`, que carrega `NODE_OPTIONS=--no-experimental-webstorage`). Suíte sempre esteve verde — corrigido abaixo
+
+**Verificação empírica desta rodada:** `./mvnw test` verde; `npx tsc --noEmit` limpo; `npm run lint`
+só com os 2 warnings pré-existentes; `npm test` **127/127** em 18 arquivos.

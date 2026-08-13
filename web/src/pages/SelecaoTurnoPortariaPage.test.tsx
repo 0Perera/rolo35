@@ -108,4 +108,46 @@ describe('SelecaoTurnoPortariaPage', () => {
     expect(selecionarSpy).toHaveBeenCalledWith(2);
     expect(await screen.findByText('Matrix')).toBeInTheDocument();
   });
+
+  // Sem tratamento, a falha some e o painel segue mostrando a sessão anterior: a portaria acredita
+  // que trocou de turno e passa a ver EVENTO_ERRADO em ingressos legítimos.
+  it('reports a failed session swap instead of silently keeping the old one', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoA, sessaoB]);
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue({
+      sessaoId: 1,
+      titulo: 'Clube da Luta',
+      salaNome: 'Sala 1',
+      dataHora: '2030-01-01T20:00:00',
+    });
+    vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockRejectedValue(new Error('falha de rede'));
+    const user = userEvent.setup();
+
+    renderPagina();
+
+    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /trocar sessão do turno/i }));
+    await user.click(await screen.findByRole('option', { name: /matrix/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível trocar a sessão/i);
+    // E o painel continua honesto sobre qual sessão está de fato ativa.
+    expect(screen.getByText('Clube da Luta')).toBeInTheDocument();
+  });
+
+  // A lista pública filtra `data_hora >= now()`, então a sessão sai dela no instante em que começa
+  // — justamente quando a portaria trabalha. O turno ativo não pode sumir do seletor por isso.
+  it('keeps the active session selectable after it has started and left the public list', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([]);
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue({
+      sessaoId: 7,
+      titulo: 'Clube da Luta',
+      salaNome: 'Sala 1',
+      dataHora: '2020-01-01T20:00:00',
+    });
+
+    renderPagina();
+
+    expect(await screen.findByText('SESSÃO ATIVA')).toBeInTheDocument();
+    expect(screen.queryByText(/nenhuma sessão disponível/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /trocar sessão do turno/i })).toHaveTextContent(/clube da luta/i);
+  });
 });

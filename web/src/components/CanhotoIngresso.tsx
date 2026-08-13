@@ -2,8 +2,12 @@ import type { ReactNode } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface CanhotoIngressoProps {
-  /** Link público do ingresso. É o que o QR carrega — a portaria escaneia e cai direto na página. */
-  urlPublica: string;
+  /**
+   * Código assinado do ingresso (`uuid.assinatura`, AD-8) — é exatamente o que o QR carrega e o
+   * que `POST /api/portaria/validacoes` espera receber. Não é o link público: a portaria escaneia
+   * pra validar, não pra abrir a página. Compartilhar é outro caminho, pelo botão de copiar link.
+   */
+  codigo: string;
   children: ReactNode;
 }
 
@@ -13,7 +17,7 @@ interface CanhotoIngressoProps {
  * painel do QR desça pra baixo do corpo quando o cartão não cabe numa linha, em vez de espremer
  * o QR até ele parar de ser escaneável.
  */
-export function CanhotoIngresso({ urlPublica, children }: CanhotoIngressoProps) {
+export function CanhotoIngresso({ codigo, children }: CanhotoIngressoProps) {
   return (
     <div className="flex flex-wrap border-[3px] border-ink-950 bg-paper-50 shadow-[10px_10px_0_var(--color-ink-950)]">
       <div aria-hidden="true" className="w-[14px] bg-gradient-to-b from-flame-600 via-flame-500 to-flame-400" />
@@ -31,12 +35,12 @@ export function CanhotoIngresso({ urlPublica, children }: CanhotoIngressoProps) 
               próprio SVG pra leitura confiável — a borda amarela do handoff é decoração, não
               margem de QR. */}
           <QRCodeSVG
-            value={urlPublica}
+            value={codigo}
             size={196}
             marginSize={4}
             bgColor="#FFFDF6"
             fgColor="#171219"
-            title={`QR code do ingresso (${urlPublica})`}
+            title="QR code do ingresso, para leitura na portaria"
           />
         </div>
         <p className="text-center font-mono text-[17px] tracking-[2px] text-cyan-400">ESCANEIE NA PORTARIA</p>
