@@ -451,3 +451,11 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 - **Decisão**: a implementação usa `GET /api/ingressos/{codigo}`, com o prefixo `/api` — o PRD usa `/ingressos/{codigo}` como abreviação nos exemplos.
 - **Por quê**: toda a API já usa `/api` como prefixo consistente (`/api/sessoes`, `/api/reservas`, `/api/pagamentos`); criar uma exceção só pra esta rota pública quebraria essa consistência sem ganho nenhum. O front-end monta a URL de compartilhamento como `/ingressos/{codigo}` (rota do React Router, sem `/api`) — a distinção é: `/ingressos/{codigo}` é a página do SPA que o cliente vê e compartilha, `/api/ingressos/{codigo}` é o endpoint que essa página chama por baixo.
+
+---
+
+## QR do ingresso é gerado no front-end, não por um endpoint da API (Story 4.2, retrofit visual)
+
+- **Decisão**: o QR do canhoto (`CanhotoIngresso`, `web/src/components`) é renderizado no navegador com `qrcode.react`, a partir do código assinado que a própria resposta da API já traz. Não existe rota do tipo `GET /api/ingressos/{codigo}/qr` devolvendo PNG/SVG.
+- **Por quê**: o QR é função pura do texto que ele carrega, e esse texto (`urlPublicaDoIngresso(codigo)`, montado sobre o código `uuid.assinatura` de AD-8) já chega no cliente em `GET /api/ingressos/minhas` e `GET /api/ingressos/{codigo}`. A parte que exige o servidor — assinar o código com o `TICKET_HMAC_SECRET` — já aconteceu antes; o QR não acrescenta segredo nenhum. Gerar no back custaria um round-trip por ingresso (a carteira lista N), mais cache/CORS pra imagem, sem ganho de segurança nem de correção. O cenário que inverteria a decisão é o ingresso virar PDF ou e-mail, onde não há navegador pra renderizar — não é o caso hoje.
+- **Nota pra Story 5.2**: o handoff desenha um QR decorativo de 21x21 módulos; a implementação real precisa de zona de silêncio própria dentro do SVG (`marginSize` em módulos, não o padding em pixels da borda amarela do desenho), senão o leitor de portaria falha em parte dos aparelhos.
