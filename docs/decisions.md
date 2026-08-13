@@ -12,6 +12,13 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
+## Escopo de um único cinema, não plataforma multi-local
+
+- **Decisão**: o projeto modela um cinema único com várias salas, não uma plataforma multi-tenant com vários cinemas/endereços. "Local" (atributo pedido no enunciado) é representado pela sala escolhida na criação da sessão — não existe entidade `cinema` nem campo de endereço em nenhuma tabela. Salas são um pool compartilhado entre todos os organizadores, sem conceito de posse.
+- **Por quê**: o enunciado pede que o organizador defina "local" por evento e que a listagem mostre "local" — isso é satisfeito literalmente pela sala (nome exibido em toda listagem pública e de gestão), sem precisar de endereço textual ou de múltiplas unidades: nada no enunciado do desafio pede múltiplos locais. Modelar multi-cinema abriria uma segunda dimensão de autorização (organizador × cinema × sala) sem agregar valor real ao que foi pedido — só multiplicaria a superfície de bugs de ownership numa área que já exige cuidado (FR-2, organizador só gerencia sessão própria). É a mesma filosofia das outras simplificações já assumidas no projeto (buffer fixo de horário, sem rate limiting): resolver o problema pedido, não generalizar pra um caso não solicitado. Do ponto de vista de produto, um cinema de bairro com várias salas é um negócio completo por si só — multi-local é expansão de um produto validado, não parte do MVP que prova o conceito.
+
+---
+
 ## Catálogo único — TMDb
 
 - **Decisão**: usar só TMDb como fonte de catálogo, descartando Ticketmaster e a opção de integrar os dois.

@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 680" width="920" height="680" role="img" aria-label="Modelo de dados: sete tabelas. usuarios (papel com CHECK de 3 papéis) referencia sessoes como organizador e reservas como cliente; salas tem assentos e abriga sessoes; assento_sessao tem PK composta de sessao_id e assento_id, status LIVRE/RESERVADO/VENDIDO, reserva_id nulo e expires_at do hold; reservas tem status ATIVA/CONFIRMADA/RECUSADA e expires_at de 10 minutos; ingressos tem id UUID não sequencial, aponta para reserva, sessao e assento, e status VALIDO ou UTILIZADO">
+  <defs>
+    <pattern id="scan" width="4" height="3" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#F4E9D4" opacity="0.05"/>
+    </pattern>
+    <pattern id="perf" width="46" height="26" patternUnits="userSpaceOnUse">
+      <rect x="10" y="6" width="26" height="14" rx="4" fill="#0C0910"/>
+    </pattern>
+    <marker id="fk" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 L11 6 L1 11 z" fill="#F26522"/>
+    </marker>
+    <marker id="fkCiano" viewBox="0 0 12 12" refX="9" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1 1 L11 6 L1 11 z" fill="#7ED9F2"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="680" fill="#0C0910"/>
+  <rect x="0" y="0" width="920" height="26" fill="#171219"/>
+  <rect x="0" y="0" width="920" height="26" fill="url(#perf)"/>
+  <rect x="0" y="654" width="920" height="26" fill="#171219"/>
+  <rect x="0" y="654" width="920" height="26" fill="url(#perf)"/>
+
+  <rect x="40" y="42" width="272" height="24" fill="#FFC414"/>
+  <text x="52" y="59" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="1.5" fill="#0C0910">SCHEMA · 7 TABELAS · PG 16</text>
+
+  <!-- ================= usuarios ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="45" y="81" width="250" height="138" fill="#F26522"/>
+    <rect x="40" y="76" width="250" height="138" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="40" y="76" width="250" height="30" fill="#FFC414"/>
+    <line x1="40" y1="106" x2="290" y2="106" stroke="#0C0910" stroke-width="3"/>
+    <text x="52" y="97" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">usuarios</text>
+    <text x="52" y="128" fill="#0C0910">◆ id</text>
+    <text x="52" y="152" fill="#171219">email<tspan fill="#E32B21">        UNIQUE</tspan></text>
+    <text x="52" y="176" fill="#171219">senha_hash<tspan fill="#171219" fill-opacity="0.55">   bcrypt</tspan></text>
+    <text x="52" y="200" fill="#171219">papel<tspan fill="#E32B21">    CHECK 3 papéis</tspan></text>
+  </g>
+
+  <!-- ================= salas ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="45" y="255" width="250" height="114" fill="#F26522"/>
+    <rect x="40" y="250" width="250" height="114" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="40" y="250" width="250" height="30" fill="#FFC414"/>
+    <line x1="40" y1="280" x2="290" y2="280" stroke="#0C0910" stroke-width="3"/>
+    <text x="52" y="271" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">salas</text>
+    <text x="52" y="302" fill="#0C0910">◆ id</text>
+    <text x="52" y="326" fill="#171219">nome</text>
+    <text x="52" y="350" fill="#171219">linhas, colunas<tspan fill="#171219" fill-opacity="0.55"> ✳</tspan></text>
+  </g>
+
+  <!-- ================= assentos ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="45" y="407" width="250" height="138" fill="#F26522"/>
+    <rect x="40" y="402" width="250" height="138" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="40" y="402" width="250" height="30" fill="#FFC414"/>
+    <line x1="40" y1="432" x2="290" y2="432" stroke="#0C0910" stroke-width="3"/>
+    <text x="52" y="423" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">assentos</text>
+    <text x="52" y="454" fill="#0C0910">◆ id</text>
+    <text x="52" y="478" fill="#171219">→ sala_id</text>
+    <text x="52" y="502" fill="#171219">fileira, numero</text>
+    <text x="52" y="526" fill="#E32B21">UK sala+fileira+numero</text>
+  </g>
+
+  <!-- ================= sessoes ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="340" y="81" width="250" height="210" fill="#F26522"/>
+    <rect x="335" y="76" width="250" height="210" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="335" y="76" width="250" height="30" fill="#FFC414"/>
+    <line x1="335" y1="106" x2="585" y2="106" stroke="#0C0910" stroke-width="3"/>
+    <text x="347" y="97" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">sessoes</text>
+    <text x="347" y="128" fill="#0C0910">◆ id</text>
+    <text x="347" y="152" fill="#171219">→ organizador_id</text>
+    <text x="347" y="176" fill="#171219">→ sala_id</text>
+    <text x="347" y="200" fill="#171219">tmdb_id, titulo<tspan fill="#171219" fill-opacity="0.55"> ✦</tspan></text>
+    <text x="347" y="224" fill="#171219">poster_url, sinopse</text>
+    <text x="347" y="248" fill="#171219">data_hora<tspan fill="#171219" fill-opacity="0.55">   sem fuso</tspan></text>
+    <text x="347" y="272" fill="#171219">preco<tspan fill="#171219" fill-opacity="0.55">   numeric(10,2)</tspan></text>
+  </g>
+
+  <!-- ================= assento_sessao (hub) ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="340" y="331" width="250" height="186" fill="#7ED9F2"/>
+    <rect x="335" y="326" width="250" height="186" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="335" y="326" width="250" height="30" fill="#7ED9F2"/>
+    <line x1="335" y1="356" x2="585" y2="356" stroke="#0C0910" stroke-width="3"/>
+    <text x="347" y="347" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">assento_sessao</text>
+    <text x="347" y="378" fill="#0C0910">◆ sessao_id</text>
+    <text x="347" y="402" fill="#0C0910">◆ assento_id</text>
+    <text x="347" y="426" fill="#E32B21">PK = os dois juntos</text>
+    <text x="347" y="450" fill="#171219">status<tspan fill="#E32B21">  LIVRE/RESV/VEND</tspan></text>
+    <text x="347" y="474" fill="#171219">→ reserva_id<tspan fill="#171219" fill-opacity="0.55">  nulo</tspan></text>
+    <text x="347" y="498" fill="#171219">expires_at<tspan fill="#171219" fill-opacity="0.55">  TTL do hold</tspan></text>
+  </g>
+
+  <!-- ================= reservas ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="635" y="81" width="250" height="162" fill="#F26522"/>
+    <rect x="630" y="76" width="250" height="162" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="630" y="76" width="250" height="30" fill="#F26522"/>
+    <line x1="630" y1="106" x2="880" y2="106" stroke="#0C0910" stroke-width="3"/>
+    <text x="642" y="97" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">reservas</text>
+    <text x="642" y="128" fill="#0C0910">◆ id</text>
+    <text x="642" y="152" fill="#171219">→ cliente_id</text>
+    <text x="642" y="176" fill="#171219">→ sessao_id</text>
+    <text x="642" y="200" fill="#171219">status<tspan fill="#E32B21"> ATIVA/CONF/RECUS</tspan></text>
+    <text x="642" y="224" fill="#171219">expires_at<tspan fill="#171219" fill-opacity="0.55">  hold 10min</tspan></text>
+  </g>
+
+  <!-- ================= ingressos ================= -->
+  <g font-family="'Courier New', monospace" font-size="13" xml:space="preserve">
+    <rect x="635" y="295" width="250" height="186" fill="#F26522"/>
+    <rect x="630" y="290" width="250" height="186" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <rect x="630" y="290" width="250" height="30" fill="#F26522"/>
+    <line x1="630" y1="320" x2="880" y2="320" stroke="#0C0910" stroke-width="3"/>
+    <text x="642" y="311" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">ingressos</text>
+    <text x="642" y="342" fill="#0C0910">◆ id<tspan fill="#E32B21">  UUID, não serial</tspan></text>
+    <text x="642" y="366" fill="#171219">→ reserva_id</text>
+    <text x="642" y="390" fill="#171219">→ sessao_id</text>
+    <text x="642" y="414" fill="#171219">→ assento_id</text>
+    <text x="642" y="438" fill="#171219">status<tspan fill="#E32B21"> VALIDO/UTILIZADO</tspan></text>
+    <text x="642" y="462" fill="#171219">validated_at</text>
+  </g>
+  <text x="630" y="500" font-family="'Courier New', monospace" font-size="12" fill="#E32B21" fill-opacity="0.9">sem UNIQUE(reserva,assento)</text>
+  <text x="630" y="518" font-family="'Courier New', monospace" font-size="12" fill="#E32B21" fill-opacity="0.9">nem FK composta — dívida</text>
+
+  <!-- ================= FKs ================= -->
+  <path d="M290 130 H331" fill="none" stroke="#F26522" stroke-width="3" marker-end="url(#fk)"/>
+  <path d="M290 100 H318 V52 H700 V68" fill="none" stroke="#F26522" stroke-width="3" marker-end="url(#fk)"/>
+  <path d="M165 364 V396" fill="none" stroke="#F26522" stroke-width="3" marker-end="url(#fk)"/>
+  <path d="M290 300 H312 V240 H331" fill="none" stroke="#F26522" stroke-width="3" marker-end="url(#fk)"/>
+  <path d="M290 460 H331" fill="none" stroke="#7ED9F2" stroke-width="3" marker-end="url(#fkCiano)"/>
+  <path d="M460 286 V322" fill="none" stroke="#7ED9F2" stroke-width="3" marker-end="url(#fkCiano)"/>
+  <path d="M630 214 H608 V306 H534 V322" fill="none" stroke="#F26522" stroke-width="3" marker-end="url(#fk)"/>
+  <path d="M800 238 V286" fill="none" stroke="#F26522" stroke-width="3" marker-end="url(#fk)"/>
+
+  <!-- ================= notas ================= -->
+  <text x="48" y="568" font-family="'Courier New', monospace" font-size="13" fill="#7ED9F2" fill-opacity="0.9">assento_sessao é o centro do modelo: uma linha por assento da sessão, criada junto com ela.</text>
+  <text x="48" y="588" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.55">PK composta = o assento existe uma vez só ali; é a linha que o lock pessimista trava.</text>
+  <text x="48" y="622" font-family="'Courier New', monospace" font-size="12" fill="#F4E9D4" fill-opacity="0.45">◆ PK  ·  → FK  ·  UK único  ·  CHECK fecha o domínio no banco  ·  ✳ declarado, não é a capacidade  ·  ✦ snapshot do TMDb</text>
+
+  <rect x="0" y="26" width="920" height="628" fill="url(#scan)"/>
+  <rect x="1.5" y="1.5" width="917" height="677" fill="none" stroke="#F4E9D4" stroke-opacity="0.16" stroke-width="3"/>
+</svg>

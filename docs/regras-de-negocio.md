@@ -2,7 +2,7 @@
 
 Levantamento do que está de fato codificado no back-end (`api/src/main/java`) e
 no schema (`api/src/main/resources/db/migration`) na branch
-`epic-3-reserva-de-assentos-cliente`, na data deste documento. Não é um
+`epic-4-pagamento-e-ingressos` (épico 4 fechado), na data deste documento. Não é um
 espelho das stories/epics — é o que existe em código, com o arquivo/linha de
 origem pra cada regra. Regras descritas em stories mas ainda não
 implementadas estão marcadas explicitamente como pendentes.
@@ -17,6 +17,11 @@ implementadas estão marcadas explicitamente como pendentes.
 - **Login por e-mail único**: `uk_usuarios_email` (`V1__schema.sql:8`).
 - **Senha nunca comparada em texto puro**: hash BCrypt (`AuthService.java`,
   `SecurityConfig.passwordEncoder()`).
+- **E-mail é normalizado antes do lookup**: `trim()` + `toLowerCase(Locale.ROOT)` no
+  service (`AuthService.java`) — `=` no Postgres é case-sensitive e o seed grava
+  minúsculo, então sem isso um teclado de celular que capitaliza a primeira letra
+  derruba o login como "credencial inválida". `Locale.ROOT` de propósito: em turco
+  `"I".toLowerCase()` vira `ı` e quebraria e-mail com I maiúsculo.
 - **Tempo de resposta do login não vaza quais e-mails existem**: quando o
   e-mail não é encontrado, o login roda BCrypt contra um hash dummy antes de
   recusar, em vez de recusar na hora — evita side-channel por timing
@@ -98,6 +103,124 @@ implementadas estão marcadas explicitamente como pendentes.
   chamada — não existe job que reescreve o status no banco
   (`SessaoService.statusEfetivo`, `SessaoService.java:246-251`).
 
+## Reservas (`reservas`)
+
+- **Seleção de 1 a 6 assentos, sem duplicados**, validada **antes** de qualquer
+  lock — a transação que segura linhas de `assento_sessao` precisa ser a mais
+  curta possível (`ReservaService.java:29`, `:50-54`).
+- **A seleção já cria o hold**: os assentos vão para `RESERVADO` com
+  `expires_at = now() + 10min` e `reserva_id` preenchido; a `Reserva` nasce
+  `ATIVA` com o mesmo `expires_at` (`ReservaService.java:30`, `:78-82`).
+- **Reserva de múltiplos assentos é atômica**: se qualquer assento pedido não
+  estiver efetivamente livre, nada é reservado (`AssentoIndisponivelException`,
+  `ReservaService.java:72-76`); e o `UPDATE` de reivindicação devolve o número
+  de linhas afetadas — divergir da quantidade pedida também aborta
+  (`ReservaService.java:83-85`).
+- **Lock pessimista ordenado por `assento_id`** (`SELECT ... FOR UPDATE`): a
+  ordenação é o mecanismo que evita deadlock entre duas reservas concorrentes
+  que pedem os mesmos assentos em ordem diferente — não é estética
+  (`AssentoSessaoRepository.travarParaReserva`, `:17-26`; provado por
+  `ReservaConcorrenciaConflitoTest` com threads reais).
+- **`lock_timeout` de 3s por transação** (`SET LOCAL`), e o estouro dele é uma
+  exceção **distinta** de indisponibilidade: `AssentoEmDisputaException`
+  (409 `ASSENTO_EM_DISPUTA`) significa "não deu pra confirmar a tempo", e o
+  cliente pode repetir com os mesmos assentos (`ReservaService.java:59`,
+  `:63-69`).
+- **TTL do hold é resolvido na leitura, não por job**: um `RESERVADO` com
+  `expires_at` vencido conta como livre na checagem de disponibilidade
+  (`ReservaService.statusEfetivoLivre`, `:92-97`) e o `UPDATE` de reivindicação
+  aceita explicitamente essa condição no `WHERE`
+  (`AssentoSessaoRepository.reivindicar`, `:51-58`).
+- **Defesa em profundidade no `UPDATE`**: `reivindicar` repete a condição de
+  status/`expires_at` no `WHERE` e devolve linhas afetadas, mesmo o service já
+  tendo checado — um call site futuro que pule a checagem não sobrescreve
+  assento vendido em silêncio (`AssentoSessaoRepository.java:41-58`).
+
+### Leitura da reserva para o checkout (Story 4.3)
+
+- **`GET /api/reservas/{id}` é a única leitura de reserva sem lock**: devolve
+  `ReservaCheckoutDto` (sessão, sala, data/hora, preço, assentos por fileira+número,
+  `status`, `expiresAt`) para a tela de pagamento se reconstruir sozinha depois de um
+  F5 — ler para exibir não disputa recurso com quem está pagando
+  (`ReservaService.buscarParaCheckout`, `ReservaController:35-40`).
+- **Reserva de outro cliente e `reservaId` inexistente devolvem o mesmo `403`**
+  também nessa rota — mesma regra do pagamento, a rota não vira oráculo de existência.
+- **Sem N+1**: assentos da reserva vêm por projection numa query só
+  (`ReservaCheckoutProjection`, `AssentoSessaoRepository.buscarAssentosDaReserva`),
+  com índice em `assento_sessao.reserva_id`
+  (`V5__indice_assento_sessao_reserva.sql`) porque a coluna passou a ser critério de
+  busca de produção, não só campo gravado.
+
+## Pagamento simulado (`pagamentos`)
+
+- **Resultado é parâmetro do corpo**, não de query string:
+  `resultadoSimulado ∈ {APROVADO, RECUSADO}`
+  (`ConfirmarPagamentoRequest`, `ResultadoSimulado`).
+- **Só o dono da reserva confirma**, e "reserva de outro cliente" e "reserva
+  inexistente" caem na **mesma** exceção/resposta (403 `NAO_AUTORIZADO`) — por
+  design, pra rota não virar oráculo de existência de `reservaId`
+  (`PagamentoService.java:60-64`).
+- **Lock pessimista na linha da `Reserva`** antes de decidir qualquer coisa
+  (`ReservaRepository.findByIdForUpdate`, `PagamentoService.java:62`), com o
+  mesmo `lock_timeout` de 3s e exceção própria pro estouro
+  (`ReservaEmDisputaException`, 409 `RESERVA_EM_DISPUTA`,
+  `PagamentoService.java:57`, `:65-72`).
+- **Idempotência**: reserva que não está mais `ATIVA` devolve `200` com o
+  estado já persistido (e os ingressos, se `CONFIRMADA`), sem reprocessar o
+  `resultadoSimulado` — duas confirmações concorrentes não emitem ingresso
+  duplicado (`PagamentoService.java:74-78`, `:113-118`; provado por
+  `PagamentoConcorrenciaConflitanteTest`).
+- **Reserva expirada é recusada** (409 `RESERVA_EXPIRADA`), checada depois do
+  lock, contra `now()` (`PagamentoService.java:79-81`).
+- **Aprovado**: `Reserva` vira `CONFIRMADA`, sai **um ingresso por assento**
+  (`StatusIngresso.VALIDO`) e os assentos viram `VENDIDO` — estado final, não
+  expira (`PagamentoService.java:88-101`).
+- **Recusado**: `Reserva` vira `RECUSADA` e os assentos são liberados
+  **imediatamente** (`LIVRE`, `reserva_id`/`expires_at` limpos), sem esperar o
+  TTL — decisão explícita, este caminho é escrita imediata
+  (`PagamentoService.java:104-110`, `AssentoSessaoRepository.liberar`, `:82-91`).
+- **Os dois `UPDATE`s de escrita filtram por `reserva_id`** e conferem o número
+  de linhas afetadas: um `assentoIds` calculado errado em call site futuro não
+  sobrescreve assento de outra reserva
+  (`AssentoSessaoRepository.reivindicarVendido`, `liberar`).
+
+## Ingressos (`ingressos`)
+
+- **Código do ingresso é `UUID` + assinatura HMAC-SHA256**, no formato
+  `<uuid>.<base64url-da-assinatura>` — não é ID adivinhável nem incrementável
+  (`CodigoIngressoService.gerar`, `:32-34`; `ingressos.id` é UUID no schema).
+- **Secret do ingresso é próprio e obrigatório**: `TICKET_HMAC_SECRET`, distinto
+  do `JWT_SECRET`, sem fallback — o boot falha se vier em branco, em vez de
+  assinar com chave degenerada (`CodigoIngressoService.java:21-30`).
+- **Validação recomputa a assinatura** e compara com `MessageDigest.isEqual`
+  (comparação em tempo constante); base64 malformado é rejeitado sem exceção
+  vazando (`CodigoIngressoService.validar`, `:36-49`).
+- **"Meus ingressos" é filtrado por dono no banco**, via `reservas.cliente_id`,
+  numa query só com `JOIN` de assento/sessão/sala (sem N+1), ordenada por
+  `data_hora DESC` e desempatada por `created_at DESC`
+  (`IngressoRepository.buscarPorCliente`, `:17-29`;
+  `IngressoService.listarMinhas`, `:41-50`). Índices em
+  `V4__indices_ingressos_por_cliente.sql`.
+- **Rota pública valida a assinatura ANTES de tocar o banco**: código com HMAC
+  inválido nunca chega ao repositório — evita usar a rota como oráculo pra
+  diferenciar "não existe" de "assinatura errada"
+  (`IngressoService.buscarPublico`, `:55-64`).
+- **"Não existe" e "assinatura inválida" devolvem a mesma resposta**
+  (404 `INGRESSO_NAO_ENCONTRADO`), pelo mesmo motivo
+  (`GlobalExceptionHandler`, handler de `IngressoNaoEncontradoException`).
+- **Link público expõe só filme, sala, horário e status** — nada do comprador
+  (`IngressoPublicoDto`).
+- **QR é gerado no front a partir do código assinado**, não por endpoint de imagem
+  da API (`qrcode.react` em `components/CanhotoIngresso.tsx`); a URL que ele carrega
+  é montada num único lugar (`web/src/lib/ingressos.ts`) para que o QR da carteira e
+  o link da página pública nunca divirjam.
+- **Nenhum dado de cartão trafega ou é persistido**: o corpo de
+  `POST /api/pagamentos/confirmar` aceita só `{reservaId, resultadoSimulado}`; os
+  campos do checkout são validados no cliente (`web/src/lib/cartao.ts`) e descartados.
+- **Leitura pública não muta estado**: `buscarPublico()` não marca o ingresso
+  como utilizado nem consome nada; a portaria é o único caminho de consumo
+  (provado explicitamente em `IngressoServiceTest`).
+
 ## Modelagem / banco (`V1__schema.sql`)
 
 - **Um assento não pode estar em dois estados ao mesmo tempo por sessão**:
@@ -116,23 +239,28 @@ implementadas estão marcadas explicitamente como pendentes.
   `sessoes (sala_id, data_hora)` (`V3__indice_sessoes_sala_data_hora.sql`)
   que serve exatamente a query de conflito de horário acima.
 
-## Pendente (schema existe, regra de serviço ainda não implementada)
+## Pendente (especificado, ainda não em código)
 
-As tabelas `reservas` e `ingressos` já existem no schema
-(`V1__schema.sql:45-71`) mas não há `Service`/`Controller` para elas ainda
-neste checkout — as regras abaixo estão descritas nas stories
-(`_bmad-output/implementation-artifacts/3-2-*`, `4-1-*`, `4-2-*`) mas **não
-estão em código**:
+O épico 5 (portaria) tem story escrita com critério de aceitação
+(`_bmad-output/implementation-artifacts/5-1-*`, `5-2-*`) mas **não existe
+`PortariaService`/`PortariaController` neste checkout**:
 
-- Hold temporário de assento na reserva (criação de `RESERVADO` + `expires_at`).
-- Pagamento simulado (aprovação/recusa determinística).
-- Emissão de ingresso com código assinado (HMAC/JWT) — não forjável por
-  incremento de ID.
-- Garantia de não vender o mesmo assento duas vezes / não validar o mesmo
-  ingresso duas vezes sob concorrência real (constraint/lock).
-- Link público de compartilhamento de ingresso (somente leitura, sem
-  vazar dado de outro usuário, sem bypass de validação de portaria).
-- Validação de ingresso na portaria (papel `PORTARIA`).
+- Seleção da sessão do turno pela portaria; validação sem sessão selecionada
+  recusada.
+- Retorno inequívoco da validação (`VALIDO` / `INVALIDO` / `JA_UTILIZADO` /
+  `EVENTO_ERRADO`) como `200` + campo `resultado`, com sessão checada antes do
+  status.
+- Não-validação-duplicada do mesmo ingresso sob concorrência real
+  (lock de banco + teste com threads) — as colunas
+  `ingressos.status`/`validated_at` já existem no schema
+  (`V1__schema.sql:63-71`), o caminho de escrita não.
+
+Lacunas conhecidas nas regras **já implementadas** (achados de revisão
+adversarial, ainda abertos) estão em
+`_bmad-output/implementation-artifacts/business-rules-gaps.md` — as principais:
+reserva e pagamento não rejeitam sessão cujo horário já passou, e `ingressos`
+não tem `UNIQUE (reserva_id, assento_id)` nem FK composta contra
+`assento_sessao`.
 
 Este documento cobre só o que existe hoje; ao implementar cada item acima,
 mover a entrada correspondente para a seção do módulo e apagar daqui.
