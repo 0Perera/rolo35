@@ -58,8 +58,19 @@ describe('IngressoPublicoPage', () => {
     renderPage();
 
     expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
-    expect(screen.getByText('SALA 1')).toBeInTheDocument();
+    expect(screen.getByText(/SALA 1/)).toBeInTheDocument();
     expect(screen.getByText('VALIDO')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('renders the canhoto with the signed code and a QR of its own public link', async () => {
+    vi.spyOn(ingressosApi, 'buscarIngressoPublico').mockResolvedValue(ingressoPublico);
+
+    renderPage();
+
+    expect(await screen.findByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
+    expect(screen.getByTitle(`QR code do ingresso (${window.location.origin}/ingressos/abc-123.assinatura)`))
+      .toBeInTheDocument();
+    expect(screen.getByText(/escaneie na portaria/i)).toBeInTheDocument();
   });
 });

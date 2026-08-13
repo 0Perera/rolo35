@@ -1,66 +1,118 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { listarMeusIngressos, type IngressoResumo } from '../api/ingressos';
 import { buttonClass } from '../components/Button';
+import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
+import { SeloStatusIngresso } from '../components/SeloStatusIngresso';
+import { urlPublicaDoIngresso } from '../lib/ingressos';
 import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
 
-function urlPublica(codigo: string): string {
-  return `${window.location.origin}/ingressos/${codigo}`;
+function assentoDe(ingresso: IngressoResumo): string {
+  return `${ingresso.assentoFileira}${ingresso.assentoNumero}`;
 }
 
-function CardIngresso({ ingresso }: { ingresso: IngressoResumo }) {
+function useCompartilhar(codigo: string) {
   const [copiado, setCopiado] = useState(false);
 
   async function compartilhar() {
-    const url = urlPublica(ingresso.codigo);
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(urlPublicaDoIngresso(codigo));
       setCopiado(true);
       setTimeout(() => setCopiado(false), 2000);
     } catch {
-      // clipboard indisponível (ex.: contexto não seguro) — a URL já aparece no card.
+      // clipboard indisponível (ex.: contexto não seguro) — o QR do canhoto continua servindo
+      // como forma de levar o ingresso pra outro aparelho.
     }
   }
 
-  return (
-    <article className="flex gap-4 border-[3px] border-ink-950 bg-paper-50 p-4 shadow-[7px_7px_0_rgba(23,18,25,0.85)]">
-      <div className="h-[110px] w-[74px] flex-none overflow-hidden border-2 border-ink-950 bg-ink-900">
-        {ingresso.sessaoPosterUrl && (
-          <img src={ingresso.sessaoPosterUrl} alt="" className="h-full w-full object-cover" />
-        )}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="font-display text-lg leading-tight">{ingresso.sessaoTitulo}</h2>
-          <span
-            className={`flex-none border-2 px-2 py-0.5 font-mono text-sm tracking-wide ${
-              ingresso.status === 'VALIDO'
-                ? 'border-cyan-400 text-cyan-400'
-                : 'border-[#7E7686] text-[#7E7686]'
-            }`}
-          >
-            {ingresso.status}
-          </span>
-        </div>
-        <p className="mt-1 font-mono text-base tracking-wide text-ink-950/60">
-          {rotuloDeDia(ingresso.dataHora)} · {rotuloDeHora(ingresso.dataHora)} · {ingresso.salaNome.toUpperCase()}
-        </p>
-        <p className="mt-0.5 font-mono text-base tracking-wide text-ink-950/60">
-          ASSENTO {ingresso.assentoFileira}
-          {ingresso.assentoNumero}
-        </p>
+  return { copiado, compartilhar };
+}
 
-        <div className="mt-auto flex flex-wrap items-center gap-2.5 pt-3">
-          <button type="button" onClick={compartilhar} className={buttonClass('secondary', 'px-4 py-2 text-xs')}>
-            {copiado ? 'LINK COPIADO ✓' : 'COMPARTILHAR'}
-          </button>
-          <code className="min-w-0 flex-1 truncate font-mono text-sm text-ink-950/50">{urlPublica(ingresso.codigo)}</code>
-        </div>
+function rotuloCompartilhar(copiado: boolean): string {
+  return copiado ? 'LINK COPIADO ✓' : '↗ COMPARTILHAR';
+}
+
+/**
+ * Linha da carteira. O card inteiro é clicável no handoff, mas botão dentro de botão não é HTML
+ * válido: quem abre o detalhe é o bloco de texto (que ocupa quase toda a linha) e o compartilhar
+ * fica ao lado, irmão dele. O realce de hover mora no `<li>`, então a linha toda reage ao mouse.
+ */
+function LinhaIngresso({ ingresso, onAbrir }: { ingresso: IngressoResumo; onAbrir: () => void }) {
+  const { copiado, compartilhar } = useCompartilhar(ingresso.codigo);
+
+  return (
+    <li className="flex flex-wrap border-[3px] border-ink-950 bg-paper-50 shadow-[8px_8px_0_var(--color-ink-950)] transition hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[10px_10px_0_var(--color-ink-950)]">
+      <div aria-hidden="true" className="w-3 bg-gradient-to-b from-flame-600 via-flame-500 to-flame-400" />
+      <div className="flex flex-1 flex-wrap items-center justify-between gap-4 px-6 py-5">
+        <button
+          type="button"
+          onClick={onAbrir}
+          aria-label={`Ver ingresso de ${ingresso.sessaoTitulo}, assento ${assentoDe(ingresso)}`}
+          className="min-w-0 flex-1 cursor-pointer text-left"
+        >
+          <span className="flex flex-wrap items-center gap-2.5">
+            <span className="font-display text-lg leading-tight">{ingresso.sessaoTitulo}</span>
+            <SeloStatusIngresso status={ingresso.status} />
+          </span>
+          <span className="mt-1.5 block font-mono text-base tracking-wide text-[#6D655B]">
+            {rotuloDeDia(ingresso.dataHora)} · {rotuloDeHora(ingresso.dataHora)} ·{' '}
+            {ingresso.salaNome.toUpperCase()} · ASSENTO {assentoDe(ingresso)}
+          </span>
+        </button>
+        <button type="button" onClick={compartilhar} className={buttonClass('ticket')}>
+          {rotuloCompartilhar(copiado)}
+        </button>
       </div>
-    </article>
+    </li>
+  );
+}
+
+function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onVoltar: () => void }) {
+  const { copiado, compartilhar } = useCompartilhar(ingresso.codigo);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onVoltar}
+        className="mt-4 cursor-pointer font-mono text-[17px] tracking-wide text-[#6D655B] hover:text-flame-600"
+      >
+        ◀ VOLTAR PRA LISTA
+      </button>
+
+      <div className="mt-5">
+        <CanhotoIngresso urlPublica={urlPublicaDoIngresso(ingresso.codigo)}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
+              ROLO 35 · {ingresso.salaNome.toUpperCase()}
+            </p>
+            <SeloStatusIngresso status={ingresso.status} />
+          </div>
+          <h2 className="mt-1.5 font-display text-[clamp(20px,2.8cqw,28px)] leading-[1.05]">
+            {ingresso.sessaoTitulo}
+          </h2>
+          <p className="mt-5 font-mono text-[17px] tracking-wide text-[#6D655B]">
+            {rotuloDeDia(ingresso.dataHora)} · {rotuloDeHora(ingresso.dataHora)} · ASSENTO{' '}
+            {assentoDe(ingresso)}
+          </p>
+          {/* break-all porque o código é `uuid.assinatura` — uma palavra só, longa o bastante pra
+              estourar o canhoto no mobile se ficar inquebrável. */}
+          <p className="mt-2 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">
+            CÓDIGO {ingresso.codigo}
+          </p>
+          <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
+            ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
+          </p>
+          <button type="button" onClick={compartilhar} className={buttonClass('ticket', 'mt-5')}>
+            {rotuloCompartilhar(copiado)}
+          </button>
+        </CanhotoIngresso>
+      </div>
+    </>
   );
 }
 
@@ -68,6 +120,7 @@ export function MeusIngressosPage() {
   const [ingressos, setIngressos] = useState<IngressoResumo[]>([]);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
+  const [abertoId, setAbertoId] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -78,6 +131,7 @@ export function MeusIngressosPage() {
           return;
         }
         setIngressos(resultado);
+        setAbertoId(null);
         setEstado(resultado.length === 0 ? 'vazio' : 'pronto');
       })
       .catch(() => {
@@ -90,21 +144,22 @@ export function MeusIngressosPage() {
     };
   }, [tentativa]);
 
+  const aberto = ingressos.find((ingresso) => ingresso.id === abertoId) ?? null;
+
   return (
     <PageShell>
-      <div className="mx-auto max-w-4xl px-6 py-10">
-        <SectionTitle kicker="COMPROVANTE">MEUS INGRESSOS</SectionTitle>
+      <div className="mx-auto max-w-[900px] px-8 pt-10 pb-[90px]">
+        <SectionTitle kicker="SUA CARTEIRA" rule={false}>
+          MEUS INGRESSOS
+        </SectionTitle>
 
         {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando…</p>}
-        {estado === 'vazio' && (
-          <p className="mt-8 font-mono text-lg text-ink-950/60">Você ainda não tem nenhum ingresso.</p>
-        )}
         {estado === 'erro' && (
           <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
             Não foi possível carregar seus ingressos agora.
           </p>
         )}
-        {(estado === 'erro' || estado === 'vazio') && (
+        {estado === 'erro' && (
           <button
             type="button"
             onClick={() => setTentativa((atual) => atual + 1)}
@@ -114,12 +169,25 @@ export function MeusIngressosPage() {
           </button>
         )}
 
-        {estado === 'pronto' && (
-          <div className="mt-8 flex flex-col gap-4">
-            {ingressos.map((ingresso) => (
-              <CardIngresso key={ingresso.id} ingresso={ingresso} />
-            ))}
+        {estado === 'vazio' && (
+          <div className="mt-10 border-[3px] border-dashed border-[#C7B694] p-10 text-center">
+            <p className="font-mono text-xl text-[#6D655B]">Você ainda não tem ingressos.</p>
+            <Link to="/" className={buttonClass('primary', 'mt-[18px]')}>
+              VER SESSÕES
+            </Link>
           </div>
+        )}
+
+        {estado === 'pronto' && aberto && (
+          <DetalheIngresso ingresso={aberto} onVoltar={() => setAbertoId(null)} />
+        )}
+
+        {estado === 'pronto' && !aberto && (
+          <ul className="mt-8 flex flex-col gap-5">
+            {ingressos.map((ingresso) => (
+              <LinhaIngresso key={ingresso.id} ingresso={ingresso} onAbrir={() => setAbertoId(ingresso.id)} />
+            ))}
+          </ul>
         )}
       </div>
     </PageShell>

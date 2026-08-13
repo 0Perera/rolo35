@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MeusIngressosPage } from './MeusIngressosPage';
@@ -38,12 +39,13 @@ describe('MeusIngressosPage', () => {
     expect(screen.getByText(/carregando/i)).toBeInTheDocument();
   });
 
-  it('shows an empty state when the client has no ingressos', async () => {
+  it('shows an empty state with a link to the sessões when the client has no ingressos', async () => {
     vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([]);
 
     renderPage();
 
-    expect(await screen.findByText(/ainda não tem nenhum ingresso/i)).toBeInTheDocument();
+    expect(await screen.findByText(/ainda não tem ingressos/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /ver sessões/i })).toHaveAttribute('href', '/');
   });
 
   it('shows a generic error message on failure', async () => {
@@ -63,5 +65,47 @@ describe('MeusIngressosPage', () => {
     expect(screen.getByText(/SALA 1/)).toBeInTheDocument();
     expect(screen.getByText(/ASSENTO A1/)).toBeInTheDocument();
     expect(screen.getByText('VALIDO')).toBeInTheDocument();
+  });
+
+  it('opens the canhoto with the signed code and a QR of the public link', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
+
+    expect(screen.getByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
+    // O QR é o que a portaria lê: precisa apontar pro link público, não pro código cru.
+    expect(screen.getByTitle(`QR code do ingresso (${window.location.origin}/ingressos/abc-123.assinatura)`))
+      .toBeInTheDocument();
+    expect(screen.getByText(/escaneie na portaria/i)).toBeInTheDocument();
+  });
+
+  it('goes back to the list from the canhoto', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
+    await userEvent.click(screen.getByRole('button', { name: /voltar pra lista/i }));
+
+    expect(screen.getByRole('button', { name: /ver ingresso de clube da luta/i })).toBeInTheDocument();
+    expect(screen.queryByText(/escaneie na portaria/i)).not.toBeInTheDocument();
+  });
+
+  it('copies the public link when sharing', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+    renderPage();
+
+    const linha = (await screen.findByText('Clube da Luta')).closest('li');
+    await userEvent.click(within(linha as HTMLElement).getByRole('button', { name: /compartilhar/i }));
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/ingressos/abc-123.assinatura`);
+    expect(await screen.findByText(/link copiado/i)).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
   });
 });
