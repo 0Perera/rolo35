@@ -6,10 +6,17 @@ const REQUEST_TIMEOUT_MS = 90_000;
 
 export class ApiRequestError extends Error {
   readonly status: number;
+  /**
+   * `codigo` do envelope de erro da API. Existe porque o status sozinho não basta: o mesmo `409`
+   * cobre erro terminal (reserva expirada, refazer a seleção) e erro transitório (reserva em
+   * disputa, tentar de novo), e tratar os dois igual manda o cliente refazer o que não precisava.
+   */
+  readonly codigo?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, codigo?: string) {
     super(message);
     this.status = status;
+    this.codigo = codigo;
   }
 }
 
@@ -36,7 +43,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
         body !== null && typeof body === 'object' && 'mensagem' in body && typeof body.mensagem === 'string'
           ? body.mensagem
           : 'Erro ao comunicar com o servidor';
-      throw new ApiRequestError(mensagem, response.status);
+      const codigo =
+        body !== null && typeof body === 'object' && 'codigo' in body && typeof body.codigo === 'string'
+          ? body.codigo
+          : undefined;
+      throw new ApiRequestError(mensagem, response.status, codigo);
     }
 
     return (await response.json()) as T;
