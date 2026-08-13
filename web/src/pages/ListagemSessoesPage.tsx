@@ -242,7 +242,7 @@ export function ListagemSessoesPage() {
         </section>
       )}
 
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-5 py-10 sm:px-6">
         <SectionTitle>O QUE TÁ PASSANDO?</SectionTitle>
 
         {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
@@ -261,10 +261,12 @@ export function ListagemSessoesPage() {
           </button>
         )}
 
+        {/* 150px de piso no mobile: com os 220px do desktop, a grade cai pra uma coluna só num
+            aparelho estreito e o pôster 2/3 ocupa a tela inteira, um filme por rolagem. */}
         {estado === 'pronto' && (
           <div
             data-testid="grade-filmes"
-            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-8"
+            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] sm:gap-8"
           >
             {filmes.map((filme) => {
               const esgotado = filme.sessoes.every((sessao) => sessao.esgotada);

@@ -60,7 +60,7 @@ function CartaoDeAviso({
   acoes: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto max-w-[620px] px-8 pt-[60px] pb-[100px]">
+    <div className="mx-auto max-w-[620px] px-5 pt-[60px] pb-[100px] sm:px-8">
       <div className="border-[3px] border-ink-950 bg-paper-50 p-[clamp(24px,4cqw,36px)] text-center shadow-[10px_10px_0_var(--color-flame-600)]">
         <p className="font-mono text-[22px] tracking-[4px] text-[#A8170F]">{kicker}</p>
         <h1 className="mt-3 font-display text-[clamp(24px,3.6cqw,34px)] leading-tight">{titulo}</h1>
@@ -190,7 +190,7 @@ export function PagamentoPage() {
   if (estado === 'loading' || estado === 'erro' || estado === 'nao-autorizado') {
     return (
       <PageShell>
-        <div className="mx-auto max-w-[940px] px-8 pt-9 pb-[90px]">
+        <div className="mx-auto max-w-[940px] px-5 pt-9 pb-[90px] sm:px-8">
           {estado === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando…</p>}
           {estado === 'erro' && (
             <p role="alert" className="font-mono text-lg text-flame-600">
@@ -258,7 +258,7 @@ export function PagamentoPage() {
   if (estado === 'aprovada' && reserva && pagamento) {
     return (
       <PageShell>
-        <div className="mx-auto max-w-[900px] px-8 pt-[46px] pb-[90px]">
+        <div className="mx-auto max-w-[900px] px-5 pt-[46px] pb-[90px] sm:px-8">
           <div className="text-center">
             <p className="font-mono text-[22px] tracking-[4px] text-navy-700">✓ PAGAMENTO APROVADO</p>
             <h1 className="mt-2.5 font-display text-[clamp(28px,4.4cqw,44px)] leading-tight text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
@@ -339,7 +339,7 @@ export function PagamentoPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-[940px] px-8 pt-9 pb-[90px]">
+      <div className="mx-auto max-w-[940px] px-5 pt-9 pb-[90px] sm:px-8">
         <Link to={linkDoMapa} className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
           ◀ TROCAR ASSENTOS
         </Link>

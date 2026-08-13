@@ -53,7 +53,7 @@ export function IngressoPublicoPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-[900px] px-8 pt-10 pb-[90px]">
+      <div className="mx-auto max-w-[900px] px-5 pt-10 pb-[90px] sm:px-8">
         <SectionTitle kicker="INGRESSO" rule={false}>
           ROLO 35
         </SectionTitle>

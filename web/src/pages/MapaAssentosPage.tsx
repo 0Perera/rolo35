@@ -176,7 +176,7 @@ export function MapaAssentosPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-[1280px] px-8 pt-9 pb-20">
+      <div className="mx-auto max-w-[1280px] px-5 pt-9 pb-20 sm:px-8">
         <Link to="/" className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
           ◀ VOLTAR PRA PRATELEIRA
         </Link>
