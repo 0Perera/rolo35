@@ -1,10 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { LoginPage } from './LoginPage';
 import * as authApi from '../api/auth';
 import { ApiRequestError } from '../api/client';
+
+/** Mostra pra onde o login mandou e o que ele levou junto — é o que a AC8 promete. */
+function DestinoFalso() {
+  const { id } = useParams<{ id: string }>();
+  const { state } = useLocation() as { state: { assentoIds?: number[] } | null };
+  return (
+    <p>
+      destino /sessoes/{id}/assentos com assentos {(state?.assentoIds ?? []).join(',')}
+    </p>
+  );
+}
 
 describe('LoginPage', () => {
   beforeEach(() => {
@@ -52,6 +63,56 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha inválidos');
     expect(screen.getByRole('button', { name: /entrar/i })).toBeEnabled();
     expect(localStorage.getItem('rolo35.token')).toBeNull();
+  });
+
+  it('returns the client to where the purchase stopped, carrying the seat selection', async () => {
+    vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'CLIENTE' });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/login', state: { retomarEm: '/sessoes/5/assentos', assentoIds: [1, 2] } },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/sessoes/:id/assentos" element={<DestinoFalso />} />
+          <Route path="/" element={<p>vitrine</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText(/e-mail/i), 'cliente1@rolo35.com.br');
+    await user.type(screen.getByLabelText(/senha/i), 'cliente123');
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+
+    expect(await screen.findByText('destino /sessoes/5/assentos com assentos 1,2')).toBeInTheDocument();
+  });
+
+  it('ignores the pending purchase when whoever logs in is not a cliente', async () => {
+    vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'ORGANIZADOR' });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/login', state: { retomarEm: '/sessoes/5/assentos', assentoIds: [1, 2] } },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/sessoes/:id/assentos" element={<DestinoFalso />} />
+          <Route path="/organizador" element={<p>painel do organizador</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText(/e-mail/i), 'organizador@rolo35.com.br');
+    await user.type(screen.getByLabelText(/senha/i), 'org123');
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+
+    expect(await screen.findByText('painel do organizador')).toBeInTheDocument();
   });
 
   // Teclado de celular capitaliza a primeira letra por padrão. O servidor já normaliza o e-mail

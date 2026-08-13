@@ -7,6 +7,7 @@ import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
 import { ListagemSessoesPage } from './pages/ListagemSessoesPage';
 import { FilmeDetalhePage } from './pages/FilmeDetalhePage';
 import { MapaAssentosPage } from './pages/MapaAssentosPage';
+import { PagamentoPage } from './pages/PagamentoPage';
 import { MeusIngressosPage } from './pages/MeusIngressosPage';
 import { IngressoPublicoPage } from './pages/IngressoPublicoPage';
 import { SobrePage } from './pages/SobrePage';

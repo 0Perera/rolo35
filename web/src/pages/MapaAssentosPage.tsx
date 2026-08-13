@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { ApiRequestError } from '../api/client';
 import { reservarAssentos } from '../api/reservas';
 import { buscarMapaAssentos, type AssentoMapa, type MapaAssentos } from '../api/sessoes';
@@ -60,6 +60,10 @@ function agruparPorFileira(assentos: AssentoMapa[]): { fileira: string; assentos
 export function MapaAssentosPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { state } = useLocation() as { state: { assentoIds?: number[] } | null };
+  // Seleção que sobreviveu ao login. Vive num ref porque só vale pra primeira carga: os recarregar
+  // seguintes (depois de um 409, por exemplo) precisam limpar a seleção, não ressuscitá-la.
+  const selecaoRetomada = useRef<number[] | null>(state?.assentoIds ?? null);
   const [mapa, setMapa] = useState<MapaAssentos | null>(null);
   const [estado, setEstado] = useState<Estado>('loading');
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
@@ -82,6 +86,20 @@ export function MapaAssentosPage() {
         }
         setMapa(resultado);
         setEstado('pronto');
+        const retomados = selecaoRetomada.current;
+        if (retomados) {
+          selecaoRetomada.current = null;
+          // O mapa que acabou de chegar é a autoridade: assento que outra pessoa levou durante o
+          // login não volta selecionado só porque estava na escolha anterior.
+          setSelecionados(
+            new Set(
+              resultado.assentos
+                .filter((assento) => assento.status === 'LIVRE' && retomados.includes(assento.id))
+                .slice(0, MAX_ASSENTOS)
+                .map((assento) => assento.id),
+            ),
+          );
+        }
       })
       .catch((error: unknown) => {
         if (!aindaAtivo()) {
@@ -136,7 +154,14 @@ export function MapaAssentosPage() {
         setSelecionados(new Set());
         await carregarMapa();
       } else if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403)) {
-        setMensagemErro('Faça login como cliente pra reservar assentos.');
+        // Sem sessão iniciada não há o que avisar: a saída é o login, e a escolha vai junto pra
+        // que voltar signifique continuar de onde parou, não recomeçar.
+        navigate('/login', {
+          state: {
+            retomarEm: `/sessoes/${sessaoId}/assentos`,
+            assentoIds: Array.from(selecionados),
+          },
+        });
       } else {
         setMensagemErro('Não foi possível concluir a reserva agora. Tente novamente.');
       }

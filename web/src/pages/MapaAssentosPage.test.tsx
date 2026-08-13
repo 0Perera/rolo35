@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useParams } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MapaAssentosPage } from './MapaAssentosPage';
 import * as sessoesApi from '../api/sessoes';
@@ -28,12 +28,23 @@ function PaginaDePagamentoFalsa() {
   return <p>página de pagamento da reserva {reservaId}</p>;
 }
 
+/** Espelha o que o mapa mandou pro login: pra onde voltar e quais assentos preservar. */
+function PaginaDeLoginFalsa() {
+  const { state } = useLocation() as { state: { retomarEm?: string; assentoIds?: number[] } | null };
+  return (
+    <p>
+      login pra retomar {state?.retomarEm} com assentos {(state?.assentoIds ?? []).join(',')}
+    </p>
+  );
+}
+
 function renderPage(id = '5') {
   return render(
     <MemoryRouter initialEntries={[`/sessoes/${id}/assentos`]}>
       <Routes>
         <Route path="/sessoes/:id/assentos" element={<MapaAssentosPage />} />
         <Route path="/pagamento/:reservaId" element={<PaginaDePagamentoFalsa />} />
+        <Route path="/login" element={<PaginaDeLoginFalsa />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -217,15 +228,40 @@ describe('MapaAssentosPage', () => {
     expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeDisabled();
   });
 
-  it('shows a login message when the request is unauthorized', async () => {
-    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
-    vi.spyOn(reservasApi, 'reservarAssentos').mockRejectedValue(new ApiRequestError('não autenticado', 401));
+  it.each([401, 403])('sends the visitor to the login screen with the pending purchase on a %i', async (status) => {
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapaComSeisLivres);
+    const reservarSpy = vi
+      .spyOn(reservasApi, 'reservarAssentos')
+      .mockRejectedValue(new ApiRequestError('não autenticado', status));
     const user = userEvent.setup();
 
     renderPage();
     await user.click(await screen.findByLabelText('Assento A1 — livre'));
+    await user.click(screen.getByLabelText('Assento A2 — livre'));
     await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/faça login como cliente/i);
+    expect(await screen.findByText('login pra retomar /sessoes/5/assentos com assentos 1,2')).toBeInTheDocument();
+    expect(reservarSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the seats chosen before the login, dropping the ones taken meanwhile', async () => {
+    // A2 saiu como RESERVADO no mapa que voltou do servidor: quem escolheu antes do login não
+    // ganha prioridade sobre quem reservou de fato nesse meio-tempo.
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
+
+    render(
+      <MemoryRouter
+        initialEntries={[{ pathname: '/sessoes/5/assentos', state: { assentoIds: [1, 2] } }]}
+      >
+        <Routes>
+          <Route path="/sessoes/:id/assentos" element={<MapaAssentosPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText('Assento A1 — livre')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Assento A2 — reservado')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('R$ 25,00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeEnabled();
   });
 });

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { login, type Papel } from '../api/auth';
 import { ApiRequestError } from '../api/client';
 import { Alert } from '../components/Alert';
@@ -21,12 +21,22 @@ export function rotaPorPapel(papel: Papel): string {
   }
 }
 
+/** Compra que ficou pendente no mapa de assentos por falta de login. */
+interface RetomadaDeCompra {
+  retomarEm: string;
+  assentoIds: number[];
+}
+
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [estado, setEstado] = useState<EstadoLogin>('idle');
   const [mensagemErro, setMensagemErro] = useState('');
   const navigate = useNavigate();
+  const { state } = useLocation() as { state: Partial<RetomadaDeCompra> | null };
+  const retomada: RetomadaDeCompra | null = state?.retomarEm
+    ? { retomarEm: state.retomarEm, assentoIds: state.assentoIds ?? [] }
+    : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +47,13 @@ export function LoginPage() {
       const resposta = await login(email, senha);
       localStorage.setItem('rolo35.token', resposta.token);
       localStorage.setItem('rolo35.papel', resposta.papel);
+      // Compra interrompida por falta de login volta pro ponto onde parou. Só pra CLIENTE: entrar
+      // com outro papel não continua uma compra, e mandar um organizador pro mapa de assentos só
+      // adiaria a mesma negação pro clique seguinte.
+      if (retomada && resposta.papel === 'CLIENTE') {
+        navigate(retomada.retomarEm, { state: { assentoIds: retomada.assentoIds } });
+        return;
+      }
       navigate(rotaPorPapel(resposta.papel));
     } catch (error) {
       setMensagemErro(error instanceof ApiRequestError ? error.message : 'Não foi possível entrar. Tente novamente.');
