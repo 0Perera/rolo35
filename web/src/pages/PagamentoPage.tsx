@@ -10,11 +10,11 @@ import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { TextField } from '../components/TextField';
 import {
-  cartaoCompleto,
   formatarCvv,
   formatarNomeNoCartao,
   formatarNumeroCartao,
   formatarValidade,
+  problemaNoCartao,
   type DadosDoCartao,
 } from '../lib/cartao';
 import { urlPublicaDoIngresso } from '../lib/ingressos';
@@ -156,8 +156,9 @@ export function PagamentoPage() {
   }
 
   async function handleConfirmar() {
-    if (!cartaoCompleto(cartao)) {
-      setAviso('Preencha todos os dados do cartão pra continuar.');
+    const problema = problemaNoCartao(cartao);
+    if (problema) {
+      setAviso(problema);
       return;
     }
     setEnviando(true);

@@ -156,7 +156,23 @@ describe('PagamentoPage', () => {
     await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
 
     expect(confirmarSpy).not.toHaveBeenCalled();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/dados do cartão/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/número do cartão incompleto/i);
+  });
+
+  it('names the wrong field instead of asking to fill a form that is already full', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    const confirmarSpy = vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.type(await screen.findByLabelText(/nome no cartão/i), 'Fulano de Tal');
+    await user.type(screen.getByLabelText(/número do cartão/i), '4111111111111111');
+    await user.type(screen.getByLabelText(/validade/i), '0120');
+    await user.type(screen.getByLabelText(/cvv/i), '123');
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    expect(confirmarSpy).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/vencido/i);
   });
 
   it('does not send anything while the card form is incomplete', async () => {

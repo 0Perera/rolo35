@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { cartaoCompleto, formatarCvv, formatarNomeNoCartao, formatarNumeroCartao, formatarValidade } from './cartao';
+import {
+  formatarCvv,
+  formatarNomeNoCartao,
+  formatarNumeroCartao,
+  formatarValidade,
+  problemaNoCartao,
+} from './cartao';
 
 describe('formatarNumeroCartao', () => {
   it('drops anything that is not a digit', () => {
@@ -37,6 +43,15 @@ describe('formatarValidade', () => {
   it('keeps deleting the slash from working', () => {
     expect(formatarValidade('12/')).toBe('12');
   });
+
+  // Não existe mês 9x. Prefixar com zero é o que todo formulário de cartão faz: quem digita "9"
+  // quis dizer setembro, e deixar "90/78" ser digitado só pra recusar depois é ruído.
+  it('completes a single-digit month that could not start a valid one', () => {
+    expect(formatarValidade('9')).toBe('09');
+    expect(formatarValidade('90')).toBe('09/0');
+    expect(formatarValidade('1')).toBe('1');
+    expect(formatarValidade('0')).toBe('0');
+  });
 });
 
 describe('formatarCvv', () => {
@@ -52,31 +67,34 @@ describe('formatarNomeNoCartao', () => {
   });
 });
 
-describe('cartaoCompleto', () => {
+describe('problemaNoCartao', () => {
   const valido = { nome: 'Ana Paula', numero: '4111 1111 1111 1111', validade: '12/30', cvv: '123' };
+  const hoje = new Date(2026, 7, 12);
 
-  it('accepts a fully filled card', () => {
-    expect(cartaoCompleto(valido)).toBe(true);
+  it('finds nothing wrong with a fully filled card', () => {
+    expect(problemaNoCartao(valido, hoje)).toBeNull();
   });
 
-  it('rejects an empty holder name', () => {
-    expect(cartaoCompleto({ ...valido, nome: '   ' })).toBe(false);
+  it('asks to fill the form only when something is actually empty', () => {
+    expect(problemaNoCartao({ ...valido, nome: '   ' }, hoje)).toMatch(/preencha/i);
+    expect(problemaNoCartao({ ...valido, cvv: '' }, hoje)).toMatch(/preencha/i);
   });
 
-  it('rejects a number with fewer than sixteen digits', () => {
-    expect(cartaoCompleto({ ...valido, numero: '4111 1111' })).toBe(false);
-  });
-
-  it('rejects a month outside 01-12', () => {
-    expect(cartaoCompleto({ ...valido, validade: '13/30' })).toBe(false);
-    expect(cartaoCompleto({ ...valido, validade: '00/30' })).toBe(false);
+  // O caso que motivou a distinção: tudo preenchido, mas o mês não existe. Pedir pra "preencher
+  // todos os dados" com o formulário cheio manda a pessoa procurar o campo vazio que não existe.
+  it('points at the field that is wrong when everything is filled', () => {
+    expect(problemaNoCartao({ ...valido, validade: '13/30' }, hoje)).toMatch(/validade/i);
+    expect(problemaNoCartao({ ...valido, validade: '00/30' }, hoje)).toMatch(/validade/i);
+    expect(problemaNoCartao({ ...valido, numero: '4111 1111' }, hoje)).toMatch(/número/i);
+    expect(problemaNoCartao({ ...valido, cvv: '12' }, hoje)).toMatch(/cvv/i);
   });
 
   it('rejects an incomplete expiry date', () => {
-    expect(cartaoCompleto({ ...valido, validade: '12/3' })).toBe(false);
+    expect(problemaNoCartao({ ...valido, validade: '12/3' }, hoje)).toMatch(/validade/i);
   });
 
-  it('rejects a cvv shorter than three digits', () => {
-    expect(cartaoCompleto({ ...valido, cvv: '12' })).toBe(false);
+  it('rejects a card that already expired', () => {
+    expect(problemaNoCartao({ ...valido, validade: '07/26' }, hoje)).toMatch(/venc/i);
+    expect(problemaNoCartao({ ...valido, validade: '08/26' }, hoje)).toBeNull();
   });
 });

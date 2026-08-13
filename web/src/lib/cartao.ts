@@ -32,7 +32,12 @@ export function formatarNumeroCartao(valor: string): string {
 }
 
 export function formatarValidade(valor: string): string {
-  const digitos = somenteDigitos(valor, DIGITOS_DA_VALIDADE);
+  let digitos = somenteDigitos(valor, DIGITOS_DA_VALIDADE);
+  // Um primeiro dígito acima de 1 não começa mês nenhum: quem digitou 9 quis dizer setembro.
+  // Completar aqui evita deixar "90/78" ser digitado inteiro só pra ser recusado no fim.
+  if (/^[2-9]/.test(digitos)) {
+    digitos = `0${digitos}`.slice(0, DIGITOS_DA_VALIDADE);
+  }
   return digitos.length > 2 ? `${digitos.slice(0, 2)}/${digitos.slice(2)}` : digitos;
 }
 
@@ -44,16 +49,34 @@ export function formatarNomeNoCartao(valor: string): string {
   return valor.replace(/\d/g, '');
 }
 
-export function cartaoCompleto({ nome, numero, validade, cvv }: DadosDoCartao): boolean {
-  const digitosDoNumero = numero.replace(/\D/g, '');
+/**
+ * Devolve o que impede este cartão de ser usado, ou `null` se não houver nada. Uma mensagem por
+ * problema, e não um booleano só: com o formulário inteiro preenchido e um mês inexistente, pedir
+ * pra "preencher todos os dados" manda a pessoa procurar um campo vazio que não existe.
+ */
+export function problemaNoCartao(
+  { nome, numero, validade, cvv }: DadosDoCartao,
+  hoje: Date = new Date(),
+): string | null {
+  if (nome.trim() === '' || numero === '' || validade === '' || cvv === '') {
+    return 'Preencha todos os dados do cartão pra continuar.';
+  }
+  if (numero.replace(/\D/g, '').length !== DIGITOS_DO_NUMERO) {
+    return 'Número do cartão incompleto — são 16 dígitos.';
+  }
+
   const [mes, ano] = validade.split('/');
   const mesValido = /^\d{2}$/.test(mes ?? '') && Number(mes) >= 1 && Number(mes) <= 12;
-
-  return (
-    nome.trim() !== '' &&
-    digitosDoNumero.length === DIGITOS_DO_NUMERO &&
-    mesValido &&
-    /^\d{2}$/.test(ano ?? '') &&
-    cvv.length >= MIN_DIGITOS_CVV
-  );
+  if (!mesValido || !/^\d{2}$/.test(ano ?? '')) {
+    return 'Validade inválida — use MM/AA, com mês de 01 a 12.';
+  }
+  // O ano de dois dígitos é sempre deste século: cartão de 19xx não circula mais.
+  const ultimoDiaDoMes = new Date(2000 + Number(ano), Number(mes), 0, 23, 59, 59);
+  if (ultimoDiaDoMes < hoje) {
+    return 'Cartão vencido — confira a validade.';
+  }
+  if (cvv.length < MIN_DIGITOS_CVV) {
+    return 'CVV incompleto — são 3 ou 4 dígitos.';
+  }
+  return null;
 }
