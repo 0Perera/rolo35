@@ -184,4 +184,37 @@ class IngressoServiceTest {
         assertThat(dto.salaNome()).isEqualTo("Sala 1");
         assertThat(dto.status()).isEqualTo(StatusIngresso.VALIDO);
     }
+
+    // AC4/AD-9: leitura pública nunca muta estado como efeito colateral, nem hoje nem em
+    // regressão futura (a Story 5.2 de validação de portaria pousa no mesmo pacote). A ausência
+    // de chamada de escrita é hoje só estrutural (nenhum save()/update() no método) — este teste
+    // torna essa garantia explícita, não só implícita pela leitura do código.
+    @Test
+    void buscarPublicoNuncaMutaEstado() {
+        setUp();
+        UUID id = UUID.randomUUID();
+        String codigo = id + ".assinatura-valida";
+        given(codigoIngressoService.extrairId(codigo)).willReturn(Optional.of(id));
+        given(codigoIngressoService.validar(id, codigo)).willReturn(true);
+        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, StatusIngresso.VALIDO, null, Instant.now());
+        given(ingressoRepository.findById(id)).willReturn(Optional.of(ingresso));
+        Sessao sessao = Sessao.builder()
+                .id(1L)
+                .organizadorId(1L)
+                .salaId(1L)
+                .tmdbId(550L)
+                .titulo("Sessão fixture")
+                .dataHora(LocalDateTime.now().plusDays(1))
+                .preco(java.math.BigDecimal.TEN)
+                .createdAt(Instant.now())
+                .build();
+        given(sessaoRepository.findById(1L)).willReturn(Optional.of(sessao));
+        Sala sala = new Sala();
+        ReflectionTestUtils.setField(sala, "nome", "Sala 1");
+        given(salaRepository.findById(1L)).willReturn(Optional.of(sala));
+
+        ingressoService.buscarPublico(codigo);
+
+        verify(ingressoRepository, never()).save(any());
+    }
 }
