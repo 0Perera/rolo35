@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: 2026-08-12 (code review Story 4.1 — 3 patches Alto/Médio corrigidos, 4 Baixo ficam como action items; status volta a in-progress)
+last_updated: 2026-08-12 (Story 4.3 criada — Epic 4 tinha o back do pagamento sem nenhum caminho de UI; status ready-for-dev)
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
@@ -68,6 +68,7 @@ development_status:
   epic-4: in-progress
   4-1-confirmacao-de-pagamento-simulado-com-emissao-de-ingresso: in-progress
   4-2-meus-ingressos-e-link-publico: review
+  4-3-checkout-de-pagamento-no-front: ready-for-dev
   epic-4-retrospective: optional
 
   epic-5: backlog

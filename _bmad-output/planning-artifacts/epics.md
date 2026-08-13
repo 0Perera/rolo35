@@ -453,6 +453,44 @@ So that eu tenho comprovante de compra e posso mostrar o ingresso sem precisar l
 **When** o link público é acessado
 **Then** retorna erro claro (`404`), sem vazar se o UUID existe no banco
 
+### Story 4.3: Checkout de Pagamento no Front-End
+
+> Story adicionada depois do fechamento original do Epic 4. A Story 4.1 entregou `POST /api/pagamentos/confirmar` e declarou nos Dev Notes que não faria tela ("Sem tela de front-end nesta story, por decisão de escopo explícita"), porque nenhuma FR numera uma UI de pagamento. O resultado é que o Epic 4 tem o back completo e nenhum caminho de UI: `MapaAssentosPage` reserva os assentos e manda o cliente pra `/em-construcao`. Esta story fecha essa lacuna, exigida por SM-1 e pelo §"Fluxo vertical completo" do PRD (login → reserva → **pagamento simulado (aprovação e recusa)** → ingresso, ponta a ponta).
+
+As a cliente autenticado com uma reserva ativa,
+I want confirmar o pagamento pela interface e ver o resultado,
+So that eu completo a compra sem sair da aplicação e recebo meu ingresso com QR na tela.
+
+**Acceptance Criteria:**
+
+**Given** um cliente que acabou de reservar assentos
+**When** a reserva é criada com sucesso
+**Then** ele chega numa tela de pagamento que mostra filme, sessão, sala, assentos escolhidos, total e quanto tempo falta pro hold expirar
+
+**Given** a tela de pagamento aberta
+**When** o cliente confirma com o resultado simulado de aprovação
+**Then** ele vê os ingressos emitidos, um por assento, cada um com QR escaneável e código assinado
+
+**Given** a tela de pagamento aberta
+**When** o cliente confirma com o resultado simulado de recusa
+**Then** ele vê que o pagamento foi recusado, que os assentos foram liberados e que nada foi cobrado, com caminho de volta pra escolher assentos de novo
+
+**Given** uma reserva cujo hold já expirou
+**When** o cliente tenta confirmar o pagamento
+**Then** ele é avisado de que a reserva expirou e volta pro mapa da sessão, que recarrega com o estado atual dos assentos
+
+**Given** o endereço da tela de pagamento aberto direto ou recarregado (F5)
+**When** a página monta sem nenhum estado de navegação
+**Then** ela se reconstrói a partir do servidor — o cliente não perde o checkout de uma reserva que ainda está válida
+
+**Given** a tela de pagamento de uma reserva que pertence a outro cliente
+**When** ela é acessada
+**Then** o acesso é negado sem revelar se a reserva existe ou de quem é
+
+**Given** os campos de cartão da tela
+**When** o pagamento é confirmado
+**Then** nenhum dado de cartão sai do navegador nem é gravado em storage — o pagamento é simulado e a requisição carrega só a reserva e o resultado desejado
+
 ## Epic 5: Validação na Portaria
 
 Portaria seleciona a sessão ativa do turno e valida ingressos por câmera ou digitação manual, com retorno inequívoco (válido/inválido/já utilizado/evento errado) e garantia de não-validação-duplicada sob concorrência.
