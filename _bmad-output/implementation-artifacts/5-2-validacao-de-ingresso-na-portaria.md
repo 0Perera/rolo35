@@ -1,6 +1,6 @@
 # Story 5.2: Validação de Ingresso na Portaria
 
-Status: ready-for-dev
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -169,8 +169,57 @@ so that eu decido se libero a entrada com confiança, sem depender de julgamento
 
 ### Agent Model Used
 
+Claude Sonnet 5 (bmad-agent-dev, Amelia)
+
 ### Debug Log References
+
+RED confirmado por falha de compilação/rota 404→500 antes de cada GREEN (Tasks 1-3). Um ajuste
+de mock em `PortariaServiceValidacaoTest` (stub de `entityManager.createNativeQuery()`, ausente
+inicialmente, causava `NullPointerException` nos 4 casos que passam do lock em diante). Teste de
+concorrência (Task 4) passou de primeira e se manteve estável em execuções repetidas.
 
 ### Completion Notes List
 
+- Dependência viva com a Story 5.1 já estava resolvida: `PortariaService`, `obterSessaoAtivaOuLancar()`
+  e as exceções bateram exatamente com os nomes assumidos pela spec desta story.
+- `PortariaServiceTest` (Story 5.1) precisou de ajuste mecânico pro construtor novo de
+  `PortariaService` (4 dependências a mais); nenhum teste de comportamento da 5.1 mudou.
+- Suíte completa verde: `mvn test` (backend, inclui os dois cenários de concorrência do
+  projeto) e `npx tsc --noEmit && npm run lint && npm run build` (frontend). `npx vitest run`
+  mantém os mesmos 3 arquivos de teste pré-existentes falhando por ambiente
+  (`localStorage` indisponível), já documentados na Story 5.1 e confirmados não relacionados.
+- Decisões registradas em `docs/decisions.md`.
+- Epic 5 encerrado — fluxo ponta a ponta completo (buscar filme → sessão → assento → pagamento
+  → ingresso → validar na portaria) implementado.
+
 ### File List
+
+- `api/src/main/java/br/com/rolo35/api/ingressos/Ingresso.java` (update — `validar()`)
+- `api/src/main/java/br/com/rolo35/api/ingressos/ResultadoValidacao.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/IngressoEmDisputaException.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/dto/ValidacaoIngressoDto.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/dto/ValidarIngressoRequest.java`
+- `api/src/main/java/br/com/rolo35/api/sessoes/AssentoNaoEncontradoException.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/repository/IngressoRepository.java` (update —
+  `findByIdForUpdate()`)
+- `api/src/main/java/br/com/rolo35/api/ingressos/service/PortariaService.java` (update —
+  `validar()`, novas dependências no construtor)
+- `api/src/main/java/br/com/rolo35/api/ingressos/controller/PortariaController.java` (update —
+  `POST /validacoes`)
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` (update — handler de
+  `IngressoEmDisputaException`)
+- `api/src/test/java/br/com/rolo35/api/ingressos/IngressoTest.java`
+- `api/src/test/java/br/com/rolo35/api/ingressos/service/PortariaServiceValidacaoTest.java`
+- `api/src/test/java/br/com/rolo35/api/ingressos/service/PortariaServiceTest.java` (update —
+  construtor novo)
+- `api/src/test/java/br/com/rolo35/api/ingressos/controller/PortariaValidacaoControllerTest.java`
+- `api/src/test/java/br/com/rolo35/api/ingressos/PortariaSecurityTest.java` (update — estendido)
+- `api/src/test/java/br/com/rolo35/api/ingressos/PortariaValidacaoConcorrenciaTest.java`
+- `web/package.json` (update — `qr-scanner`)
+- `web/src/api/portaria.ts` (update — `ResultadoValidacao`, `validarIngresso`)
+- `web/src/pages/ValidacaoPortariaPage.tsx`
+- `web/src/pages/ValidacaoPortariaPage.test.tsx`
+- `web/src/pages/SelecaoTurnoPortariaPage.tsx` (update — link "validar ingressos")
+- `web/src/App.tsx` (update — rota `/portaria/validar`)
+- `docs/decisions.md` (update)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (update)

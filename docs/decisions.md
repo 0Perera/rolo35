@@ -522,3 +522,24 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 - **Decisão**: quando a API recusa a reserva por falta de autenticação (`401`/`403`), o mapa manda pro login levando no `state` de navegação a sessão de origem e os assentos escolhidos; o login devolve a pessoa ao mapa com esse mesmo `state`, e o mapa só reseleciona os assentos que voltaram `LIVRE` na carga seguinte. Nada disso passa por `localStorage`/`sessionStorage`.
 - **Por quê**: sem isso o visitante batia num aviso pedindo login sem caminho até ele e, se entrasse por conta própria, voltava com a escolha perdida — a compra morria antes do checkout que esta story existe pra entregar. O `state` de navegação é o lugar certo porque a seleção é dado de uma compra em andamento, não preferência que deva sobreviver à aba ou vazar pra outra sessão do mesmo navegador. E ela não pode ser tratada como reserva: durante o login outra pessoa pode ter reservado o mesmo assento, então a autoridade é o mapa que o servidor devolve na volta — o `state` só propõe, o servidor dispõe. O login honra a retomada apenas pra papel `CLIENTE`: entrar como organizador ou portaria não continua compra nenhuma, e mandar esse usuário pro mapa só adiaria a mesma negação pro clique seguinte.
+
+---
+
+## Os 4 resultados de validação voltam `200`, não como erro HTTP (Story 5.2)
+
+- **Decisão**: `VALIDO`/`INVALIDO`/`JA_UTILIZADO`/`EVENTO_ERRADO` são todos `200 OK` com um campo `resultado` no corpo — nunca `404`/`409`/`422`.
+- **Por quê**: mesmo racional de `PagamentoDto` (Story 4.1, AD-6) — são desfechos de negócio esperados que a portaria precisa tratar visualmente, não falhas da requisição em si. As exceções reais desta story (`SessaoAtivaNaoSelecionadaException` → 409, `IngressoEmDisputaException` → 409) são sobre a operação não poder ser tentada/completada agora, categoria diferente de "o ingresso é inválido". Tratar os 4 resultados como erro HTTP obrigaria o front a diferenciar "erro de rede" de "ingresso já usado" pelo mesmo mecanismo, o que não faz sentido pra uma tela de portaria que precisa de resposta visual imediata.
+
+---
+
+## `INVALIDO` não diferencia motivo (Story 5.2)
+
+- **Decisão**: código malformado, assinatura HMAC adulterada e UUID inexistente caem todos no mesmo resultado `INVALIDO` — a resposta não revela qual dos três aconteceu.
+- **Por quê**: mesma decisão de `IngressoNaoEncontradoException` na Story 4.2 (AD-8), reaplicada aqui. Diferenciar os motivos transformaria o endpoint de validação num oráculo pra descobrir por tentativa e erro se um UUID é válido — a assinatura já é checada antes de qualquer consulta ao banco, então nem um código forjado chega a segurar uma linha da tabela `ingressos`.
+
+---
+
+## `qr-scanner` como dependência nova pra leitura de QR (Story 5.2)
+
+- **Decisão**: adicionado `qr-scanner` (npm) como única dependência nova do front nesta story, pra leitura de ingresso por câmera.
+- **Por quê**: wrapper leve sobre `getUserMedia` com API mínima (`start()`/`stop()`/callback `onDecode`), sem exigir infraestrutura própria de decodificação. Ativado só por clique explícito ("ligar câmera"), nunca automático no mount — evita pedir permissão de câmera sem contexto e mantém o teste do componente livre de mockar `getUserMedia` globalmente.
