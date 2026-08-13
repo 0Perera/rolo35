@@ -29,8 +29,10 @@ const COR_SELECIONADO =
 
 const COR_STATUS_DESCONHECIDO = 'border-flame-600 bg-[#221D28] text-flame-600';
 
+// O assento cresce a partir de lg: num monitor largo a grade de 30px vira um brinquedo dentro de
+// um auditório vazio, e é nela que a pessoa precisa acertar o clique.
 const ASSENTO_BASE =
-  'grid h-[26px] w-[30px] place-items-center rounded-t-[5px] rounded-b-[2px] border-2 p-0 font-mono text-[13px] transition-colors';
+  'grid h-[26px] w-[30px] place-items-center rounded-t-[5px] rounded-b-[2px] border-2 p-0 font-mono text-[13px] transition-colors lg:h-[34px] lg:w-[40px] lg:text-[15px]';
 
 const LEGENDA: { rotulo: string; cor: string }[] = [
   { rotulo: 'LIVRE', cor: COR_POR_STATUS.LIVRE },
@@ -176,7 +178,7 @@ export function MapaAssentosPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-[1280px] px-5 pt-9 pb-20 sm:px-8">
+      <div className="mx-auto max-w-[1280px] px-5 pt-9 pb-20 sm:px-8 xl:max-w-[1440px]">
         <Link to="/" className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
           ◀ VOLTAR PRA PRATELEIRA
         </Link>
@@ -212,13 +214,13 @@ export function MapaAssentosPage() {
                 />
                 <p className="mb-[30px] text-center font-mono text-xl tracking-[6px] text-cyan-400">TELA</p>
 
-                <div className="flex flex-col gap-[9px]" data-testid="grade-assentos">
+                <div className="flex flex-col gap-[9px] lg:gap-3" data-testid="grade-assentos">
                   {agruparPorFileira(mapa.assentos).map(({ fileira, assentos }) => (
                     <div key={fileira} className="flex items-center gap-3">
-                      <div aria-hidden="true" className="w-[22px] font-display text-sm text-[#7E7686]">
+                      <div aria-hidden="true" className="w-[22px] font-display text-sm text-[#7E7686] lg:w-7 lg:text-base">
                         {fileira}
                       </div>
-                      <div className="flex gap-[7px]">
+                      <div className="flex gap-[7px] lg:gap-2.5">
                         {assentos.map((assento) => {
                           const selecionado = selecionados.has(assento.id);
                           const livre = assento.status === 'LIVRE';
@@ -248,7 +250,10 @@ export function MapaAssentosPage() {
                       {/* Letra repetida à direita só a partir de sm: numa fileira larga a referência
                           da esquerda fica longe de quem olha a ponta oposta, mas no mobile ela só
                           soma 34px de largura numa grade que já rola. */}
-                      <div aria-hidden="true" className="hidden w-[22px] font-display text-sm text-[#7E7686] sm:block">
+                      <div
+                        aria-hidden="true"
+                        className="hidden w-[22px] font-display text-sm text-[#7E7686] sm:block lg:w-7 lg:text-base"
+                      >
                         {fileira}
                       </div>
                     </div>
@@ -261,7 +266,7 @@ export function MapaAssentosPage() {
                   <span key={rotulo} className="flex items-center gap-2">
                     <span
                       aria-hidden="true"
-                      className={`h-[18px] w-5 rounded-t-[4px] rounded-b-[2px] border-2 ${cor}`}
+                      className={`h-[18px] w-5 rounded-t-[4px] rounded-b-[2px] border-2 lg:h-[22px] lg:w-6 ${cor}`}
                     />
                     {rotulo}
                   </span>
@@ -270,7 +275,7 @@ export function MapaAssentosPage() {
             </section>
 
             {/* Resumo do pedido: acompanha a seleção sem exigir rolagem de volta pro topo. */}
-            <aside className="flex-[1_1_290px] border-[3px] border-ink-950 bg-paper-50 p-6 shadow-[9px_9px_0_var(--color-ink-950)]">
+            <aside className="flex-[1_1_290px] border-[3px] border-ink-950 bg-paper-50 p-6 shadow-[9px_9px_0_var(--color-ink-950)] xl:p-8">
               <p className="font-mono text-lg tracking-[2px] text-[#6D655B]">SEU PEDIDO</p>
               <h1 className="mt-2 font-display text-[22px] leading-[1.1]">{mapa.titulo}</h1>
 
