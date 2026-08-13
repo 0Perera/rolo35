@@ -10,6 +10,7 @@ import { MapaAssentosPage } from './pages/MapaAssentosPage';
 import { PagamentoPage } from './pages/PagamentoPage';
 import { MeusIngressosPage } from './pages/MeusIngressosPage';
 import { IngressoPublicoPage } from './pages/IngressoPublicoPage';
+import { SalasPage } from './pages/SalasPage';
 import { SobrePage } from './pages/SobrePage';
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
             <Route path="/meus-ingressos" element={<MeusIngressosPage />} />
             <Route path="/ingressos/:codigo" element={<IngressoPublicoPage />} />
             <Route path="/sobre" element={<SobrePage />} />
+            <Route path="/salas" element={<SalasPage />} />
             {/* O painel cria e edita sessão na própria tela; as rotas antigas de
                 busca/criação/edição em telas separadas caíram junto com elas. */}
             <Route path="/organizador" element={<GerenciarSessoesPage />} />

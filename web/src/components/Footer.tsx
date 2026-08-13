@@ -23,12 +23,7 @@ export function Footer() {
           <div className="font-mono text-base tracking-[2px] text-cyan-400">A CASA</div>
           <div className="mt-2 flex flex-col gap-2 text-sm text-paper-100/70">
             <Link to="/sobre">Sobre o Rolo 35</Link>
-            <Link
-              to="/em-construcao"
-              state={{ titulo: 'Salas', mensagem: 'O cadastro de salas ainda depende de um design próprio.' }}
-            >
-              Salas
-            </Link>
+            <Link to="/salas">Salas</Link>
           </div>
         </div>
         <div>
