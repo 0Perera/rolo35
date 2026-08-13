@@ -11,6 +11,7 @@ import { PagamentoPage } from './pages/PagamentoPage';
 import { MeusIngressosPage } from './pages/MeusIngressosPage';
 import { IngressoPublicoPage } from './pages/IngressoPublicoPage';
 import { SalasPage } from './pages/SalasPage';
+import { SelecaoTurnoPortariaPage } from './pages/SelecaoTurnoPortariaPage';
 import { SobrePage } from './pages/SobrePage';
 
 function App() {
@@ -50,7 +51,7 @@ function App() {
                 busca/criação/edição em telas separadas caíram junto com elas. */}
             <Route path="/organizador" element={<GerenciarSessoesPage />} />
             <Route path="/organizador/sessoes" element={<Navigate to="/organizador" replace />} />
-            <Route path="/portaria" element={<PapelPlaceholderPage titulo="Área da Portaria" />} />
+            <Route path="/portaria" element={<SelecaoTurnoPortariaPage />} />
             <Route path="/em-construcao" element={<PapelPlaceholderPage />} />
           </Route>
         </Routes>
