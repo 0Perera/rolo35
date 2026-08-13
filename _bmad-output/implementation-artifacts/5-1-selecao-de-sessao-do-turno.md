@@ -1,6 +1,6 @@
 # Story 5.1: Seleção de Sessão do Turno
 
-Status: ready-for-dev
+Status: review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -158,8 +158,46 @@ so that toda validação seguinte já sabe contra qual sessão comparar o códig
 
 ### Agent Model Used
 
+Claude Sonnet 5 (bmad-agent-dev, Amelia)
+
 ### Debug Log References
+
+Nenhum problema além do esperado no ciclo Red-Green-Refactor: RED confirmado por falha de
+compilação (Tasks 2, 3, 4) antes de cada GREEN; um ajuste de `UnnecessaryStubbingException`
+em `PortariaServiceTest` (stub de `turnoPortariaRepository.findById()` desnecessário, já que
+`selecionarSessao()` sempre chama `save()` direto, sem checagem prévia).
 
 ### Completion Notes List
 
+- Migration nomeada `V6__turno_portaria.sql` (não `V5` como o rascunho original da story
+  sugeria) — `V5` já estava ocupado por `V5__indice_assento_sessao_reserva.sql`.
+- Suíte completa verde: `mvn test` (backend) e `npx tsc --noEmit && npm run lint && npm run
+  build` (frontend). `npx vitest run` tem 3 arquivos de teste pré-existentes falhando
+  (`client.test.ts`, `Header.test.tsx`, `LoginPage.test.tsx`) por um problema de ambiente
+  (`localStorage` indisponível) não relacionado a esta story — confirmado reproduzindo a
+  falha antes de qualquer mudança desta story (`git stash` + rerun). O arquivo de teste novo
+  desta story (`SelecaoTurnoPortariaPage.test.tsx`) passa integralmente.
+- Decisões registradas em `docs/decisions.md`.
+
 ### File List
+
+- `api/src/main/resources/db/migration/V6__turno_portaria.sql`
+- `api/src/main/java/br/com/rolo35/api/ingressos/TurnoPortaria.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/repository/TurnoPortariaRepository.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/SessaoAtivaNaoSelecionadaException.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/PortariaNaoEncontradaException.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/dto/SessaoAtivaDto.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/dto/SelecionarSessaoRequest.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/service/PortariaService.java`
+- `api/src/main/java/br/com/rolo35/api/ingressos/controller/PortariaController.java`
+- `api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java` (update)
+- `api/src/test/java/br/com/rolo35/api/ingressos/repository/TurnoPortariaRepositorySmokeTest.java`
+- `api/src/test/java/br/com/rolo35/api/ingressos/service/PortariaServiceTest.java`
+- `api/src/test/java/br/com/rolo35/api/ingressos/controller/PortariaControllerTest.java`
+- `api/src/test/java/br/com/rolo35/api/ingressos/PortariaSecurityTest.java`
+- `web/src/api/portaria.ts`
+- `web/src/pages/SelecaoTurnoPortariaPage.tsx`
+- `web/src/pages/SelecaoTurnoPortariaPage.test.tsx`
+- `web/src/App.tsx` (update)
+- `docs/decisions.md` (update)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (update)

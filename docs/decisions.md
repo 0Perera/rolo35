@@ -40,6 +40,27 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
+## `turno_portaria` como tabela própria, não coluna em `usuarios`
+
+- **Decisão**: o ponteiro "sessão ativa do turno da portaria" (Story 5.1) vive numa tabela própria (`turno_portaria`, PK = `usuario_id`, sem entidade de domínio rica), não como coluna `sessao_ativa_id` em `usuarios`.
+- **Por quê**: a arquitetura já registra `usuarios` como "uma tabela pros três papéis... nenhum papel tem campo próprio que justifique split". Uma coluna preenchida só por linhas `papel = PORTARIA` seria exatamente esse split. Tabela própria resolve sem contradizer a decisão já tomada, e ausência de linha vira o estado natural "nenhuma sessão selecionada ainda" — sem precisar de coluna nullable.
+
+---
+
+## Seleção de sessão do turno reaproveita a listagem pública, sem endpoint dedicado
+
+- **Decisão**: a tela de seleção de sessão da portaria (Story 5.1) reaproveita `GET /api/sessoes` (`listarSessoesPublicadas()`), a mesma listagem da home, em vez de uma rota nova de "sessões disponíveis pra portaria".
+- **Por quê**: simplificação consciente dentro do prazo de 7 dias. Isso traz junto o filtro `data_hora >= now()` já existente no repository — a portaria escolhe entre sessões futuras/em andamento no sentido de "ainda não passaram da lista pública", não uma janela mais estrita de "sessão rolando agora". Nenhum FR pede uma janela mais precisa.
+
+---
+
+## `PortariaService.obterSessaoAtivaOuLancar()` nasce na Story 5.1 para a Story 5.2 reusar
+
+- **Decisão**: `obterSessaoAtivaOuLancar()` devolve a entidade `Sessao` (não o DTO) e lança `SessaoAtivaNaoSelecionadaException` quando a portaria não tem turno selecionado. Ele já existe e é exercitado ponta a ponta hoje via `GET /api/portaria/turno`, embora a validação de ingresso em si (que vai chamá-lo) só chegue na próxima story.
+- **Por quê**: não é código especulativo — é o mecanismo de bloqueio que a AC1 desta story pede ("operação bloqueada sem sessão selecionada"), e a validação de ingresso da próxima story precisa exatamente desse primitivo antes de tocar em qualquer `Ingresso`, para não reimplementar a mesma checagem em dois lugares.
+
+---
+
 ## Vite + React puro em vez de Next.js
 
 - **Decisão**: front-end em Vite + React puro (SPA).

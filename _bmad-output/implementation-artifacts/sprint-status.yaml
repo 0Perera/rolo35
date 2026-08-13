@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: 2026-08-13 (Epic 4 fechado: 4.1, 4.2 e 4.3 done — fluxo de pagamento, ingresso e link público completos ponta a ponta)
+last_updated: 2026-08-13 (Story 5.1 → review — seleção de sessão do turno da portaria)
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
@@ -71,7 +71,7 @@ development_status:
   4-3-checkout-de-pagamento-no-front: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-selecao-de-sessao-do-turno: backlog
+  epic-5: in-progress
+  5-1-selecao-de-sessao-do-turno: review
   5-2-validacao-de-ingresso-na-portaria: backlog
   epic-5-retrospective: optional
