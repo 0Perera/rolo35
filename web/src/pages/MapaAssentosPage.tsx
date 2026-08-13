@@ -179,8 +179,13 @@ export function MapaAssentosPage() {
   return (
     <PageShell>
       <div className="mx-auto max-w-[1280px] px-5 pt-9 pb-20 sm:px-8 xl:max-w-[1440px]">
-        <Link to="/" className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
-          ◀ VOLTAR PRA PRATELEIRA
+        {/* Volta pro filme, que é de onde se escolhe outra sessão. A vitrine é o destino só
+            enquanto o mapa não carregou e não se sabe de qual filme ele é. */}
+        <Link
+          to={mapa ? `/filmes/${mapa.tmdbId}` : '/'}
+          className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600"
+        >
+          ◀ {mapa ? 'VOLTAR PRAS SESSÕES' : 'VOLTAR PRA PRATELEIRA'}
         </Link>
 
         {estado === 'loading' && <p className="mt-6 font-mono text-lg text-ink-950/60">Carregando…</p>}

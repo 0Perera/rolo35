@@ -11,6 +11,7 @@ import type { Reserva } from '../api/reservas';
 
 const mapa: MapaAssentos = {
   sessaoId: 5,
+  tmdbId: 550,
   titulo: 'Clube da Luta',
   posterUrl: null,
   salaNome: 'Sala 1',
@@ -90,6 +91,16 @@ describe('MapaAssentosPage', () => {
     renderPage('999');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sessão não encontrada/i);
+  });
+
+  // Quem chega no mapa veio da tela de horários do filme; devolver pra vitrine inteira obriga a
+  // procurar o filme de novo pra trocar de sessão.
+  it('points the back link at the film, not at the whole shelf', async () => {
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
+
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: /voltar/i })).toHaveAttribute('href', '/filmes/550');
   });
 
   it('renders the session header and each seat with its status', async () => {

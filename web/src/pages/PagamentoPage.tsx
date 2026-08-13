@@ -199,7 +199,7 @@ export function PagamentoPage() {
   if (estado === 'loading' || estado === 'erro' || estado === 'nao-autorizado') {
     return (
       <PageShell>
-        <div className="mx-auto max-w-[940px] px-5 pt-9 pb-[90px] sm:px-8">
+        <div className="mx-auto max-w-[940px] px-5 pt-9 pb-[90px] sm:px-8 xl:max-w-[1100px]">
           {estado === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando…</p>}
           {estado === 'erro' && (
             <p role="alert" className="font-mono text-lg text-flame-600">
@@ -267,7 +267,7 @@ export function PagamentoPage() {
   if (estado === 'aprovada' && reserva && pagamento) {
     return (
       <PageShell>
-        <div className="mx-auto max-w-[900px] px-5 pt-[46px] pb-[90px] sm:px-8">
+        <div className="mx-auto max-w-[900px] px-5 pt-[46px] pb-[90px] sm:px-8 xl:max-w-[1040px]">
           <div className="text-center">
             <p className="font-mono text-[22px] tracking-[4px] text-navy-700">✓ PAGAMENTO APROVADO</p>
             <h1 className="mt-2.5 font-display text-[clamp(28px,4.4cqw,44px)] leading-tight text-flame-600 [text-shadow:3px_3px_0_var(--color-flame-400)]">
@@ -348,7 +348,7 @@ export function PagamentoPage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-[940px] px-5 pt-9 pb-[90px] sm:px-8">
+      <div className="mx-auto max-w-[940px] px-5 pt-9 pb-[90px] sm:px-8 xl:max-w-[1100px]">
         <Link to={linkDoMapa} className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
           ◀ TROCAR ASSENTOS
         </Link>
@@ -452,7 +452,7 @@ export function PagamentoPage() {
             </Button>
           </section>
 
-          <aside className="flex-[1_1_280px] border-[3px] border-ink-950 bg-paper-50 p-6 shadow-[9px_9px_0_var(--color-ink-950)]">
+          <aside className="flex-[1_1_280px] border-[3px] border-ink-950 bg-paper-50 p-6 shadow-[9px_9px_0_var(--color-ink-950)] xl:p-8">
             <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">SUA RESERVA</p>
             <h2 className="mt-2 font-display text-xl leading-[1.1]">{reserva?.sessaoTitulo}</h2>
             <div className="my-4 h-[3px] bg-gradient-to-r from-flame-600 to-flame-400" />

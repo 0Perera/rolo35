@@ -319,7 +319,7 @@ class SessaoControllerTest {
     @Test
     void returns200WithMapaAssentosDtoForGetMapaAssentos() throws Exception {
         MapaAssentosDto dto = new MapaAssentosDto(
-                100L, "Clube da Luta", "http://poster", "Sala 1", LocalDateTime.now().plusDays(7),
+                100L, 550L, "Clube da Luta", "http://poster", "Sala 1", LocalDateTime.now().plusDays(7),
                 new BigDecimal("25.00"),
                 List.of(new AssentoMapaDto(1L, "A", 1, "LIVRE"), new AssentoMapaDto(2L, "A", 2, "RESERVADO")));
         given(sessaoService.mapaAssentos(100L)).willReturn(dto);
@@ -327,6 +327,7 @@ class SessaoControllerTest {
         mockMvc.perform(get("/api/sessoes/100/mapa-assentos"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessaoId").value(100))
+                .andExpect(jsonPath("$.tmdbId").value(550))
                 .andExpect(jsonPath("$.titulo").value("Clube da Luta"))
                 .andExpect(jsonPath("$.salaNome").value("Sala 1"))
                 .andExpect(jsonPath("$.assentos[0].id").value(1))

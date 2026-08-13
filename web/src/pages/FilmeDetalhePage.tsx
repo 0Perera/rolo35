@@ -60,7 +60,7 @@ export function FilmeDetalhePage() {
 
   return (
     <PageShell>
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-5 py-10 sm:px-6 xl:max-w-[1440px]">
       <Link to="/" className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600">
         ◀ VOLTAR PRA PRATELEIRA
       </Link>
@@ -76,8 +76,10 @@ export function FilmeDetalhePage() {
       )}
 
       {estado === 'pronto' && preco && (
-        <div className="mt-6 flex flex-wrap items-start gap-9">
-          <div className="w-full flex-[0_1_300px] border-[3px] border-ink-950 bg-ink-950 shadow-[9px_9px_0_rgba(23,18,25,0.85)]">
+        <div className="mt-6 flex flex-wrap items-start gap-9 xl:gap-12">
+          {/* O pôster cresce junto do container em tela grande: a 300px fixos ele vira uma miniatura
+              com meia tela vazia embaixo, e o pôster é o que identifica o filme aqui. */}
+          <div className="w-full flex-[0_1_300px] border-[3px] border-ink-950 bg-ink-950 shadow-[9px_9px_0_rgba(23,18,25,0.85)] xl:flex-[0_1_400px]">
             <div className="relative aspect-[2/3]">
               {sessoesDoFilme[0].posterUrl ? (
                 <img
@@ -112,11 +114,11 @@ export function FilmeDetalhePage() {
             </div>
 
             {sessoesDoFilme[0].sinopse && (
-              <p className="mt-5 max-w-xl text-base leading-relaxed">{sessoesDoFilme[0].sinopse}</p>
+              <p className="mt-5 max-w-xl text-base leading-relaxed xl:max-w-2xl xl:text-lg">{sessoesDoFilme[0].sinopse}</p>
             )}
 
             <div className="my-7 h-[3px] bg-ink-950" />
-            <h2 className="mb-4 font-display text-xl">ESCOLHA A SESSÃO</h2>
+            <h2 className="mb-4 font-display text-xl xl:text-2xl">ESCOLHA A SESSÃO</h2>
 
             {agruparPorDia(sessoesDoFilme).map(({ dia, sessoes: sessoesDoDia }) => (
               <div
@@ -126,7 +128,7 @@ export function FilmeDetalhePage() {
                 {/* Coluna do dia mais estreita que os 150px do protótipo: lá cada dia tem três ou
                     quatro horários preenchendo a linha; aqui um dia com uma sessão só deixaria
                     um vão entre a data e o único botão. */}
-                <div className="shrink-0 font-mono text-xl tracking-wide uppercase sm:w-[104px]">{dia}</div>
+                <div className="shrink-0 font-mono text-xl tracking-wide uppercase sm:w-[104px] xl:w-[124px] xl:text-2xl">{dia}</div>
                 <div className="flex flex-wrap gap-3">
                   {sessoesDoDia.map((sessao) => (
                     <button
@@ -134,7 +136,7 @@ export function FilmeDetalhePage() {
                       type="button"
                       disabled={sessao.esgotada}
                       onClick={() => escolherHorario(sessao)}
-                      className={buttonClass('horario')}
+                      className={buttonClass('horario', 'xl:px-6 xl:py-4')}
                     >
                       <span className="font-display text-[17px] leading-tight">{rotuloDeHora(sessao.dataHora)}</span>
                       <span className="font-mono text-[15px] tracking-wide text-ink-950/60">

@@ -252,8 +252,8 @@ public class SessaoService {
                 .map(p -> new AssentoMapaDto(p.getAssentoId(), p.getFileira(), p.getNumero(), statusEfetivo(p, agora)))
                 .toList();
         return new MapaAssentosDto(
-                sessao.getId(), sessao.getTitulo(), sessao.getPosterUrl(), sala.getNome(), sessao.getDataHora(),
-                sessao.getPreco(), assentos);
+                sessao.getId(), sessao.getTmdbId(), sessao.getTitulo(), sessao.getPosterUrl(), sala.getNome(),
+                sessao.getDataHora(), sessao.getPreco(), assentos);
     }
 
     private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora) {

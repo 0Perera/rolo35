@@ -6,6 +6,7 @@ import java.util.List;
 
 public record MapaAssentosDto(
         Long sessaoId,
+        Long tmdbId,
         String titulo,
         String posterUrl,
         String salaNome,

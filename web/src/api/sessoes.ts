@@ -75,6 +75,7 @@ export interface AssentoMapa {
 
 export interface MapaAssentos {
   sessaoId: number;
+  tmdbId: number;
   titulo: string;
   posterUrl: string | null;
   salaNome: string;

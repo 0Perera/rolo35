@@ -562,6 +562,9 @@ class SessaoServiceTest {
         var mapa = sessaoService.mapaAssentos(7L);
 
         assertThat(mapa.sessaoId()).isEqualTo(7L);
+        // O tmdbId é o que permite voltar do mapa pra tela de escolha de sessão do filme: sem ele,
+        // o único caminho de volta é a vitrine inteira.
+        assertThat(mapa.tmdbId()).isEqualTo(550L);
         assertThat(mapa.titulo()).isEqualTo("Clube da Luta");
         assertThat(mapa.salaNome()).isEqualTo("Sala 1");
         assertThat(mapa.preco()).isEqualByComparingTo("25.00");
