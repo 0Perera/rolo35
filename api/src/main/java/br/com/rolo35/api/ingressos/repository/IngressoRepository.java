@@ -25,7 +25,7 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
             JOIN Sessao s ON s.id = i.sessaoId
             JOIN Sala sa ON sa.id = s.salaId
             WHERE r.clienteId = :clienteId
-            ORDER BY s.dataHora DESC
+            ORDER BY s.dataHora DESC, i.createdAt DESC
             """)
     List<IngressoResumoProjection> buscarPorCliente(Long clienteId);
 }

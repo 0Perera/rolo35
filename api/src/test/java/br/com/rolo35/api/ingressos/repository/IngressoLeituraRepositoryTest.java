@@ -137,4 +137,61 @@ class IngressoLeituraRepositoryTest {
         assertThat(projecao.getSalaNome()).isEqualTo("Sala ingressos leitura (fixture)");
         assertThat(projecao.getStatus()).isEqualTo(StatusIngresso.VALIDO);
     }
+
+    @Test
+    void buscarPorClienteDesempataIngressosDaMesmaSessaoPorCreatedAt() {
+        Sala sala = new Sala();
+        ReflectionTestUtils.setField(sala, "nome", "Sala desempate (fixture)");
+        ReflectionTestUtils.setField(sala, "linhas", 1);
+        ReflectionTestUtils.setField(sala, "colunas", 2);
+        sala = salaRepository.save(sala);
+        salaCriadaId = sala.getId();
+
+        Assento a1 = new Assento();
+        ReflectionTestUtils.setField(a1, "salaId", sala.getId());
+        ReflectionTestUtils.setField(a1, "fileira", "A");
+        ReflectionTestUtils.setField(a1, "numero", 1);
+        a1 = assentoRepository.save(a1);
+
+        Assento a2 = new Assento();
+        ReflectionTestUtils.setField(a2, "salaId", sala.getId());
+        ReflectionTestUtils.setField(a2, "fileira", "A");
+        ReflectionTestUtils.setField(a2, "numero", 2);
+        a2 = assentoRepository.save(a2);
+
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+        Sessao sessao = Sessao.builder()
+                .organizadorId(organizadorId)
+                .salaId(sala.getId())
+                .tmdbId(550L)
+                .titulo("Sessão desempate (fixture)")
+                .dataHora(LocalDateTime.now().plusDays(90).withNano(0))
+                .preco(new BigDecimal("25.00"))
+                .createdAt(Instant.now())
+                .build();
+        sessao = sessaoRepository.save(sessao);
+        sessaoCriadaId = sessao.getId();
+
+        Long cliente1Id = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
+        Reserva reserva1 = reservaRepository.save(new Reserva(
+                null, cliente1Id, sessao.getId(), StatusReserva.CONFIRMADA, Instant.now().truncatedTo(ChronoUnit.MICROS), null));
+        reserva1Id = reserva1.getId();
+
+        // Dois ingressos da MESMA sessão (mesmo dataHora) — sem desempate, a ordem entre eles
+        // não é garantida pelo banco. Insere o mais ANTIGO primeiro de propósito: se o teste só
+        // passasse por coincidir com a ordem física de inserção, trocar a ordem de save() aqui
+        // teria que quebrar o teste sem o ORDER BY explícito por createdAt.
+        Instant primeiro = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant segundo = primeiro.plusSeconds(1);
+        Ingresso ingressoMaisAntigo = ingressoRepository.save(new Ingresso(
+                null, reserva1.getId(), a1.getId(), sessao.getId(), StatusIngresso.VALIDO, null, primeiro));
+        Ingresso ingressoMaisNovo = ingressoRepository.save(new Ingresso(
+                null, reserva1.getId(), a2.getId(), sessao.getId(), StatusIngresso.VALIDO, null, segundo));
+
+        List<IngressoResumoProjection> resultado = ingressoRepository.buscarPorCliente(cliente1Id);
+
+        assertThat(resultado).hasSize(2);
+        assertThat(resultado.get(0).getId()).isEqualTo(ingressoMaisNovo.getId());
+        assertThat(resultado.get(1).getId()).isEqualTo(ingressoMaisAntigo.getId());
+    }
 }
