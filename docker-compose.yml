@@ -32,6 +32,9 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       TMDB_API_TOKEN: ${TMDB_API_TOKEN}
       TZ: ${TZ:-America/Sao_Paulo}
+      # Ver .env.example: alargada no dev local pra que a portaria seja alcançável com o seed.
+      PORTARIA_JANELA_ANTES_MINUTOS: ${PORTARIA_JANELA_ANTES_MINUTOS:-20160}
+      PORTARIA_JANELA_DEPOIS_HORAS: ${PORTARIA_JANELA_DEPOIS_HORAS:-2}
     ports:
       - "8080:8080"
     depends_on:

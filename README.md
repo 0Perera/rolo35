@@ -164,6 +164,7 @@ local.
 | `TMDB_API_TOKEN` | raiz | Token v4 do TMDb, usado só pelo back-end |
 | `CORS_ALLOWED_ORIGINS` | raiz | Allow-list de origens da API (default: `http://localhost:5173`) |
 | `TZ` | raiz | Fuso da JVM e do Postgres — **obrigatória**, veja o aviso abaixo |
+| `PORTARIA_JANELA_ANTES_MINUTOS` / `PORTARIA_JANELA_DEPOIS_HORAS` | raiz | Janela em que a portaria pode ativar uma sessão como turno (defaults: `30` e `2`). O compose já sobe alargado — sem isso nenhuma sessão do seed é selecionável, veja abaixo |
 | `VITE_API_URL` | raiz | URL da API consumida pela SPA. Lida em tempo de **build** (o Vite inlina no bundle), então mudá-la exige `docker compose up -d --build web` — restart não basta. Fica na raiz porque é de lá que o `docker-compose.yml` a lê como build arg; `web/.env` só vale pro `vite dev` |
 
 > ⚠️ **`TZ` é obrigatória, inclusive no deploy.** `sessoes.data_hora` é wall-clock sem fuso: o
@@ -337,6 +338,16 @@ recarga de página e tentativa de acessar o que é de outro usuário.
    inexistente.
 8. **Trava pós-venda:** volte como **organizador** e tente editar a sessão que acabou de vender
    ingresso — `409 SESSAO_COM_INGRESSO_CONFIRMADO`, em todos os campos, sem exceção.
+9. **Portaria:** entre como **portaria**, selecione a sessão do ingresso que você acabou de comprar
+   e valide — pela câmera, apontando pro QR, ou digitando os 8 caracteres impressos no canhoto.
+   Repita a mesma leitura: `JA_UTILIZADO`, sem validar duas vezes.
+
+> ℹ️ **Sobre o passo 9.** A portaria só ativa como "sessão do turno" uma sessão perto do horário
+> dela — a janela real é de 30 min antes a 2h depois, porque ativar a sessão errada faz a fila
+> inteira ser recusada com ingresso legítimo na mão. Como todo o seed nasce com data futura, com
+> essa janela nenhuma sessão semeada seria selecionável. Por isso o `docker-compose.yml` sobe com
+> `PORTARIA_JANELA_ANTES_MINUTOS=20160` (14 dias): a regra continua existindo e testada nos
+> defaults, e o fluxo fica exercitável sem esperar o relógio. Em produção, deixe o default.
 
 Duas provas que só aparecem no protocolo, se você quiser conferir:
 

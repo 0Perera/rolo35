@@ -76,9 +76,11 @@ class PortariaServiceValidacaoTest {
     private PortariaService portariaService;
 
     private void setUp() {
+        // Janela do turno nos defaults de produção: nada neste arquivo depende dela — a sessão
+        // ativa vem stubada direto — mas usar outro valor aqui seria ruído.
         portariaService = new PortariaService(
                 usuarioRepository, sessaoRepository, salaRepository, turnoPortariaRepository, ingressoRepository,
-                assentoRepository, codigoIngressoService, entityManager);
+                assentoRepository, codigoIngressoService, entityManager, 30, 2);
     }
 
     private void stubSessaoAtiva() {

@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -45,11 +46,21 @@ public class PortariaService {
      */
     private static final int LIMITE_HISTORICO = 30;
 
-    // Janela operacional pra ativar sessão como "sessão do turno" — não reaproveita o buffer de
-    // 4h de conflito de sala (SessaoService): são conceitos diferentes, mesmo que o valor pareça
-    // parecido. Decidido em spec-backlog-hardening (CAP-8).
-    private static final long JANELA_TURNO_ANTES_MINUTOS = 30;
-    private static final long JANELA_TURNO_DEPOIS_HORAS = 2;
+    /**
+     * Janela operacional pra ativar sessão como "sessão do turno": até {@code janelaAntesMinutos}
+     * antes do horário dela e até {@code janelaDepoisHoras} depois. Não reaproveita o buffer de 4h
+     * de conflito de sala (SessaoService) — são conceitos diferentes, mesmo que o valor pareça
+     * parecido. Decidido em spec-backlog-hardening (CAP-8).
+     *
+     * <p>Configuráveis pelo mesmo motivo (e no mesmo formato) do teto de cadastro: o default é a
+     * regra de operação real, mas quem está avaliando ou desenvolvendo precisa alcançar a tela da
+     * portaria sem esperar o relógio bater na sessão certa. Todo seed nasce com data futura, então
+     * com a janela estrita nenhuma sessão semeada é selecionável. Alargar por ambiente é o que
+     * torna o fluxo exercitável sem afrouxar o que vai pro ar.
+     */
+    private final long janelaAntesMinutos;
+
+    private final long janelaDepoisHoras;
 
     private final UsuarioRepository usuarioRepository;
     private final SessaoRepository sessaoRepository;
@@ -64,7 +75,11 @@ public class PortariaService {
             UsuarioRepository usuarioRepository, SessaoRepository sessaoRepository, SalaRepository salaRepository,
             TurnoPortariaRepository turnoPortariaRepository, IngressoRepository ingressoRepository,
             AssentoRepository assentoRepository, CodigoIngressoService codigoIngressoService,
-            EntityManager entityManager) {
+            EntityManager entityManager,
+            @Value("${portaria.turno.janela-antes-minutos:30}") long janelaAntesMinutos,
+            @Value("${portaria.turno.janela-depois-horas:2}") long janelaDepoisHoras) {
+        this.janelaAntesMinutos = janelaAntesMinutos;
+        this.janelaDepoisHoras = janelaDepoisHoras;
         this.usuarioRepository = usuarioRepository;
         this.sessaoRepository = sessaoRepository;
         this.salaRepository = salaRepository;
@@ -81,8 +96,8 @@ public class PortariaService {
         Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
 
         LocalDateTime agora = LocalDateTime.now();
-        LocalDateTime inicioJanela = agora.minusHours(JANELA_TURNO_DEPOIS_HORAS);
-        LocalDateTime fimJanela = agora.plusMinutes(JANELA_TURNO_ANTES_MINUTOS);
+        LocalDateTime inicioJanela = agora.minusHours(janelaDepoisHoras);
+        LocalDateTime fimJanela = agora.plusMinutes(janelaAntesMinutos);
         if (sessao.getDataHora().isBefore(inicioJanela) || sessao.getDataHora().isAfter(fimJanela)) {
             throw new SessaoForaDaJanelaDoTurnoException();
         }
