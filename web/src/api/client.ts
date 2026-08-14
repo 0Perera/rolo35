@@ -1,3 +1,5 @@
+import { lerSessao, limparSessao } from '../lib/sessao';
+
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
 // Cold start do plano free do Render leva ~1min; timeout com folga evita
@@ -20,11 +22,17 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * Token que a API recusou. Distingue "sua sessão acabou, entre de novo" de "a API falhou, tente de
+ * novo" — sem isso a tela pede pra repetir uma chamada que vai dar 401 de novo pra sempre.
+ */
+export class SessaoExpiradaError extends ApiRequestError {}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const token = localStorage.getItem('rolo35.token');
+  const { token } = lerSessao();
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -47,6 +55,13 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
         body !== null && typeof body === 'object' && 'codigo' in body && typeof body.codigo === 'string'
           ? body.codigo
           : undefined;
+      // 401 só significa sessão morta se havia token pra morrer: o mesmo status responde
+      // credencial errada no login, e limpar/anunciar sessão ali seria inventar um logout de
+      // quem nunca entrou.
+      if (response.status === 401 && token) {
+        limparSessao();
+        throw new SessaoExpiradaError(mensagem, response.status, codigo);
+      }
       throw new ApiRequestError(mensagem, response.status, codigo);
     }
 

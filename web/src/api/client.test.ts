@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ApiRequestError, apiFetch } from './client';
+import { ApiRequestError, SessaoExpiradaError, apiFetch } from './client';
 
 function respostaDeErro(body: unknown, status = 409): Response {
   return new Response(typeof body === 'string' ? body : JSON.stringify(body), {
@@ -64,6 +64,30 @@ describe('apiFetch', () => {
 
     expect((erro as ApiRequestError).codigo).toBeUndefined();
     expect((erro as ApiRequestError).message).toBe('Erro qualquer');
+  });
+
+  it('clears the stored session when the API rejects the token we sent', async () => {
+    localStorage.setItem('rolo35.token', 'token-vencido');
+    localStorage.setItem('rolo35.papel', 'CLIENTE');
+    vi.mocked(fetch).mockResolvedValue(respostaDeErro({ mensagem: 'Não autenticado' }, 401));
+
+    const erro = await apiFetch('/api/ingressos/minhas').catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(SessaoExpiradaError);
+    expect(localStorage.getItem('rolo35.token')).toBeNull();
+    expect(localStorage.getItem('rolo35.papel')).toBeNull();
+  });
+
+  it('does not report an expired session on a 401 from a request that carried no token', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      respostaDeErro({ codigo: 'CREDENCIAIS_INVALIDAS', mensagem: 'E-mail ou senha inválidos' }, 401),
+    );
+
+    const erro = await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
+
+    expect(erro).toBeInstanceOf(ApiRequestError);
+    expect(erro).not.toBeInstanceOf(SessaoExpiradaError);
+    expect((erro as ApiRequestError).codigo).toBe('CREDENCIAIS_INVALIDAS');
   });
 
   it('leaves codigo undefined when the error body is not JSON', async () => {

@@ -7,6 +7,7 @@ import { Button, buttonClass } from '../components/Button';
 import { Card } from '../components/Card';
 import { PageShell } from '../components/PageShell';
 import { TextField } from '../components/TextField';
+import { salvarSessao } from '../lib/sessao';
 
 type EstadoLogin = 'idle' | 'loading' | 'error';
 
@@ -45,8 +46,7 @@ export function LoginPage() {
 
     try {
       const resposta = await login(email, senha);
-      localStorage.setItem('rolo35.token', resposta.token);
-      localStorage.setItem('rolo35.papel', resposta.papel);
+      salvarSessao(resposta.token, resposta.papel);
       // Compra interrompida por falta de login volta pro ponto onde parou. Só pra CLIENTE: entrar
       // com outro papel não continua uma compra, e mandar um organizador pro mapa de assentos só
       // adiaria a mesma negação pro clique seguinte.

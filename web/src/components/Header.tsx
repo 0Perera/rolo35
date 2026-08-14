@@ -1,12 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router';
-import type { Papel } from '../api/auth';
-
-function lerSessao(): { token: string | null; papel: Papel | null } {
-  return {
-    token: localStorage.getItem('rolo35.token'),
-    papel: localStorage.getItem('rolo35.papel') as Papel | null,
-  };
-}
+import { limparSessao, useSessao } from '../lib/sessao';
 
 function linkClass(ativo: boolean): string {
   return `border-b-2 pb-0.5 ${
@@ -22,11 +15,10 @@ function paginaAtual(ativo: boolean): 'page' | undefined {
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { token, papel } = lerSessao();
+  const { token, papel } = useSessao();
 
   function sair() {
-    localStorage.removeItem('rolo35.token');
-    localStorage.removeItem('rolo35.papel');
+    limparSessao();
     navigate('/');
   }
 

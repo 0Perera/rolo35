@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { Header } from './Header';
+import { limparSessao } from '../lib/sessao';
 
 function renderHeader(papel?: string) {
   localStorage.clear();
@@ -41,6 +42,18 @@ describe('Header', () => {
 
     renderHeader('PORTARIA');
     expect(screen.queryByRole('link', { name: /meus ingressos/i })).not.toBeInTheDocument();
+  });
+
+  // Quando a API recusa o token, quem limpa a sessão é o `apiFetch` — o header precisa parar de
+  // anunciar "CLIENTE · SAIR" na mesma hora, senão a tela jura que a pessoa continua logada.
+  it('drops the logged-in badge as soon as the session is cleared elsewhere', () => {
+    renderHeader('CLIENTE');
+    expect(screen.getByRole('button', { name: /CLIENTE · SAIR/i })).toBeInTheDocument();
+
+    act(() => limparSessao());
+
+    expect(screen.queryByRole('button', { name: /SAIR/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /entrar/i })).toBeInTheDocument();
   });
 
   it('marks the wallet link as the current page while the client is on it', () => {
