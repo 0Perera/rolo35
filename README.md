@@ -167,6 +167,10 @@ npm run dev                   # SPA em http://localhost:5173
 | `V2__seed.sql` | Dados de teste versionados (4 usuários, 3 salas, 1 sessão publicada) |
 | `V3__indice_sessoes_sala_data_hora.sql` | Índice composto que serve a query de conflito de horário |
 | `V4__indices_ingressos_por_cliente.sql` | Índices de `reservas.cliente_id` e `ingressos.reserva_id` para "Meus ingressos" |
+| `V5__indice_assento_sessao_reserva.sql` | Índice de `assento_sessao.reserva_id` para retomar o checkout |
+| `V6__turno_portaria.sql` | Tabela `turno_portaria` (sessão ativa por operador) |
+| `V7__indice_ingressos_por_sessao.sql` | Índice de `ingressos.sessao_id` para o painel do turno |
+| `V8__backstops_ingressos.sql` | FK composta de `ingressos` contra `assento_sessao` e `UNIQUE (reserva_id, assento_id)` |
 
 - `spring.jpa.hibernate.ddl-auto=validate`: o Hibernate **nunca** cria nem altera tabela. O schema
   é do Flyway; a aplicação só valida se o mapeamento casa.
@@ -428,11 +432,14 @@ Constraints que expressam domínio, não só validação de aplicação:
 
 - `CHECK` em `usuarios.papel`, `reservas.status`, `assento_sessao.status`, `ingressos.status` — não
   existe papel ou status livre, nem via `psql`.
-- `UNIQUE (email)` em `usuarios`; `UNIQUE (sala_id, fileira, numero)` em `assentos`.
-- FKs coerentes em todas as relações acima.
+- `UNIQUE (email)` em `usuarios`; `UNIQUE (sala_id, fileira, numero)` em `assentos`;
+  `UNIQUE (reserva_id, assento_id)` em `ingressos` — uma reserva não emite dois canhotos pra mesma
+  poltrona.
+- FKs coerentes em todas as relações acima, incluindo a composta de `ingressos (sessao_id,
+  assento_id)` contra `assento_sessao`: ingresso aponta pra uma linha real do mapa daquela sessão,
+  não pra um par (sessão, assento) que só existe separado.
 
-O que **falta** no schema está declarado em [17](#17-o-que-não-funciona--ficou-de-fora) — inclusive
-duas constraints de integridade que eu reconheço como dívida, não como decisão.
+O que **falta** no schema está declarado em [17](#17-o-que-não-funciona--ficou-de-fora).
 
 ---
 
@@ -819,7 +826,6 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 
 | Item | Impacto real |
 |---|---|
-| `ingressos` sem `UNIQUE (reserva_id, assento_id)` e sem FK composta contra `assento_sessao` | Hoje inalcançável pela aplicação (o service sempre deriva sessão e assento da mesma linha, sob lock), mas é o único dos invariantes de duplicação sem *backstop* no banco. Inconsistente com o critério que eu mesmo apliquei nos outros dois |
 | Conflito de horário garantido por lock de aplicação, sem `EXCLUDE USING gist` | Escrita que não passe por `SessaoService` não é protegida pelo schema |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
 | Organizador não vê ocupação da sala ao criar sessão | `salas` é pool compartilhado, `sessoes` é isolada por dono: o organizador só descobre conflito ao submeter. Não é falha de segurança (o back valida sempre), é fricção de UX |

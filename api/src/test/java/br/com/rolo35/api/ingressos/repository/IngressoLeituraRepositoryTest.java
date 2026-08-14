@@ -10,9 +10,12 @@ import br.com.rolo35.api.reservas.Reserva;
 import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.Assento;
+import br.com.rolo35.api.sessoes.AssentoSessao;
+import br.com.rolo35.api.sessoes.AssentoSessaoId;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
+import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import java.math.BigDecimal;
@@ -56,6 +59,9 @@ class IngressoLeituraRepositoryTest {
     @Autowired
     private SessaoRepository sessaoRepository;
 
+    @Autowired
+    private AssentoSessaoRepository assentoSessaoRepository;
+
     private Long salaCriadaId;
     private Long sessaoCriadaId;
     private Long reserva1Id;
@@ -72,6 +78,7 @@ class IngressoLeituraRepositoryTest {
             reservaRepository.deleteById(reserva2Id);
         }
         if (sessaoCriadaId != null) {
+            assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(sessaoCriadaId));
             sessaoRepository.deleteById(sessaoCriadaId);
         }
         if (salaCriadaId != null) {
@@ -114,6 +121,7 @@ class IngressoLeituraRepositoryTest {
                 .build();
         sessao = sessaoRepository.save(sessao);
         sessaoCriadaId = sessao.getId();
+        mapeiaNaSessao(sessao.getId(), a1, a2);
 
         Long cliente1Id = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
         Long cliente2Id = usuarioRepository.findByEmail(CLIENTE_2).orElseThrow().getId();
@@ -167,6 +175,7 @@ class IngressoLeituraRepositoryTest {
                 .build();
         sessao = sessaoRepository.save(sessao);
         sessaoCriadaId = sessao.getId();
+        mapeiaNaSessao(sessao.getId(), a1, a2, a3);
 
         Long cliente1Id = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
         Long cliente2Id = usuarioRepository.findByEmail(CLIENTE_2).orElseThrow().getId();
@@ -213,6 +222,19 @@ class IngressoLeituraRepositoryTest {
         return assentoRepository.save(assento);
     }
 
+    /**
+     * O mapa da sessão, que a fixture montava só na cabeça: aqui as sessões nascem por
+     * {@code sessaoRepository.save()} e não por {@code SessaoService.criar()}, então nenhuma linha
+     * de {@code assento_sessao} vinha junto. A FK composta da V8 tornou isso um estado impossível —
+     * ingresso agora aponta pra uma linha real do mapa.
+     */
+    private void mapeiaNaSessao(Long sessaoId, Assento... assentos) {
+        for (Assento assento : assentos) {
+            assentoSessaoRepository.save(
+                    new AssentoSessao(new AssentoSessaoId(sessaoId, assento.getId()), "VENDIDO", null, null));
+        }
+    }
+
     @Test
     void buscarPorClienteDesempataIngressosDaMesmaSessaoPorCreatedAt() {
         Sala sala = new Sala();
@@ -246,6 +268,7 @@ class IngressoLeituraRepositoryTest {
                 .build();
         sessao = sessaoRepository.save(sessao);
         sessaoCriadaId = sessao.getId();
+        mapeiaNaSessao(sessao.getId(), a1, a2);
 
         Long cliente1Id = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
         Reserva reserva1 = reservaRepository.save(new Reserva(
