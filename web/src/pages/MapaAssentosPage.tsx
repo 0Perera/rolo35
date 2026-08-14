@@ -52,11 +52,16 @@ export function MapaAssentosPage() {
         if (retomados) {
           selecaoRetomada.current = null;
           // O mapa que acabou de chegar é a autoridade: assento que outra pessoa levou durante o
-          // login não volta selecionado só porque estava na escolha anterior.
+          // login não volta selecionado só porque estava na escolha anterior. MEU_HOLD entra junto
+          // de LIVRE — assento que o próprio cliente já segurava continua disponível pra ele.
           setSelecionados(
             new Set(
               resultado.assentos
-                .filter((assento) => assento.status === 'LIVRE' && retomados.includes(assento.id))
+                .filter(
+                  (assento) =>
+                    (assento.status === 'LIVRE' || assento.status === 'MEU_HOLD') &&
+                    retomados.includes(assento.id),
+                )
                 .slice(0, MAX_ASSENTOS)
                 .map((assento) => assento.id),
             ),

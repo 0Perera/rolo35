@@ -67,10 +67,15 @@ export function LoginPage() {
     try {
       const resposta = await login(email, senha);
       salvarSessao(resposta.token, resposta.papel);
-      // Conta de demonstração tem destino próprio, guardado fora do canal de retomada. `retomarEm`
-      // quer dizer "havia uma compra parada esperando login" — reusá-lo como rota da conta demo
-      // faria a plataforma tratar uma escolha de papel como compra que ninguém começou.
-      if (destinoDemo) {
+      // Compra parada vence o destino da conta demo, e só ela. A conta demo é atalho de credencial,
+      // não declaração de destino: quem clicou em comprar, foi desviado pra cá e escolheu a conta
+      // mais rápida pra entrar continua querendo comprar. Mandar essa pessoa pra vitrine descarta a
+      // seleção de assentos no único ponto do fluxo em que refazê-la dói.
+      //
+      // O recorte por papel é o que mantém os dois canais separados: entrar como organizador não
+      // continua a compra de ninguém, e aí o destino da conta demo segue sendo o certo.
+      const compraParada = retomada !== null && retomada.assentoIds.length > 0;
+      if (destinoDemo && !(compraParada && resposta.papel === 'CLIENTE')) {
         navigate(destinoDemo);
         return;
       }

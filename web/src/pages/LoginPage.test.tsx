@@ -178,9 +178,11 @@ describe('LoginPage', () => {
     expect(await screen.findByText('terminal de portaria')).toBeInTheDocument();
   });
 
-  // O destino da conta demo mora fora do canal de retomada de propósito. Se dividissem a mesma
-  // variável, escolher uma conta demo seria indistinguível de uma compra parada esperando login.
-  it('does not treat a demo account as a purchase waiting to be resumed', async () => {
+  // A conta demo é atalho de credencial, não declaração de destino. Quem clicou em comprar, tomou
+  // o desvio pro login e escolheu a conta mais rápida pra entrar continua querendo comprar — mandar
+  // essa pessoa pra vitrine joga a seleção de assentos fora no único ponto do fluxo em que ela é
+  // difícil de refazer.
+  it('resumes an interrupted purchase even when the credentials came from a demo account', async () => {
     vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'CLIENTE' });
     const user = userEvent.setup();
 
@@ -202,7 +204,34 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: /cliente1@rolo35\.com\.br/i }));
     await user.click(screen.getByRole('button', { name: /entrar/i }));
 
-    expect(await screen.findByText('vitrine')).toBeInTheDocument();
+    expect(await screen.findByText('destino /sessoes/5/assentos com assentos 1,2')).toBeInTheDocument();
+  });
+
+  // O recorte por papel continua valendo, e é o que mantém os dois canais separados: entrar como
+  // organizador não continua a compra de ninguém, então aí o destino da conta demo é o certo.
+  it('sends a demo staff account to its own screen even with a purchase waiting', async () => {
+    vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'ORGANIZADOR' });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/login', state: { retomarEm: '/sessoes/5/assentos', assentoIds: [1, 2] } },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/sessoes/:id/assentos" element={<DestinoFalso />} />
+          <Route path="/organizador" element={<p>painel do organizador</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /contas de demonstração/i }));
+    await user.click(screen.getByRole('button', { name: /organizador@rolo35\.com\.br/i }));
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+
+    expect(await screen.findByText('painel do organizador')).toBeInTheDocument();
   });
 
   it('drops the demo destination once the credentials are edited by hand', async () => {
