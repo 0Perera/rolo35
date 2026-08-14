@@ -1,10 +1,12 @@
 package br.com.rolo35.api.ingressos.repository;
 
 import br.com.rolo35.api.ingressos.Ingresso;
+import br.com.rolo35.api.ingressos.StatusIngresso;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -36,4 +38,28 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
             ORDER BY s.dataHora DESC, i.createdAt DESC
             """)
     List<IngressoResumoProjection> buscarPorCliente(Long clienteId);
+
+    /** Quantas pessoas já entraram na sessão (FR-21). */
+    long countBySessaoIdAndStatus(Long sessaoId, StatusIngresso status);
+
+    /** Denominador do contador: ingressos emitidos pra sessão, não capacidade da sala (FR-21). */
+    long countBySessaoId(Long sessaoId);
+
+    /**
+     * Histórico de entradas liberadas do turno, mais recente primeiro.
+     *
+     * <p>Devolve o id do ingresso, não o código assinado: o código é credencial (AD-8), e quem
+     * monta o prefixo curto de conferência é o service. Também não traz nada do cliente — a
+     * portaria decide entrada por assento e estado (FR-19).
+     */
+    @Query(
+            """
+            SELECT i.id AS ingressoId, a.fileira AS assentoFileira, a.numero AS assentoNumero,
+                   i.validatedAt AS validadoEm
+            FROM Ingresso i
+            JOIN Assento a ON a.id = i.assentoId
+            WHERE i.sessaoId = :sessaoId AND i.status = br.com.rolo35.api.ingressos.StatusIngresso.UTILIZADO
+            ORDER BY i.validatedAt DESC
+            """)
+    List<LeituraTurnoProjection> buscarLeiturasDoTurno(@Param("sessaoId") Long sessaoId, Pageable pageable);
 }

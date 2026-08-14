@@ -9,6 +9,8 @@ import br.com.rolo35.api.ingressos.ResultadoValidacao;
 import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
 import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.TurnoPortaria;
+import br.com.rolo35.api.ingressos.dto.PainelTurnoDto;
+import br.com.rolo35.api.ingressos.dto.PainelTurnoDto.LeituraTurnoDto;
 import br.com.rolo35.api.ingressos.dto.SessaoAtivaDto;
 import br.com.rolo35.api.ingressos.dto.ValidacaoIngressoDto;
 import br.com.rolo35.api.ingressos.repository.IngressoRepository;
@@ -24,14 +26,23 @@ import br.com.rolo35.api.sessoes.repository.SalaRepository;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class PortariaService {
+
+    /**
+     * O painel é conferência de turno, não relatório: o operador precisa das últimas leituras pra
+     * responder "essa pessoa já entrou?". Sem teto, uma sessão lotada devolveria centenas de linhas
+     * a cada validação, na frente da fila.
+     */
+    private static final int LIMITE_HISTORICO = 30;
 
     private final UsuarioRepository usuarioRepository;
     private final SessaoRepository sessaoRepository;
@@ -114,6 +125,43 @@ public class PortariaService {
         ingressoRepository.save(ingresso);
         return new ValidacaoIngressoDto(
                 ResultadoValidacao.VALIDO, assento.getFileira(), assento.getNumero(), sessaoAtiva.getTitulo());
+    }
+
+    /**
+     * Painel do turno (FR-21): leitura pura sobre o que a validação já persistiu. Não adquire lock
+     * e não transiciona nada — {@code POST /portaria/validacoes} continua sendo o único caminho de
+     * {@code VALIDO → UTILIZADO} (AD-9).
+     *
+     * <p>Só entradas liberadas aparecem no histórico. Ingresso inválido, repetido ou de outra
+     * sessão é recusado sem gravar nada, então não há de onde ler — registrar isso exigiria uma
+     * tabela de auditoria escrita dentro da transação de {@link #validar}, que é o caminho
+     * protegido por AD-5. Decisão registrada na Story 5.3.
+     */
+    @Transactional(readOnly = true)
+    public PainelTurnoDto painelDoTurno(String portariaEmail) {
+        Sessao sessaoAtiva = obterSessaoAtivaOuLancar(portariaEmail);
+        List<LeituraTurnoDto> leituras =
+                ingressoRepository.buscarLeiturasDoTurno(sessaoAtiva.getId(), PageRequest.of(0, LIMITE_HISTORICO))
+                        .stream()
+                        .map(leitura -> new LeituraTurnoDto(
+                                codigoCurto(leitura.getIngressoId()),
+                                leitura.getAssentoFileira(),
+                                leitura.getAssentoNumero(),
+                                leitura.getValidadoEm()))
+                        .toList();
+        return new PainelTurnoDto(
+                ingressoRepository.countBySessaoIdAndStatus(sessaoAtiva.getId(), StatusIngresso.UTILIZADO),
+                ingressoRepository.countBySessaoId(sessaoAtiva.getId()),
+                leituras);
+    }
+
+    /**
+     * Prefixo pra conferência visual contra o ingresso na mão do cliente. Curto de propósito: o
+     * código completo é assinado por HMAC e vale como credencial (AD-8) — listá-lo inteiro numa
+     * tela transformaria o painel numa fonte de ingressos válidos.
+     */
+    private static String codigoCurto(UUID ingressoId) {
+        return ingressoId.toString().substring(0, 6).toUpperCase();
     }
 
     private SessaoAtivaDto montarDto(Sessao sessao) {

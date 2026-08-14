@@ -12,6 +12,8 @@ import br.com.rolo35.api.auth.JwtService;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.config.SecurityConfig;
 import br.com.rolo35.api.ingressos.controller.PortariaController;
+import br.com.rolo35.api.ingressos.dto.PainelTurnoDto;
+import br.com.rolo35.api.ingressos.dto.PainelTurnoDto.LeituraTurnoDto;
 import br.com.rolo35.api.ingressos.dto.SessaoAtivaDto;
 import br.com.rolo35.api.ingressos.dto.ValidacaoIngressoDto;
 import br.com.rolo35.api.ingressos.service.PortariaService;
@@ -116,6 +118,51 @@ class PortariaSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sessaoId\":1}"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void painelReturns401WithoutToken() throws Exception {
+        mockMvc.perform(get("/api/portaria/turno/painel"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTENTICADO"));
+    }
+
+    @Test
+    void painelReturns403ForClienteToken() throws Exception {
+        String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
+
+        mockMvc.perform(get("/api/portaria/turno/painel").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void painelReturns403ForOrganizadorToken() throws Exception {
+        String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
+
+        mockMvc.perform(get("/api/portaria/turno/painel").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    // Além do 200, checa o corpo: a resposta do painel não pode carregar nada que identifique o
+    // cliente (FR-19). A asserção existe pra que um campo novo no DTO não passe despercebido.
+    @Test
+    void painelReturns200ForPortariaTokenSemDadoDeCliente() throws Exception {
+        String token = jwtService.generateToken("portaria@rolo35.com.br", "PORTARIA");
+        given(portariaService.painelDoTurno(anyString()))
+                .willReturn(new PainelTurnoDto(
+                        2L, 5L, java.util.List.of(new LeituraTurnoDto("A3F91C", "D", 7, LocalDateTime.now()))));
+
+        mockMvc.perform(get("/api/portaria/turno/painel").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.validados").value(2))
+                .andExpect(jsonPath("$.emitidos").value(5))
+                .andExpect(jsonPath("$.leituras[0].codigoCurto").value("A3F91C"))
+                .andExpect(jsonPath("$.leituras[0].assentoFileira").value("D"))
+                .andExpect(jsonPath("$.leituras[0].cliente").doesNotExist())
+                .andExpect(jsonPath("$.leituras[0].clienteNome").doesNotExist())
+                .andExpect(jsonPath("$.leituras[0].email").doesNotExist());
     }
 
     @Test
