@@ -40,7 +40,7 @@ implementadas estão marcadas explicitamente como pendentes.
   não tem token, e a Story 1.3 decidiu não gatear a escolha de papel);
   o matcher do mapa de assentos é por path exato (`/api/sessoes/*/mapa-assentos`)
   para não vazar `GET /api/sessoes/{id}` (gestão, só ORGANIZADOR) nem
-  `GET /api/sessoes/minhas` (`SecurityConfig.java:48-57`).
+  `GET /api/sessoes/gestao` (`SecurityConfig.java:48-57`).
 - **Toda outra rota exige autenticação** (`anyRequest().authenticated()`,
   `SecurityConfig.java:57-58`).
 
@@ -82,12 +82,14 @@ implementadas estão marcadas explicitamente como pendentes.
   - `lock_timeout` de 3s setado antes do lock, pra falhar rápido em vez de
     travar a requisição indefinidamente se a linha da sala já estiver
     lockada (`SessaoService.java:80`, `:128`).
-- **Edição de sessão é bloqueada por dono**: só o organizador que criou pode
-  editar; checagem de ownership roda **antes** de qualquer validação de
-  corpo, pra nunca vazar um 400 antes de confirmar quem é o dono (mesmo ID
-  certo + corpo malformado ainda dá 403) —
-  `SessaoNaoPertenceAoOrganizadorException`
-  (`SessaoService.java:134-136`, comentário AC2).
+- **Edição de sessão não é bloqueada por dono** (CAP-1): qualquer `ORGANIZADOR`
+  autenticado edita qualquer sessão, porque a sessão é recurso do cinema e a
+  equipe de organizadores é compartilhada. O que a edição ainda exige é que a
+  conta do token exista (`OrganizadorNaoEncontradoException`, `SessaoService.java:130`)
+  — um JWT válido de usuário já removido não edita nada. `sessoes.organizador_id`
+  continua registrando quem criou, e é essa autoria (não quem editou) que volta
+  na resposta. A regra anterior, com `SessaoNaoPertenceAoOrganizadorException`
+  checada antes de validar o corpo, foi **removida**; a exceção não existe mais.
 - **Sessão com ingresso confirmado não pode mais ser editada**:
   `SessaoComIngressoConfirmadoException`, checado via
   `existeIngressoConfirmado` (`SessaoService.java:140-142`).

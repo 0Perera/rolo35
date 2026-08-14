@@ -96,7 +96,11 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
-## Deploy Render + Vercel, aceitando limitação de free tier
+## ~~Deploy Render + Vercel, aceitando limitação de free tier~~ — revogada pelo CAP-6
+
+> **Revogada.** A Vercel saiu do plano de deploy: o `render.yaml` sobe os três serviços numa conta
+> só. Ver "Deploy inteiro no Render por blueprint, em vez de API no Render + front na Vercel
+> (CAP-6)" mais abaixo.
 
 - **Decisão**: API no Render (free), front na Vercel; limitação documentada no README.
 - **Por quê**: risco aceito conscientemente — mitigado no README, com possibilidade de upgrade pro plano pago do Render se necessário pra evitar cold start; Docker Compose cobrindo a aplicação inteira garante caminho alternativo de "sobe com um comando" se o deploy falhar.
@@ -426,7 +430,12 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
-## Ownership checado antes da validação de corpo na edição de sessão (Story 2.2)
+## ~~Ownership checado antes da validação de corpo na edição de sessão (Story 2.2)~~ — revogada pelo CAP-1
+
+> **Revogada.** O CAP-1 removeu o ownership de sessão inteiro, e com ele a ordem que esta decisão
+> estabelecia. `SessaoNaoPertenceAoOrganizadorException` não existe mais. Fica registrada porque o
+> raciocínio sobre vazamento por diferença de status continua valendo para outras rotas — ver
+> "Sessão é recurso do cinema, não do organizador (CAP-1)" abaixo.
 
 - **Decisão**: em `SessaoService.editar`, a checagem de que o organizador autenticado é dono da sessão (`SessaoNaoPertenceAoOrganizadorException`) roda antes de qualquer validação do corpo da requisição (`DataHoraNoPassadoException`, conflito de horário, etc.) — nessa ordem, mesmo que o corpo esteja malformado.
 - **Por quê**: se a validação de corpo rodasse primeiro, um organizador tentando editar sessão de outro (ID certo, mas sem ser o dono) só descobriria isso depois de passar por um 400 de corpo malformado — ou, pior, um 400 nunca apareceria e a diferença de status entre "corpo ruim" e "não é seu" vazaria, por inferência, se aquele ID de sessão existe e pertence a outra pessoa. Checar dono primeiro garante 403 sempre que o recurso não é do chamador, independente do que vier no corpo — mesma classe de cuidado que já rege a mitigação de timing attack no login.
@@ -513,6 +522,10 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ## `NaoAutorizadoException` subiu pra `common`; `SessaoNaoPertenceAoOrganizadorException` ficou onde estava (Story 4.3)
 
+> **Parcialmente revogada pelo CAP-1.** A parte sobre `NaoAutorizadoException` em `common` continua
+> valendo. A segunda metade não: `SessaoNaoPertenceAoOrganizadorException` foi apagada junto com o
+> ownership de sessão, então não há mais o que manter onde estava.
+
 - **Decisão**: `pagamentos.NaoAutorizadoException` virou `common.NaoAutorizadoException`, passando a atender também `reservas`. `sessoes.SessaoNaoPertenceAoOrganizadorException` **não** entrou no movimento.
 - **Por quê**: já existiam quatro origens do mesmo par `403 NAO_AUTORIZADO`, e uma classe nova em `reservas` seria a segunda cópia de uma exceção que nasceu com nome genérico; a alternativa — `reservas` importar de `pagamentos` — inverteria a direção de dependência registrada pra Story 4.1. `common` é onde `GlobalExceptionHandler` e `ApiError` já moram, então nada se inverte. A exceção de sessão ficou porque o nome carrega significado no throw site e nos testes (é ownership de sessão, não papel errado): colapsá-la numa genérica perderia informação. O objetivo era parar de multiplicar cópias de uma exceção sem significado próprio, não uniformizar tudo.
 
@@ -567,6 +580,7 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Por quê**: o isolamento multi-tenant entre organizadores nunca foi pedido. O PDF oficial do desafio especifica um organizador seedado e nenhuma noção de vários organizadores independentes disputando o mesmo cinema; a decisão "Escopo de um único cinema, não plataforma multi-local" já tinha registrado que salas são pool compartilhado "sem conceito de posse", e sessão ter dono contradizia isso — o mesmo cinema, com a mesma sala e a mesma portaria, mas com uma agenda invisível pra metade da equipe. Na operação real de um cinema de bairro, quem cobre o turno da noite precisa corrigir a sessão que o turno da tarde cadastrou errado. Manter o isolamento significava manter uma dimensão de autorização inteira (e sua superfície de bug) pra sustentar uma regra que ninguém pediu.
 - **Consequência assumida**: não há trilha de quem editou o quê — `organizador_id` só diz quem criou. Auditoria de edição seria uma tabela nova, fora do escopo do desafio; a alternativa barata (sobrescrever `organizador_id` com quem editou por último) foi rejeitada por destruir a única informação de autoria que existe hoje.
 - **Efeito no requisito**: a leitura estrita de "organizador só gerencia sessão própria" (FR-2) deixa de valer; a leitura que fica é "só quem tem papel `ORGANIZADOR` gerencia sessões", que continua sendo garantida pelo `@PreAuthorize` de cada rota de gestão.
+- **Ressalva que faltava nesta entrada** (levantada em code review depois do commit): o ownership também era, por acidente, o que limitava o raio do cadastro público. `POST /api/auth/cadastro` é `permitAll` e aceita `papel` no corpo (Story 1.3), então qualquer visitante cria uma conta `ORGANIZADOR`; antes do CAP-1 essa conta só mexia nas sessões que ela própria tivesse criado, e agora mexe em todas. Nenhuma das duas decisões está errada isolada — juntas é que somam. Mantido assim de propósito, porque é o que torna as três telas avaliáveis sem seed manual, e declarado no README §17 em vez de escondido. Num produto real, o cadastro público criaria só `CLIENTE` e staff viria por convite.
 
 ---
 

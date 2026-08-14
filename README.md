@@ -191,9 +191,26 @@ local.
 | `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3` |
 | `V10__seed_mais_sessoes.sql` | Mais 5 sessões publicadas, com dois filmes em mais de um horário |
 | `V11__codigo_curto_ingresso.sql` | Coluna `codigo_curto` do ingresso, única e indexada |
+| `V12__horario_redondo_sessao_do_seed.sql` | Arredonda a sessão da `V2`, que nascia no minuto exato do boot |
+| `V13__seed_mais_tres_sessoes.sql` | Mais 3 sessões publicadas, uma por sala, na segunda semana |
 
 - `spring.jpa.hibernate.ddl-auto=validate`: o Hibernate **nunca** cria nem altera tabela. O schema
   é do Flyway; a aplicação só valida se o mapeamento casa.
+- **Se a API não subir na `V8`**, o motivo é ela adicionar constraint a uma tabela que já tem
+  linha: `ADD CONSTRAINT ... FOREIGN KEY` valida `ingressos` inteira, e um ingresso órfão (assento
+  que não está mais no mapa daquela sessão) faz o Flyway abortar o boot. Volume novo nunca cai
+  nisso — é cenário de volume de desenvolvimento antigo. A migration não limpa sozinha de
+  propósito: apagar ingresso em silêncio é pior que a falha, que pelo menos é visível e
+  reversível. Para achar os culpados antes de decidir o que fazer com eles:
+
+```sql
+SELECT i.* FROM ingressos i
+WHERE NOT EXISTS (
+  SELECT 1 FROM assento_sessao a
+  WHERE a.sessao_id = i.sessao_id AND a.assento_id = i.assento_id);
+```
+
+  Em ambiente de desenvolvimento o caminho curto é o `down -v` logo abaixo, que recomeça do seed.
 - Zerar tudo e recomeçar do seed:
 
 ```bash
@@ -552,7 +569,7 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | Sala sem assento cadastrado não pode virar sessão (`409 SALA_SEM_ASSENTOS`) | Sessão sem mapa é sessão que não pode ser reservada — falha cedo, não na primeira compra |
 | Data/hora no passado é rejeitada, na criação e na edição | Regra óbvia de domínio; virou teste porque o bug de fuso a fazia disparar em horário válido |
 | **Conflito de horário na sala com buffer de 4h**, checado nos dois sentidos | Sessão de cinema ocupa a sala por um tempo, e o domínio não tem coluna de duração. Um buffer fixo de 4h aproxima "filme + limpeza + intervalo" sem inventar campo. O intervalo é aberto: exatamente 4h depois **não** conflita, e há teste na fronteira |
-| Edição só pelo organizador dono, e o *ownership* é checado **antes** de validar o corpo | ID certo com corpo malformado ainda responde `403`. Validar corpo primeiro contaria, pelo código do erro, que aquele ID existe |
+| **Sessão é recurso do cinema, não do organizador que a criou**: qualquer `ORGANIZADOR` autenticado vê e edita qualquer sessão | O enunciado especifica um organizador seedado, sem isolamento entre contas. `sessoes.organizador_id` continua registrando a autoria e volta na resposta da edição, mas não restringe mais quem edita — a equipe é compartilhada, como numa bilheteria de verdade |
 | Sessão com ≥1 ingresso confirmado **trava todos os campos**, sem exceção | Preço, horário e sala são o contrato de quem já comprou. Permitir editar "só o pôster" abre a discussão de qual campo é inofensivo; a trava total não abre |
 | Trocar de sala numa edição reconstrói o mapa de assentos do zero | Só é seguro porque o passo anterior já provou que não há ingresso confirmado — nenhum estado de venda real se perde |
 | Listagem pública mostra só sessões futuras, e **sessão esgotada continua aparecendo**, marcada | Esgotado é informação, não ausência: sumir da lista faz o usuário achar que a sessão não existe |
@@ -911,7 +928,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 | Item | Situação |
 |---|---|
 | **Janela de seleção da sessão do turno** | Resolvido: `PortariaService.selecionarSessao()` agora recusa sessão fora da janela `-30min/+2h` em volta do horário, com `SESSAO_FORA_DA_JANELA_DO_TURNO`. A constante é própria, separada do buffer de 4h de conflito de sala — são conceitos diferentes. O que continua fora é uma tela dedicada de "sessões em andamento agora": o seletor ainda parte da listagem pública |
-| **Autocadastro de cliente** | Fora do sprint original; as contas vêm do seed. A rota `/cadastro` é um *placeholder* honesto, não um formulário que finge funcionar |
+| **Autocadastro com papel selecionável** | Entregue, e com uma consequência que prefiro declarar a esconder: `POST /api/auth/cadastro` é público (quem cria conta ainda não tem token) e aceita o papel no corpo, então qualquer visitante pode criar uma conta `ORGANIZADOR` ou `PORTARIA`. Foi escolha consciente — é o que torna as três telas avaliáveis sem seed manual — mas o CAP-1 tirou o *ownership* de sessão, que era o que limitava o estrago de uma conta dessas às sessões que ela própria tivesse criado. Num produto real o cadastro público criaria só `CLIENTE`, e staff viria por convite |
 | **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
 
 ### Dívida técnica que eu reconheço como dívida
