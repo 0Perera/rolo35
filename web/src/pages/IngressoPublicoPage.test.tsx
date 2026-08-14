@@ -52,7 +52,10 @@ describe('IngressoPublicoPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar/i);
   });
 
-  it('renders session title, sala and status without any action control', async () => {
+  // A página segue somente-leitura sobre o ingresso: nada aqui muda estado — não valida, não
+  // cancela, não consome. Copiar link e copiar código são ações sobre texto que já está desenhado
+  // na tela, e quem abriu o link já tem os dois na mão; nenhuma delas toca o recurso.
+  it('renders session title, sala and status with only copy actions', async () => {
     vi.spyOn(ingressosApi, 'buscarIngressoPublico').mockResolvedValue(ingressoPublico);
 
     renderPage();
@@ -60,7 +63,10 @@ describe('IngressoPublicoPage', () => {
     expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
     expect(screen.getByText(/SALA 1/)).toBeInTheDocument();
     expect(screen.getByText('VALIDO')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /validar|cancelar|devolver/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /compartilhar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copiar código/i })).toBeInTheDocument();
   });
 
   it('renders the canhoto with the signed code and its QR', async () => {

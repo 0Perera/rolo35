@@ -1,39 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { SessaoExpiradaError } from '../api/client';
 import { listarMeusIngressos, type IngressoResumo } from '../api/ingressos';
+import { AcoesDoIngresso } from '../components/AcoesDoIngresso';
 import { buttonClass } from '../components/Button';
 import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { SeloStatusIngresso } from '../components/SeloStatusIngresso';
-import { urlPublicaDoIngresso } from '../lib/ingressos';
 import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
-type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
+type Estado = 'loading' | 'vazio' | 'erro' | 'expirada' | 'pronto';
 
 function assentoDe(ingresso: IngressoResumo): string {
   return `${ingresso.assentoFileira}${ingresso.assentoNumero}`;
-}
-
-function useCompartilhar(codigo: string) {
-  const [copiado, setCopiado] = useState(false);
-
-  async function compartilhar() {
-    try {
-      await navigator.clipboard.writeText(urlPublicaDoIngresso(codigo));
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    } catch {
-      // clipboard indisponível (ex.: contexto não seguro) — o QR do canhoto continua servindo
-      // como forma de levar o ingresso pra outro aparelho.
-    }
-  }
-
-  return { copiado, compartilhar };
-}
-
-function rotuloCompartilhar(copiado: boolean): string {
-  return copiado ? 'LINK COPIADO ✓' : '↗ COMPARTILHAR';
 }
 
 /**
@@ -42,8 +22,6 @@ function rotuloCompartilhar(copiado: boolean): string {
  * fica ao lado, irmão dele. O realce de hover mora no `<li>`, então a linha toda reage ao mouse.
  */
 function LinhaIngresso({ ingresso, onAbrir }: { ingresso: IngressoResumo; onAbrir: () => void }) {
-  const { copiado, compartilhar } = useCompartilhar(ingresso.codigo);
-
   return (
     <li className="flex flex-wrap border-[3px] border-ink-950 bg-paper-50 shadow-[8px_8px_0_var(--color-ink-950)] transition hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[10px_10px_0_var(--color-ink-950)]">
       <div aria-hidden="true" className="w-3 bg-gradient-to-b from-flame-600 via-flame-500 to-flame-400" />
@@ -63,17 +41,13 @@ function LinhaIngresso({ ingresso, onAbrir }: { ingresso: IngressoResumo; onAbri
             {ingresso.salaNome.toUpperCase()} · ASSENTO {assentoDe(ingresso)}
           </span>
         </button>
-        <button type="button" onClick={compartilhar} className={buttonClass('ticket')}>
-          {rotuloCompartilhar(copiado)}
-        </button>
+        <AcoesDoIngresso codigo={ingresso.codigo} />
       </div>
     </li>
   );
 }
 
 function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onVoltar: () => void }) {
-  const { copiado, compartilhar } = useCompartilhar(ingresso.codigo);
-
   return (
     <>
       <button
@@ -101,15 +75,13 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
           </p>
           {/* break-all porque o código é `uuid.assinatura` — uma palavra só, longa o bastante pra
               estourar o canhoto no mobile se ficar inquebrável. */}
-          <p className="mt-2 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">
+          <p className="mt-5 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">
             CÓDIGO {ingresso.codigo}
           </p>
           <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
             ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
           </p>
-          <button type="button" onClick={compartilhar} className={buttonClass('ticket', 'mt-5')}>
-            {rotuloCompartilhar(copiado)}
-          </button>
+          <AcoesDoIngresso codigo={ingresso.codigo} className="mt-5" />
         </CanhotoIngresso>
       </div>
     </>
@@ -134,9 +106,9 @@ export function MeusIngressosPage() {
         setAbertoId(null);
         setEstado(resultado.length === 0 ? 'vazio' : 'pronto');
       })
-      .catch(() => {
+      .catch((erro: unknown) => {
         if (ativo) {
-          setEstado('erro');
+          setEstado(erro instanceof SessaoExpiradaError ? 'expirada' : 'erro');
         }
       });
     return () => {
@@ -167,6 +139,23 @@ export function MeusIngressosPage() {
           >
             TENTAR NOVAMENTE
           </button>
+        )}
+
+        {estado === 'expirada' && (
+          <>
+            <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
+              Sua sessão expirou. Entre de novo pra ver seus ingressos.
+            </p>
+            {/* `retomarEm` traz de volta pra carteira depois do login, em vez de largar na vitrine
+                quem só queria ver o ingresso. */}
+            <Link
+              to="/login"
+              state={{ retomarEm: '/meus-ingressos' }}
+              className={buttonClass('primary', 'mt-4')}
+            >
+              ENTRAR DE NOVO
+            </Link>
+          </>
         )}
 
         {estado === 'vazio' && (

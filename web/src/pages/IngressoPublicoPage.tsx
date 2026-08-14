@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { buscarIngressoPublico, type IngressoPublico } from '../api/ingressos';
 import { ApiRequestError } from '../api/client';
+import { AcoesDoIngresso } from '../components/AcoesDoIngresso';
 import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
@@ -95,6 +96,7 @@ export function IngressoPublicoPage() {
               <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
                 ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
               </p>
+              <AcoesDoIngresso codigo={codigo} className="mt-5" />
             </CanhotoIngresso>
           </div>
         )}

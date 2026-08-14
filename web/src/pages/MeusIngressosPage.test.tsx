@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MeusIngressosPage } from './MeusIngressosPage';
 import * as ingressosApi from '../api/ingressos';
 import type { IngressoResumo } from '../api/ingressos';
+import { SessaoExpiradaError } from '../api/client';
 
 const ingresso: IngressoResumo = {
   id: 'abc-123',
@@ -56,6 +57,20 @@ describe('MeusIngressosPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar/i);
   });
 
+  // Sessão vencida devolve 401 em toda tentativa: oferecer "tentar novamente" só repetiria a
+  // recusa. A saída é o login, e a carteira é pra onde se volta depois dele.
+  it('asks for a new login instead of a retry when the session has expired', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockRejectedValue(
+      new SessaoExpiradaError('Não autenticado', 401),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sessão expirou/i);
+    expect(screen.getByRole('link', { name: /entrar de novo/i })).toHaveAttribute('href', '/login');
+    expect(screen.queryByRole('button', { name: /tentar novamente/i })).not.toBeInTheDocument();
+  });
+
   it('renders each ingresso with session title, sala and assento', async () => {
     vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
 
@@ -104,7 +119,43 @@ describe('MeusIngressosPage', () => {
     await userEvent.click(within(linha as HTMLElement).getByRole('button', { name: /compartilhar/i }));
 
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/ingressos/abc-123.assinatura`);
-    expect(await screen.findByText(/link copiado/i)).toBeInTheDocument();
+    // Pelo `role`, não pelo texto: o mesmo "Link copiado" também é anunciado num `aria-live`
+    // invisível, e buscar só pelo texto acha os dois.
+    expect(await screen.findByRole('button', { name: /link copiado/i })).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  // O código é `uuid.assinatura`: uma palavra só, longa, quebrada em várias linhas. Selecionar com
+  // o dedo é inviável, e é no celular que o cliente abre o ingresso — o botão é a única forma
+  // prática de levar o código pra digitação manual na portaria.
+  it('copies the signed code itself, not the public link', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
+    await userEvent.click(screen.getByRole('button', { name: /copiar código/i }));
+
+    expect(writeText).toHaveBeenCalledWith('abc-123.assinatura');
+    expect(await screen.findByRole('button', { name: /código copiado/i })).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
+
+  // Sem contexto seguro não existe `navigator.clipboard`, e o `execCommand` do fallback não é
+  // implementado pelo jsdom. O que não pode acontecer é o clique não dizer nada: antes o erro era
+  // engolido e o usuário ficava sem saber se copiou.
+  it('says out loud when copying is not possible instead of failing silently', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
+    await userEvent.click(screen.getByRole('button', { name: /copiar código/i }));
+
+    expect(await screen.findByRole('button', { name: /não foi possível copiar/i })).toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });

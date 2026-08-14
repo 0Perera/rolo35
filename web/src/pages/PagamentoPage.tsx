@@ -4,6 +4,7 @@ import { ApiRequestError } from '../api/client';
 import { confirmarPagamento, type Pagamento, type ResultadoSimulado } from '../api/pagamentos';
 import { buscarReserva, type ReservaCheckout } from '../api/reservas';
 import { Alert } from '../components/Alert';
+import { AcoesDoIngresso } from '../components/AcoesDoIngresso';
 import { Button, buttonClass } from '../components/Button';
 import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
@@ -327,6 +328,9 @@ export function PagamentoPage() {
                   <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
                     ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
                   </p>
+                  {/* É aqui que compartilhar faz mais falta: o cliente acabou de receber os
+                      ingressos e manda o do acompanhante antes de sair da tela. */}
+                  <AcoesDoIngresso codigo={ingresso.codigo} className="mt-5" />
                 </CanhotoIngresso>
               );
             })}
