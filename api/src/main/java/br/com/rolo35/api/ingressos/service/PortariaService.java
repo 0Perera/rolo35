@@ -29,6 +29,7 @@ import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -133,24 +134,32 @@ public class PortariaService {
     /**
      * Resolve o texto lido — QR ou digitado — no ingresso correspondente, ou {@code null}.
      *
-     * <p>Um formato só: o código curto. O QR carrega exatamente o que o operador digitaria, então a
-     * câmera e o teclado convergem antes de chegar aqui. O código assinado por HMAC deixou de ser
-     * credencial de portaria — sobrou como token do link público, que é a única superfície sem
-     * autenticação e a única que ainda precisa de assinatura.
+     * <p>Dois formatos, um caminho: o código assinado é reconhecido pela forma
+     * {@code uuid.assinatura} e só passa depois de conferida a HMAC; qualquer outra coisa é tentada
+     * como código curto de digitação manual. A ordem importa — um código assinado nunca tem 8
+     * caracteres, então não há ambiguidade, e checar a assinatura primeiro mantém o caminho da
+     * câmera exatamente como era.
      *
-     * <p>Todos os motivos de falha (formato recusado, código inexistente) devolvem {@code null} e
-     * viram o mesmo {@code INVALIDO}, pelo mesmo raciocínio já registrado na Story 5.2: a resposta
-     * não pode virar oráculo de quais códigos existem.
+     * <p>Todos os motivos de falha (formato, assinatura adulterada, código inexistente) devolvem
+     * {@code null} e viram o mesmo {@code INVALIDO}, pelo mesmo raciocínio já registrado na Story
+     * 5.2: a resposta não pode virar oráculo de quais códigos existem.
      */
     private Ingresso localizar(String codigo) {
-        Optional<String> codigoCurto = codigoIngressoService.normalizarCodigoCurto(codigo);
-        if (codigoCurto.isEmpty()) {
+        Optional<UUID> idAssinado = codigoIngressoService.extrairId(codigo)
+                .filter(id -> codigoIngressoService.validar(id, codigo));
+        Optional<String> codigoCurto = idAssinado.isPresent()
+                ? Optional.empty()
+                : codigoIngressoService.normalizarCodigoCurto(codigo);
+        if (idAssinado.isEmpty() && codigoCurto.isEmpty()) {
             return null;
         }
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         try {
-            return codigoCurto.flatMap(ingressoRepository::findByCodigoCurtoForUpdate).orElse(null);
+            return idAssinado
+                    .flatMap(ingressoRepository::findByIdForUpdate)
+                    .or(() -> codigoCurto.flatMap(ingressoRepository::findByCodigoCurtoForUpdate))
+                    .orElse(null);
         } catch (PessimisticLockingFailureException e) {
             throw new IngressoEmDisputaException();
         }
