@@ -95,6 +95,16 @@ services:
     routes:
       # Mesmo motivo do try_files do nginx no compose: as rotas do react-router não existem como
       # arquivo, e sem o rewrite qualquer link direto vira 404 do Render.
+      #
+      # As duas regras existem porque `/*` não casa com a raiz: declarar `routes` desliga o
+      # fallback implícito pro index.html, e `/*` exige ao menos um caractere depois da barra.
+      # O efeito medido no primeiro deploy foi o pior possível — `/organizador`, `/carteira` e
+      # qualquer link profundo respondiam 200, e só `https://<host>/` devolvia 404, ou seja,
+      # justamente o endereço que alguém digita pra abrir a aplicação. A regra da raiz vem antes
+      # por legibilidade; o Render avalia na ordem e só uma das duas casa cada requisição.
+      - type: rewrite
+        source: /
+        destination: /index.html
       - type: rewrite
         source: /*
         destination: /index.html
