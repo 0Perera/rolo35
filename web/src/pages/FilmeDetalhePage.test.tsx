@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { FilmeDetalhePage } from './FilmeDetalhePage';
 import * as sessoesApi from '../api/sessoes';
@@ -21,6 +21,12 @@ function sessao(campos: Partial<SessaoPublicada> = {}): SessaoPublicada {
     esgotada: false,
     ...campos,
   };
+}
+
+/** Espelha o que o resumo mandou pras salas: a tela de onde a pessoa saiu. */
+function DestinoDasSalas() {
+  const { state } = useLocation() as { state: { retomarEm?: string } | null };
+  return <p>salas pra retomar {state?.retomarEm}</p>;
 }
 
 function pagina(conteudo: SessaoPublicada[]): Pagina<SessaoPublicada> {
@@ -98,6 +104,37 @@ describe('FilmeDetalhePage', () => {
     const resumo = screen.getByText('1999').closest('div');
     expect(resumo).toHaveTextContent('SALA 1');
     expect(resumo).toHaveTextContent('2 SESSÕES');
+  });
+
+  // Os botões de horário dizem "SALA 1" e param aí: o que é essa sala está na página institucional,
+  // linkada só no rodapé, longe de quem lê o nome no momento de escolher. O resumo leva direto.
+  // O nome acessível começa pelo texto visível de propósito (WCAG 2.5.3): quem navega por voz diz
+  // "SALA 1" e acerta o link.
+  it('links the room summary to the rooms page', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessao()]));
+
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: /^SALA 1\b/ })).toHaveAttribute('href', '/salas');
+  });
+
+  // Sem levar a origem junto, a página de salas só sabe devolver pra vitrine — e quem estava
+  // escolhendo horário teria que reachar o filme e refazer a escolha pra voltar de onde saiu.
+  it('carries the current movie in the rooms link, so the visitor comes back to it', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessao()]));
+
+    render(
+      <MemoryRouter initialEntries={['/filmes/550']}>
+        <Routes>
+          <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />
+          <Route path="/salas" element={<DestinoDasSalas />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(await screen.findByRole('link', { name: /^SALA 1\b/ }));
+
+    expect(screen.getByText('salas pra retomar /filmes/550')).toBeInTheDocument();
   });
 
   // "A partir de" só quando os preços divergem: com valor único ele vira ruído em cima do

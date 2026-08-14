@@ -1,3 +1,4 @@
+import { Link, useLocation } from 'react-router';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { identidadeDaSala, nomeExibidoDaSala } from '../lib/salas';
@@ -14,10 +15,25 @@ const SALAS = [
 ];
 
 export function SalasPage() {
+  // Quem chegou pelo resumo do filme mandou junto de onde saiu. Sem origem — rodapé, URL colada,
+  // aba nova — a vitrine é a saída: `navigate(-1)` daria botão morto justamente nesses casos, que
+  // são os que não têm histórico.
+  const { state } = useLocation() as { state: { retomarEm?: string } | null };
+  const retomarEm = state?.retomarEm;
+
   return (
     <PageShell>
       <div className="mx-auto max-w-[900px] px-5 pt-[46px] pb-[90px] sm:px-8 xl:max-w-[1040px]">
-        <SectionTitle kicker="A CASA">SALAS</SectionTitle>
+        <Link
+          to={retomarEm ?? '/'}
+          className="font-mono text-lg tracking-wide text-ink-950/60 hover:text-flame-600"
+        >
+          ◀ {retomarEm ? 'VOLTAR PRAS SESSÕES' : 'VOLTAR PRA PRATELEIRA'}
+        </Link>
+
+        <div className="mt-6">
+          <SectionTitle kicker="A CASA">SALAS</SectionTitle>
+        </div>
 
         <ul className="mt-8 flex flex-col gap-[18px]">
           {SALAS.map((sala) => {

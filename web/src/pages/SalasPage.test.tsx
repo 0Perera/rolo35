@@ -3,9 +3,9 @@ import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { SalasPage } from './SalasPage';
 
-function renderPage() {
+function renderPage(retomarEm?: string) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[{ pathname: '/salas', state: retomarEm ? { retomarEm } : null }]}>
       <SalasPage />
     </MemoryRouter>,
   );
@@ -23,6 +23,23 @@ describe('SalasPage', () => {
     expect(screen.getByText(/80 lugares/i)).toBeInTheDocument();
     expect(screen.getByText(/sala 3 — vhs club/i)).toBeInTheDocument();
     expect(screen.getByText(/60 lugares/i)).toBeInTheDocument();
+  });
+
+  // Quem chega aqui pelo resumo do filme estava escolhendo sessão. Sem volta pro filme, o caminho
+  // de retorno é vitrine -> filme de novo, refazendo a escolha só pra descobrir o que é a sala.
+  it('goes back to the movie the visitor came from', () => {
+    renderPage('/filmes/27205');
+
+    expect(screen.getByRole('link', { name: /voltar pras sessões/i })).toHaveAttribute('href', '/filmes/27205');
+  });
+
+  // Sem origem — link do rodapé, URL colada, aba nova — a vitrine é a saída. `navigate(-1)` daria
+  // botão morto justamente nesses casos, que são os que não têm histórico.
+  it('falls back to the showcase when there is no origin', () => {
+    renderPage();
+
+    expect(screen.getByRole('link', { name: /voltar pra prateleira/i })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: /voltar pras sessões/i })).not.toBeInTheDocument();
   });
 
   // A página é conteúdo institucional, não leitura do cadastro: nenhuma sala aqui vem do banco,
