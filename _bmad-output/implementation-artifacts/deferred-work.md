@@ -133,8 +133,8 @@
   evidence: `grep -rn "import .*App" web/src` retorna só `src/main.tsx`. Reverter o `element` de `/cadastro` pro placeholder, ou escrever `path="/cadastrar"`, deixa a suíte inteira verde e desfaz a Task 9 sem sinal. Lacuna pré-existente do projeto, não introduzida aqui.
 
 - source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
-  summary: `POST /api/auth/cadastro` é público e aceita o papel direto do corpo, sem rate limit, convite, captcha ou qualquer teto — qualquer pessoa na internet cria contas `ORGANIZADOR` ou `PORTARIA` ilimitadas.
-  evidence: A ausência de gate de autorização é decisão deliberada e documentada (reduz atrito de avaliação do desafio), e o `AuthSecurityTest` fixa isso como esperado. O que não está decidido é o abuso por volume. Nenhuma AC pede controle de taxa; registrar antes de qualquer uso real.
+  summary: ~~`POST /api/auth/cadastro` é público e aceita o papel direto do corpo, sem rate limit, convite, captcha ou qualquer teto — qualquer pessoa na internet cria contas `ORGANIZADOR` ou `PORTARIA` ilimitadas.~~ **Parcialmente resolvido**: ganhou teto de 5 cadastros por hora por endereço de origem (`LimitadorDeCadastro`, `429 LIMITE_DE_CADASTRO_EXCEDIDO`). Segue em aberto o abuso por quem dispõe de muitos endereços, e a contagem não sobrevive a restart nem é compartilhada entre instâncias.
+  evidence: A ausência de gate de autorização é decisão deliberada e documentada (reduz atrito de avaliação do desafio), e o `AuthSecurityTest` fixa isso como esperado. O que não estava decidido era o abuso por volume — daí o teto por endereço, que é atrito contra mineração casual e não fronteira de segurança. Conter abuso de verdade pede convite, verificação de e-mail ou contador compartilhado; nenhum cabe no escopo desta story, e é isto que fica registrado aqui.
 
 - source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
   summary: O contrato de requisição de `login()` em `web/src/api/auth.ts` — método, path e chaves do corpo — não é aferido por teste nenhum; as páginas mockam o módulo inteiro.

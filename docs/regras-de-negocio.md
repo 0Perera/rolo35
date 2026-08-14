@@ -43,6 +43,16 @@ implementadas estão marcadas explicitamente como pendentes.
   `GET /api/sessoes/minhas` (`SecurityConfig.java:48-57`).
 - **Toda outra rota exige autenticação** (`anyRequest().authenticated()`,
   `SecurityConfig.java:57-58`).
+- **`POST /api/auth/cadastro` tem teto por endereço de origem**: 5 tentativas por
+  hora, configuráveis por `CADASTRO_LIMITE_TENTATIVAS` e
+  `CADASTRO_LIMITE_JANELA_MINUTOS`; ao estourar, `429 LIMITE_DE_CADASTRO_EXCEDIDO`
+  (`LimitadorDeCadastro`). É a única rota pública que escreve, e escreve conta com
+  o papel que o corpo pedir — as demais são de leitura. O teto conta só tentativas
+  que passaram do `@Valid`, para que errar o formulário não gaste a cota de quem
+  nunca criou nada. **Não é fronteira de segurança**: o endereço vem de
+  `X-Forwarded-For` (falsificável por quem alcança a API direto), quem dispõe de
+  muitos endereços passa por cima, e a contagem vive na memória de um processo só
+  — reiniciar a API zera, e duas instâncias contam separado.
 
 ## Catálogo de filmes (`sessoes/catalogo`)
 

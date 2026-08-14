@@ -11,6 +11,7 @@ import br.com.rolo35.api.auth.dto.CadastroRequest;
 import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.dto.LoginResponse;
 import br.com.rolo35.api.auth.service.AuthService;
+import br.com.rolo35.api.auth.service.LimitadorDeCadastro;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,11 @@ class AuthSecurityTest {
 
     @MockitoBean
     private AuthService authService;
+
+    // Este teste é sobre quem passa pela filter chain, não sobre o teto de cadastro: com o limitador
+    // real, a asserção de 200 dependeria da contagem deixada por outros testes da mesma classe.
+    @MockitoBean
+    private LimitadorDeCadastro limitadorDeCadastro;
 
     // O `permitAll()` que este teste protege é uma lista só, com login e cadastro dentro. Aferir só
     // o cadastro deixaria uma edição futura derrubar `/api/auth/login` da lista e quebrar todo login

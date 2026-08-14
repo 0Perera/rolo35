@@ -16,6 +16,7 @@ import br.com.rolo35.api.auth.dto.CadastroRequest;
 import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.dto.LoginResponse;
 import br.com.rolo35.api.auth.service.AuthService;
+import br.com.rolo35.api.auth.service.LimitadorDeCadastro;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,12 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    // Mock, e não o limitador real: este teste dispara vários cadastros seguidos do mesmo endereço
+    // e o teto real os reprovaria a partir do sexto, quebrando testes que nada têm a ver com limite.
+    // O 429 tem teste próprio, em CadastroLimiteControllerTest.
+    @MockitoBean
+    private LimitadorDeCadastro limitadorDeCadastro;
 
     @Test
     void returns200WithTokenForValidCredentials() throws Exception {

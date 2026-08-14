@@ -103,6 +103,15 @@ so that eu consiga operar no sistema com o papel certo sem depender de um cadast
   intocada) ou abrir escopo que nenhuma AC pede: duplicação do letreiro de marquee entre as duas
   telas, `rotaPorPapel` morando em `LoginPage.tsx` em vez de `lib/sessao.ts`, ausência de teste de
   roteamento no nível do `App`, e falta de rate limit no cadastro público.
+- **[Review][Patch]** O item de rate limit acima saiu do defer a pedido do usuário, depois do
+  fechamento da story. `POST /api/auth/cadastro` ganhou teto de 5 cadastros por hora por endereço de
+  origem (`LimitadorDeCadastro`, janela fixa em memória, `429 LIMITE_DE_CADASTRO_EXCEDIDO`). O
+  endereço vem do primeiro elemento de `X-Forwarded-For` — atrás do proxy do Render,
+  `getRemoteAddr()` devolveria o proxy e limitaria o mundo inteiro como um cliente só. O teto conta
+  só o que passa do `@Valid`, descarta janelas vencidas quando o mapa encosta em 10.000 endereços
+  (senão o próprio limite viraria vetor de negação de serviço), e é **atrito, não fronteira de
+  segurança**: quem tem muitos endereços passa, e a contagem não sobrevive a restart nem é
+  compartilhada entre instâncias. O que sobra segue registrado em `deferred-work.md`.
 
 ## Dev Notes
 
