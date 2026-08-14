@@ -25,8 +25,8 @@ negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
 - [2. Estado da entrega](#2-estado-da-entrega)
 - [3. Como rodar](#3-como-rodar)
   - [3.1 Pré-requisitos](#31-pré-requisitos)
-  - [3.2 Subir back-end + banco](#32-subir-back-end--banco)
-  - [3.3 Subir o front-end](#33-subir-o-front-end)
+  - [3.2 Subir a aplicação inteira](#32-subir-a-aplicação-inteira)
+  - [3.3 Desenvolver o front com hot reload](#33-desenvolver-o-front-com-hot-reload)
   - [3.4 Variáveis de ambiente](#34-variáveis-de-ambiente)
   - [3.5 Banco de dados, migrations e seed](#35-banco-de-dados-migrations-e-seed)
   - [3.6 Rodar os testes](#36-rodar-os-testes)
@@ -209,18 +209,31 @@ recriar o container em cada rodada.
 
 ### 3.7 Deploy e limitações do plano free
 
-Alvo planejado: **API + Postgres no Render** (plano free) e **front na Vercel**. A infraestrutura
-está pronta pra isso (`api/Dockerfile` multi-stage, variáveis todas externalizadas, CORS por
-allow-list), mas **a aplicação não está publicada no momento desta escrita** — o Docker Compose é o
-caminho garantido de execução.
+`render.yaml` na raiz é um **blueprint** que sobe os três serviços numa conta só — Static Site pro
+front, Web Service (Docker) pra API e Postgres gerenciado — em *Blueprints → New Blueprint
+Instance*, apontando pro repositório. Substituiu o arranjo anterior de API no Render + front na
+Vercel: duas contas, dois deploys e duas origens pra manter em sincronia por CORS.
+
+**A aplicação não está publicada no momento desta escrita** — o Docker Compose ([3.2](#32-subir-a-aplicação-inteira))
+é o caminho garantido de execução.
+
+Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard, depois dele):
+
+- `TMDB_API_TOKEN` — segredo, nunca versionado.
+- `CORS_ALLOWED_ORIGINS` na API e `VITE_API_URL` no front: cada um precisa da URL do outro. São
+  previsíveis (`https://<nome-do-serviço>.onrender.com`), mas o Render sufixa o nome quando ele já
+  está em uso, então chutar no arquivo seria pior do que preencher com a URL real. `VITE_API_URL` é
+  lida em tempo de build (o Vite inlina no bundle), então trocá-la exige redeploy do front.
 
 Limitações conhecidas do plano free, para quando a publicação acontecer:
 
-- O serviço dorme após ~15 min sem tráfego e leva cerca de 1 min pra acordar no próximo request. A
-  primeira chamada da avaliação pode parecer lenta; a segunda é normal.
+- **A API dorme** após ~15 min sem tráfego e leva cerca de 1 min pra acordar no próximo request. A
+  primeira chamada da avaliação pode parecer lenta; a segunda é normal. **O front não dorme**:
+  Static Site é CDN, então a aplicação abre na hora — o que espera é a primeira chamada de API.
 - O Postgres free expira depois de um período — o prazo aparece no dashboard ao criar o banco.
-- `TZ=America/Sao_Paulo` precisa ser configurada no serviço, senão o container roda em UTC e rejeita
-  horários válidos (ver [3.4](#34-variáveis-de-ambiente)).
+- `TZ=America/Sao_Paulo` já vai fixada no blueprint. Ela não é cosmética: além do wall-clock de
+  `sessoes.data_hora`, o `now()` que a listagem pública e o guard de reserva comparam vem do fuso da
+  sessão JDBC, que o driver deriva do fuso da JVM (ver [3.4](#34-variáveis-de-ambiente)).
 
 ---
 
@@ -831,7 +844,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 | **Janela de seleção da sessão do turno** | A portaria escolhe a sessão do turno a partir da mesma listagem pública, que filtra `data_hora >= now()`. Sessões já iniciadas não aparecem na lista; a sessão ativa continua selecionável (é reinjetada no seletor), mas não existe uma janela dedicada do tipo "sessões em andamento agora". Simplificação consciente de escopo, não bug |
 | **Validação server-side da sessão do turno** | `POST /api/portaria/turno` aceita qualquer `sessaoId` existente, incluindo sessões passadas. A restrição a sessões futuras vive só na lista do front. Sem impacto de segurança sobre ingressos de terceiros (o operador só consegue transformar as próprias leituras em `EVENTO_ERRADO`), mas é validação que devia estar no servidor |
 | **Autocadastro de cliente** | Fora do sprint original; as contas vêm do seed. A rota `/cadastro` é um *placeholder* honesto, não um formulário que finge funcionar |
-| **Aplicação publicada** | Não publicada no momento desta escrita — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
+| **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
 
 ### Dívida técnica que eu reconheço como dívida
 

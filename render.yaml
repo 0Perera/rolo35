@@ -1,0 +1,83 @@
+# Blueprint do Render: os três serviços do rolo35 num arquivo só (Blueprints > New Blueprint
+# Instance, apontando pro repo). Substitui o arranjo anterior de API no Render + front na Vercel —
+# duas contas, dois deploys e duas origens pra manter em sincronia por CORS.
+#
+# Dois valores não dá pra derivar aqui e ficam como `sync: false`, ou seja, o Render pergunta no
+# apply (ou você preenche no dashboard):
+#   - TMDB_API_TOKEN — segredo seu, nunca versionado.
+#   - CORS_ALLOWED_ORIGINS / VITE_API_URL — as URLs que os serviços recebem. São previsíveis
+#     (https://<nome-do-serviço>.onrender.com), mas o Render sufixa o nome se ele já estiver em uso,
+#     então chutar aqui seria pior do que preencher com a URL real depois do primeiro apply.
+
+databases:
+  - name: rolo35-postgres
+    databaseName: rolo35
+    user: rolo35
+    plan: free
+
+services:
+  - type: web
+    name: rolo35-api
+    runtime: docker
+    plan: free
+    rootDir: api
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      # A URL JDBC é montada em application.properties a partir destas três: o Render expõe o banco
+      # como host/porta/nome separados, e a `connectionString` que ele fornece pronta vem no formato
+      # postgres://..., que o driver JDBC não aceita.
+      - key: DB_HOST
+        fromDatabase:
+          name: rolo35-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: rolo35-postgres
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: rolo35-postgres
+          property: database
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: rolo35-postgres
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: rolo35-postgres
+          property: password
+      # Segredos sem fallback no código: gerados pelo Render e distintos entre si por decisão
+      # (sessão de usuário × autenticidade do ingresso).
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TICKET_HMAC_SECRET
+        generateValue: true
+      - key: TMDB_API_TOKEN
+        sync: false
+      # sessoes.data_hora é wall-clock sem fuso. Sem esta variável o container roda em UTC e rejeita
+      # como "no passado" qualquer horário nas próximas 3h — e o now() que a listagem pública e o
+      # guard de reserva usam vem do fuso da sessão JDBC, que o driver deriva daqui.
+      - key: TZ
+        value: America/Sao_Paulo
+      # URL do rolo35-web, preenchida depois do primeiro apply.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+  - type: web
+    name: rolo35-web
+    runtime: static
+    rootDir: web
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # URL do rolo35-api, preenchida depois do primeiro apply. É lida em tempo de build (o Vite
+      # inlina no bundle), então mudá-la exige redeploy do front, não só restart.
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # Mesmo motivo do try_files do nginx no compose: as rotas do react-router não existem como
+      # arquivo, e sem o rewrite qualquer link direto vira 404 do Render.
+      - type: rewrite
+        source: /*
+        destination: /index.html
