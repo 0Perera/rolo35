@@ -13,3 +13,14 @@ export function login(email: string, senha: string): Promise<LoginResponse> {
     body: JSON.stringify({ email, senha }),
   });
 }
+
+/**
+ * A API devolve `LoginResponse` (token + papel) pra quem se cadastra: a tela usa esse token pra já
+ * entrar, sem uma segunda requisição só pra repetir a senha recém-digitada.
+ */
+export function cadastrar(nome: string, email: string, senha: string, papel: Papel): Promise<LoginResponse> {
+  return apiFetch<LoginResponse>('/api/auth/cadastro', {
+    method: 'POST',
+    body: JSON.stringify({ nome, email, senha, papel }),
+  });
+}

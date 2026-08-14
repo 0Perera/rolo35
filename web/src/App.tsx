@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router';
 import { Layout } from './components/Layout';
 import { RolarAoTrocarDeRota } from './components/RolarAoTrocarDeRota';
+import { CadastroPage } from './pages/CadastroPage';
 import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
 import { GerenciarSessoesPage } from './pages/GerenciarSessoesPage';
@@ -30,15 +31,7 @@ function App() {
         />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/cadastro"
-            element={
-              <PapelPlaceholderPage
-                titulo="Ficha nova"
-                mensagem="O autocadastro de cliente chega na Story 1.3. Por enquanto, as contas vêm do seed."
-              />
-            }
-          />
+          <Route path="/cadastro" element={<CadastroPage />} />
           <Route element={<Layout />}>
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />

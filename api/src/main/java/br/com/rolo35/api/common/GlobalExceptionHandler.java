@@ -1,6 +1,8 @@
 package br.com.rolo35.api.common;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.auth.EmailJaCadastradoException;
+import br.com.rolo35.api.auth.LimiteDeCadastroExcedidoException;
 import br.com.rolo35.api.ingressos.IngressoEmDisputaException;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
@@ -48,6 +50,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleCredenciaisInvalidas() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiError("CREDENCIAIS_INVALIDAS", "E-mail ou senha inválidos"));
+    }
+
+    // Um caminho só de 409 pro cadastro, com mensagem fixa e sem detalhe extra no corpo: quem
+    // recebe sabe que precisa escolher outro e-mail e nada além disso. Mesma disciplina do
+    // CREDENCIAIS_INVALIDAS acima — a resposta não é oráculo de mais nada.
+    @ExceptionHandler(EmailJaCadastradoException.class)
+    public ResponseEntity<ApiError> handleEmailJaCadastrado() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("EMAIL_JA_CADASTRADO", "E-mail já cadastrado"));
+    }
+
+    // 429 e não 403: o pedido está correto e a conta seria criada — o que falta é esperar. A
+    // mensagem não revela o teto nem quanto falta da janela, que só serviriam pra calibrar o abuso.
+    @ExceptionHandler(LimiteDeCadastroExcedidoException.class)
+    public ResponseEntity<ApiError> handleLimiteDeCadastroExcedido() {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiError(
+                        "LIMITE_DE_CADASTRO_EXCEDIDO", "Muitas contas criadas deste endereço. Tente mais tarde."));
     }
 
     @ExceptionHandler(CatalogoIndisponivelException.class)

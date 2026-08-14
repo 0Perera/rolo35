@@ -34,13 +34,25 @@ implementadas estão marcadas explicitamente como pendentes.
   não herda permissão por esquecimento (`SecurityConfig.java:40-42`,
   comentário no código).
 - **Superfície pública é allowlist explícita, não por prefixo amplo**:
-  `POST /api/auth/login`, `GET /actuator/health`, `GET /api/sessoes` e
-  `GET /api/sessoes/{id}/mapa-assentos` são as únicas rotas sem autenticação;
+  `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`,
+  `GET /api/sessoes` e `GET /api/sessoes/{id}/mapa-assentos` são as rotas sem
+  autenticação (`POST /api/auth/cadastro` é público porque quem cria conta ainda
+  não tem token, e a Story 1.3 decidiu não gatear a escolha de papel);
   o matcher do mapa de assentos é por path exato (`/api/sessoes/*/mapa-assentos`)
   para não vazar `GET /api/sessoes/{id}` (gestão, só ORGANIZADOR) nem
   `GET /api/sessoes/minhas` (`SecurityConfig.java:48-57`).
 - **Toda outra rota exige autenticação** (`anyRequest().authenticated()`,
   `SecurityConfig.java:57-58`).
+- **`POST /api/auth/cadastro` tem teto por endereço de origem**: 5 tentativas por
+  hora, configuráveis por `CADASTRO_LIMITE_TENTATIVAS` e
+  `CADASTRO_LIMITE_JANELA_MINUTOS`; ao estourar, `429 LIMITE_DE_CADASTRO_EXCEDIDO`
+  (`LimitadorDeCadastro`). É a única rota pública que escreve, e escreve conta com
+  o papel que o corpo pedir — as demais são de leitura. O teto conta só tentativas
+  que passaram do `@Valid`, para que errar o formulário não gaste a cota de quem
+  nunca criou nada. **Não é fronteira de segurança**: o endereço vem de
+  `X-Forwarded-For` (falsificável por quem alcança a API direto), quem dispõe de
+  muitos endereços passa por cima, e a contagem vive na memória de um processo só
+  — reiniciar a API zera, e duas instâncias contam separado.
 
 ## Catálogo de filmes (`sessoes/catalogo`)
 

@@ -108,3 +108,38 @@
 - **Sem limite de tamanho em `codigo`** — rota exige papel `PORTARIA` autenticado, risco de abuso baixo. [`api/src/main/java/br/com/rolo35/api/ingressos/dto/ValidarIngressoRequest.java`]
 - **`setUp()` privado chamado à mão em vez de `@BeforeEach`** — higiene de teste, sem impacto funcional. [`api/src/test/java/br/com/rolo35/api/ingressos/PortariaSecurityTest.java`]
 - **Story 5.3 (Painel de Turno da Portaria) marcada `done` sem story file próprio e sem passar por `bmad-code-review` formal** — o `sprint-change-proposal-2026-08-13.md` (adendo) registra a decisão de implementação e as ACs, mas nunca foi materializada como `implementation-artifacts/5-3-*.md` nem triada como as demais stories. Fechada junto do épico por decisão explícita de prazo (penúltimo dia); revisitar se sobrar tempo — gerar o story file retroativo e rodar `bmad-code-review` nele antes da entrega final, ou aceitar a lacuna documentada aqui.
+
+## Deferred from: code review da Story 1.3 (2026-08-14)
+
+> Achados das três camadas de review que não são causados pela Story 1.3, ou cuja correção exigiria
+> tocar `LoginPage.tsx` — que o usuário determinou que ficasse intocada nesta story. Os achados
+> causados pela story (500 em e-mail duplicado concorrente, ausência de `@Size(max)`, lacunas de
+> teste, documentação da allow-list) foram corrigidos, não deferidos.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: As ~18 linhas do letreiro de marquee estão duplicadas entre `LoginPage.tsx` e `CadastroPage.tsx`, e as duas telas divergem na largura máxima (`440px` contra `480px`) sem motivo declarado.
+  evidence: A extração pra componente compartilhado chegou a ser feita durante a implementação e foi desfeita quando veio a instrução de não tocar `LoginPage.tsx` — um componente com um consumidor só não compartilha nada. Vira ganho real assim que a outra tela puder ser editada.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: `rotaPorPapel` mora em `LoginPage.tsx` e agora é importada página-a-página por `CadastroPage.tsx`; o lugar dela é ao lado de `salvarSessao`, em `web/src/lib/sessao.ts`.
+  evidence: Acopla duas páginas sem relação entre si e alimenta os dois avisos de fast-refresh que o lint reporta (um módulo de componente exportando algo que não é componente). Mover exige editar `LoginPage.tsx`.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: `rotaPorPapel` é um `switch` exaustivo sem `default`, e o tipo TS `Papel` é um espelho mantido à mão do enum Java, sem teste de contrato entre os dois — um `papel` inesperado produz `navigate(undefined)`.
+  evidence: A coluna `usuarios.papel` é `VARCHAR` com CHECK no banco, então o valor é constrangido na prática; mas o caminho passou a ter uma segunda porta de entrada com esta story. Corrigir exige editar `LoginPage.tsx`.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: Nenhum teste renderiza `App` — a tabela de rotas da aplicação não é observada por teste nenhum, em nenhuma rota.
+  evidence: `grep -rn "import .*App" web/src` retorna só `src/main.tsx`. Reverter o `element` de `/cadastro` pro placeholder, ou escrever `path="/cadastrar"`, deixa a suíte inteira verde e desfaz a Task 9 sem sinal. Lacuna pré-existente do projeto, não introduzida aqui.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: ~~`POST /api/auth/cadastro` é público e aceita o papel direto do corpo, sem rate limit, convite, captcha ou qualquer teto — qualquer pessoa na internet cria contas `ORGANIZADOR` ou `PORTARIA` ilimitadas.~~ **Parcialmente resolvido**: ganhou teto de 5 cadastros por hora por endereço de origem (`LimitadorDeCadastro`, `429 LIMITE_DE_CADASTRO_EXCEDIDO`). Segue em aberto o abuso por quem dispõe de muitos endereços, e a contagem não sobrevive a restart nem é compartilhada entre instâncias.
+  evidence: A ausência de gate de autorização é decisão deliberada e documentada (reduz atrito de avaliação do desafio), e o `AuthSecurityTest` fixa isso como esperado. O que não estava decidido era o abuso por volume — daí o teto por endereço, que é atrito contra mineração casual e não fronteira de segurança. Conter abuso de verdade pede convite, verificação de e-mail ou contador compartilhado; nenhum cabe no escopo desta story, e é isto que fica registrado aqui.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: O contrato de requisição de `login()` em `web/src/api/auth.ts` — método, path e chaves do corpo — não é aferido por teste nenhum; as páginas mockam o módulo inteiro.
+  evidence: Renomear o path ou uma chave do corpo deixa as duas suítes verdes e quebra o login em produção. É o padrão estabelecido do repositório (mockar o módulo de API nas páginas), pré-existente à Story 1.3. O mesmo buraco em `cadastrar()` foi fechado por esta story.
+
+- source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
+  summary: `sprint-status.yaml` linha 44 não é YAML válido — o escalar de `last_updated` contém `Epic 5 fechado:` sem aspas.
+  evidence: Presente desde `HEAD~10`, anterior a esta story. Não foi corrigido junto porque é um arquivo que a ferramentaria BMad reescreve, e mudar o estilo de aspas pode conflitar com as próprias escritas dela. Vale uma passada dedicada.
