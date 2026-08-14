@@ -45,6 +45,8 @@ class PortariaServiceValidacaoTest {
     private static final Long SESSAO_ATIVA_ID = 1L;
     private static final String CODIGO = "codigo-qualquer";
     private static final String CODIGO_CURTO = "7ZK3QW9M";
+    private static final String CODIGO_ASSINADO =
+            "3f2a1b4c-1111-2222-3333-444455556666.YWJjZGVmZ2hpamtsbW5vcHFy";
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -143,7 +145,6 @@ class PortariaServiceValidacaoTest {
     void codigoMalformadoRetornaInvalidoSemConsultarBanco() {
         setUp();
         stubSessaoAtiva();
-        given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.empty());
         given(codigoIngressoService.normalizarCodigoCurto(CODIGO)).willReturn(Optional.empty());
 
         ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
@@ -161,7 +162,6 @@ class PortariaServiceValidacaoTest {
         stubSessaoAtiva();
         stubLockTimeout();
         UUID id = UUID.randomUUID();
-        given(codigoIngressoService.extrairId(CODIGO_CURTO)).willReturn(Optional.empty());
         given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
         Ingresso ingresso = ingresso(id, SESSAO_ATIVA_ID, StatusIngresso.VALIDO);
         given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.of(ingresso));
@@ -180,7 +180,6 @@ class PortariaServiceValidacaoTest {
         setUp();
         stubSessaoAtiva();
         stubLockTimeout();
-        given(codigoIngressoService.extrairId(CODIGO_CURTO)).willReturn(Optional.empty());
         given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
         Ingresso ingresso = ingresso(UUID.randomUUID(), 999L, StatusIngresso.VALIDO);
         given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.of(ingresso));
@@ -189,6 +188,8 @@ class PortariaServiceValidacaoTest {
         ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO_CURTO);
 
         assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.EVENTO_ERRADO);
+        assertThat(dto.assentoFileira()).isEqualTo("A");
+        assertThat(dto.sessaoTitulo()).isEqualTo("Clube da Luta");
         verify(ingressoRepository, never()).save(any());
     }
 
@@ -197,7 +198,6 @@ class PortariaServiceValidacaoTest {
         setUp();
         stubSessaoAtiva();
         stubLockTimeout();
-        given(codigoIngressoService.extrairId(CODIGO_CURTO)).willReturn(Optional.empty());
         given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
         given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.empty());
 
@@ -206,18 +206,15 @@ class PortariaServiceValidacaoTest {
         assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.INVALIDO);
     }
 
+    // A mudança que este arquivo inteiro existe pra fixar: o código assinado deixou de ser
+    // credencial de portaria. Ele continua sendo o token do link público — só não abre mais a porta.
     @Test
-    void assinaturaInvalidaRetornaInvalido() {
+    void codigoAssinadoRetornaInvalido() {
         setUp();
         stubSessaoAtiva();
-        UUID id = UUID.randomUUID();
-        given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.of(id));
-        given(codigoIngressoService.validar(id, CODIGO)).willReturn(false);
-        // Assinatura adulterada não vira tentativa de código curto por acidente: a forma
-        // uuid.assinatura tem muito mais que 8 caracteres, e a normalização recusa.
-        given(codigoIngressoService.normalizarCodigoCurto(CODIGO)).willReturn(Optional.empty());
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO_ASSINADO)).willReturn(Optional.empty());
 
-        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
+        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO_ASSINADO);
 
         assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.INVALIDO);
         verify(ingressoRepository, never()).findByIdForUpdate(any());
@@ -225,75 +222,19 @@ class PortariaServiceValidacaoTest {
     }
 
     @Test
-    void assinaturaValidaMasIngressoNaoEncontradoRetornaInvalido() {
-        setUp();
-        stubSessaoAtiva();
-        stubLockTimeout();
-        UUID id = UUID.randomUUID();
-        given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.of(id));
-        given(codigoIngressoService.validar(id, CODIGO)).willReturn(true);
-        given(ingressoRepository.findByIdForUpdate(id)).willReturn(Optional.empty());
-
-        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
-
-        assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.INVALIDO);
-    }
-
-    @Test
-    void sessaoDiferenteRetornaEventoErradoSemSalvar() {
-        setUp();
-        stubSessaoAtiva();
-        stubLockTimeout();
-        UUID id = UUID.randomUUID();
-        given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.of(id));
-        given(codigoIngressoService.validar(id, CODIGO)).willReturn(true);
-        Ingresso ingresso = ingresso(id, 999L, StatusIngresso.VALIDO);
-        given(ingressoRepository.findByIdForUpdate(id)).willReturn(Optional.of(ingresso));
-        given(assentoRepository.findById(1L)).willReturn(Optional.of(assento(1L, "A", 1)));
-
-        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
-
-        assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.EVENTO_ERRADO);
-        assertThat(dto.assentoFileira()).isEqualTo("A");
-        assertThat(dto.sessaoTitulo()).isEqualTo("Clube da Luta");
-        verify(ingressoRepository, never()).save(any());
-    }
-
-    @Test
     void jaUtilizadoRetornaJaUtilizadoSemSalvarDeNovo() {
         setUp();
         stubSessaoAtiva();
         stubLockTimeout();
-        UUID id = UUID.randomUUID();
-        given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.of(id));
-        given(codigoIngressoService.validar(id, CODIGO)).willReturn(true);
-        Ingresso ingresso = ingresso(id, SESSAO_ATIVA_ID, StatusIngresso.UTILIZADO);
-        given(ingressoRepository.findByIdForUpdate(id)).willReturn(Optional.of(ingresso));
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
+        Ingresso ingresso = ingresso(UUID.randomUUID(), SESSAO_ATIVA_ID, StatusIngresso.UTILIZADO);
+        given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.of(ingresso));
         given(assentoRepository.findById(1L)).willReturn(Optional.of(assento(1L, "A", 1)));
 
-        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
+        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO_CURTO);
 
         assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.JA_UTILIZADO);
         verify(ingressoRepository, never()).save(any());
-    }
-
-    @Test
-    void ingressoValidoMudaParaUtilizadoESalva() {
-        setUp();
-        stubSessaoAtiva();
-        stubLockTimeout();
-        UUID id = UUID.randomUUID();
-        given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.of(id));
-        given(codigoIngressoService.validar(id, CODIGO)).willReturn(true);
-        Ingresso ingresso = ingresso(id, SESSAO_ATIVA_ID, StatusIngresso.VALIDO);
-        given(ingressoRepository.findByIdForUpdate(id)).willReturn(Optional.of(ingresso));
-        given(assentoRepository.findById(1L)).willReturn(Optional.of(assento(1L, "A", 1)));
-
-        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
-
-        assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.VALIDO);
-        assertThat(ingresso.getStatus()).isEqualTo(StatusIngresso.UTILIZADO);
-        verify(ingressoRepository).save(ingresso);
     }
 
     @Test

@@ -7,7 +7,6 @@ import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.ingressos.dto.ValidacaoIngressoDto;
 import br.com.rolo35.api.ingressos.repository.IngressoRepository;
 import br.com.rolo35.api.ingressos.repository.TurnoPortariaRepository;
-import br.com.rolo35.api.ingressos.service.CodigoIngressoService;
 import br.com.rolo35.api.ingressos.service.PortariaService;
 import br.com.rolo35.api.pagamentos.ResultadoSimulado;
 import br.com.rolo35.api.pagamentos.dto.ConfirmarPagamentoRequest;
@@ -65,9 +64,6 @@ class PortariaValidacaoConcorrenciaTest {
 
     @Autowired
     private PortariaService portariaService;
-
-    @Autowired
-    private CodigoIngressoService codigoIngressoService;
 
     @Autowired
     private SalaRepository salaRepository;
@@ -154,9 +150,11 @@ class PortariaValidacaoConcorrenciaTest {
         reservaCriadaId = reservaCriada.id();
         pagamentoService.confirmar(new ConfirmarPagamentoRequest(reservaCriada.id(), ResultadoSimulado.APROVADO), CLIENTE);
 
-        UUID ingressoId =
-                ingressoRepository.findByReservaId(reservaCriada.id()).get(0).getId();
-        String codigo = codigoIngressoService.gerar(ingressoId);
+        Ingresso ingressoEmitido = ingressoRepository.findByReservaId(reservaCriada.id()).get(0);
+        UUID ingressoId = ingressoEmitido.getId();
+        // O código curto vem da coluna preenchida na emissão — é literalmente o que o QR carrega e
+        // o que o operador digitaria. Disputar por ele é disputar pelo caminho real.
+        String codigo = ingressoEmitido.getCodigoCurto();
 
         portariaId = usuarioRepository.findByEmail(PORTARIA).orElseThrow().getId();
         portariaService.selecionarSessao(PORTARIA, sessao.getId());
