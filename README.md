@@ -8,6 +8,12 @@
   <img alt="TDD" src="https://img.shields.io/badge/XP-TDD-F4E9D4?style=for-the-badge&labelColor=171219">
 </p>
 
+<p align="center">
+  <img alt="A home do Rolo 35 num monitor de desktop: header escuro com logo, navegação e conta; o destaque é uma TV de tubo com o cartaz de Clube da Luta, selo tocando agora, sala, data, preço, sinopse e botão de comprar ingresso; abaixo, a faixa clara com busca por filme, filtro de sala e a grade de sessões em cartaz" src="docs/assets/preview-desktop.png" width="66%">
+  &nbsp;
+  <img alt="A mesma home num celular: header numa linha, a TV de tubo ocupando a largura da tela com A Origem em destaque, botão de comprar ingresso e a listagem de sessões logo abaixo" src="docs/assets/preview-mobile.png" width="23%">
+</p>
+
 **Rolo 35** é uma plataforma de eventos e ingressos de cinema: o organizador publica sessões a
 partir do catálogo do TMDb, o cliente escolhe o assento num mapa de sala, paga de forma simulada e
 recebe um ingresso com código assinado e link público de compartilhamento — e a portaria valida esse
@@ -253,8 +259,8 @@ pra avaliação):
 | Portaria | `portaria@rolo35.com.br` | `portaria123` |
 
 Também vêm semeadas **3 salas** de tamanhos diferentes — Sala 1 (8×10 = 80 assentos), Sala 2
-(5×6 = 30) e Sala 3 (10×14 = 140) — e **6 sessões publicadas**, espalhadas pelas três salas nos
-próximos dez dias, com todos os assentos livres:
+(5×6 = 30) e Sala 3 (10×14 = 140) — e **9 sessões publicadas**, espalhadas pelas três salas nas
+próximas duas semanas, com todos os assentos livres:
 
 | Filme | Sessões | Onde |
 |---|---|---|
@@ -262,6 +268,9 @@ próximos dez dias, com todos os assentos livres:
 | *Matrix* (1999) | 2 | Sala 1 e Sala 2 |
 | *Cidade de Deus* (2002) | 1 | Sala 2 |
 | *A Origem* (2010) | 1 | Sala 3 |
+| *De Volta para o Futuro* (1985) | 1 | Sala 1 |
+| *Obsessão* (2026) | 1 | Sala 2 |
+| *Psicopata Americano* (2000) | 1 | Sala 3 |
 
 Pôster, sinopse e data de estreia são reais, buscados uma vez no TMDb e congelados no SQL — não se
 atualizam se o catálogo mudar depois. Dois filmes em mais de um horário existem pra que a tela de
@@ -425,6 +434,11 @@ Decisões de tema que não são enfeite:
 
 O protótipo que fixou essa direção (`Rolo 35.dc.html`) veio de uma sessão de design assistida por
 IA, e isso está declarado em [16. Uso de IA](#16-uso-de-ia).
+
+A prévia no topo deste README é o tema montado, nos dois extremos de largura: no desktop o destaque
+tem coluna de texto à esquerda do cartaz; no mobile o texto passa a se sobrepor à imagem e a
+listagem encolhe para duas colunas — mas o tubo continua sendo a moldura do destaque nos dois,
+porque é ele que fecha a metáfora.
 
 ---
 
@@ -938,7 +952,7 @@ web/src/
 docs/
 ├── decisions.md            Registro de decisões, com o motivo de cada uma
 ├── regras-de-negocio.md    Regras em código, com arquivo e linha
-└── assets/                 Banner deste README
+└── assets/                 Banner, diagramas e prévia da interface deste README
 ```
 
 <p align="center">
