@@ -20,13 +20,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest
 class SeedSessoesRepositoryTest {
 
-    private static final String TITULOS_SEMEADOS = "('Clube da Luta', 'Matrix', 'Cidade de Deus', 'A Origem')";
+    private static final String TITULOS_SEMEADOS =
+            "('Clube da Luta', 'Matrix', 'Cidade de Deus', 'A Origem', 'De Volta para o Futuro', 'Obsessão',"
+                    + " 'Psicopata Americano')";
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void seedTemPeloMenosSeisSessoesEDoisFilmesComMaisDeUmHorario() {
+    void seedTemPeloMenosNoveSessoesEDoisFilmesComMaisDeUmHorario() {
         Integer sessoes = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM sessoes WHERE titulo IN " + TITULOS_SEMEADOS, Integer.class);
         Integer filmesComVariosHorarios = jdbcTemplate.queryForObject(
@@ -37,7 +39,7 @@ class SeedSessoesRepositoryTest {
                 """.formatted(TITULOS_SEMEADOS),
                 Integer.class);
 
-        assertThat(sessoes).isGreaterThanOrEqualTo(6);
+        assertThat(sessoes).isGreaterThanOrEqualTo(9);
         assertThat(filmesComVariosHorarios).isGreaterThanOrEqualTo(2);
     }
 
