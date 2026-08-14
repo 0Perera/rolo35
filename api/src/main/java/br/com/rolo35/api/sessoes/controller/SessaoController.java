@@ -4,6 +4,7 @@ import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
+import br.com.rolo35.api.sessoes.dto.OcupacaoSalaDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -65,6 +66,16 @@ public class SessaoController {
     @PreAuthorize("hasRole('ORGANIZADOR')")
     public ResponseEntity<List<SessaoGestaoDto>> listarParaGestao(Authentication authentication) {
         return ResponseEntity.ok(sessaoService.listarParaGestao(authentication.getName()));
+    }
+
+    /**
+     * Path fixo declarado antes de {@code /{id}} — o Spring resolve por especificidade e não por
+     * ordem, mas manter os dois vizinhos deixa visível que {@code ocupacao} nunca pode virar um id.
+     */
+    @GetMapping("/ocupacao")
+    @PreAuthorize("hasRole('ORGANIZADOR')")
+    public ResponseEntity<List<OcupacaoSalaDto>> ocupacaoDaSala(@RequestParam(name = "salaId") Long salaId) {
+        return ResponseEntity.ok(sessaoService.listarOcupacaoDaSala(salaId));
     }
 
     @GetMapping("/{id}")

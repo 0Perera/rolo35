@@ -170,6 +170,20 @@ class SessaoSecurityTest {
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }
 
+    @Test
+    void returns401ForGetOcupacaoWithoutAnyToken() throws Exception {
+        mockMvc.perform(get("/api/sessoes/ocupacao?salaId=1")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returns403ForGetOcupacaoWithClienteToken() throws Exception {
+        String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
+
+        mockMvc.perform(get("/api/sessoes/ocupacao?salaId=1").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
     // Regressão explícita do risco descrito no comentário de SecurityConfig: o permitAll()
     // novo de /api/sessoes/*/mapa-assentos (Story 3.1) não pode vazar pra essa rota de gestão.
     @Test

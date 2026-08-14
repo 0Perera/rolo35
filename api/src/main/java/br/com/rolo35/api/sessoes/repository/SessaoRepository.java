@@ -59,6 +59,25 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
     boolean jaComecou(@Param("sessaoId") Long sessaoId);
 
     /**
+     * Janelas em que a sala não aceita sessão nova, pro formulário avisar antes do submit.
+     *
+     * <p>O recorte é o mesmo de {@code existeConflitante}, não "sessões futuras": uma sessão que já
+     * começou continua bloqueando enquanto o buffer dela não vencer, então o filtro é sobre o fim
+     * da janela ({@code data_hora + buffer > now()}) e não sobre {@code data_hora}. Um filtro por
+     * sessão futura mostraria a sala livre num horário que o {@code POST} recusaria — exatamente o
+     * 409-surpresa que esta consulta existe pra evitar.
+     */
+    @Query(value = """
+        SELECT s.id AS id, s.data_hora AS dataHora
+        FROM sessoes s
+        WHERE s.sala_id = :salaId
+          AND (s.data_hora + (INTERVAL '1 minute' * :bufferMinutos)) > now()
+        ORDER BY s.data_hora
+        """, nativeQuery = true)
+    List<SessaoOcupacaoProjection> listarOcupacaoDaSala(
+            @Param("salaId") Long salaId, @Param("bufferMinutos") int bufferMinutos);
+
+    /**
      * Listagem de gestão: todas as sessões do cinema, sem filtro por organizador. A coluna
      * {@code organizador_id} continua registrando quem criou cada sessão, mas não restringe mais
      * quem a vê ou edita — a equipe de organizadores é compartilhada (CAP-1, ver

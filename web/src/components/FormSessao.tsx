@@ -1,8 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Filme } from '../api/filmes';
 import { ApiRequestError } from '../api/client';
-import { criarSessao, editarSessao, type Sala, type SessaoGestao } from '../api/sessoes';
+import {
+  criarSessao,
+  editarSessao,
+  listarOcupacaoDaSala,
+  type OcupacaoSala,
+  type Sala,
+  type SessaoGestao,
+} from '../api/sessoes';
 import { dataValida, deDataHoraIso, horaValida, paraDataHoraIso } from '../lib/dataHora';
+import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 import { Alert } from './Alert';
 import { CampoDeData } from './CampoDeData';
 import { CampoDeHora } from './CampoDeHora';
@@ -30,6 +38,33 @@ export function FormSessao({ salas, emEdicao, onSalvou, onCancelarEdicao }: Form
   const [preco, setPreco] = useState('');
   const [estado, setEstado] = useState<EstadoSubmit>('idle');
   const [mensagemErro, setMensagemErro] = useState('');
+  const [ocupacao, setOcupacao] = useState<OcupacaoSala[] | null>(null);
+
+  // A ocupação segue a sala escolhida. A janela da própria sessão em edição sai da lista: ela não é
+  // obstáculo pra si mesma, e o back já a exclui na checagem de conflito.
+  useEffect(() => {
+    if (!salaId) {
+      setOcupacao(null);
+      return;
+    }
+    let ativo = true;
+    listarOcupacaoDaSala(Number(salaId))
+      .then((janelas) => {
+        if (ativo) {
+          setOcupacao(janelas.filter((janela) => janela.sessaoId !== emEdicao?.id));
+        }
+      })
+      // Silencioso de propósito: isto é um aviso preventivo, não a validação. Quem decide se o
+      // horário serve continua sendo o POST, e um alerta de rede aqui competiria com o erro real.
+      .catch(() => {
+        if (ativo) {
+          setOcupacao(null);
+        }
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [salaId, emEdicao?.id]);
 
   useEffect(() => {
     if (!emEdicao) {
@@ -156,6 +191,31 @@ export function FormSessao({ salas, emEdicao, onSalvou, onCancelarEdicao }: Form
             rotulo: `${sala.nome} (${sala.capacidade} assentos)`,
           }))}
         />
+
+        {ocupacao !== null && (
+          <div className="border-[3px] border-ink-950/20 bg-paper-100 p-2.5">
+            <span className="block font-mono text-lg tracking-wide text-ink-950/60">SALA JÁ OCUPADA</span>
+            {ocupacao.length === 0 ? (
+              <p className="mt-1.5 font-mono text-sm tracking-wide text-ink-950/50">
+                NENHUM HORÁRIO OCUPADO NESTA SALA.
+              </p>
+            ) : (
+              <>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {ocupacao.map((janela) => (
+                    <li key={janela.sessaoId} className="font-mono text-sm tracking-wide">
+                      {rotuloDeDia(janela.bloqueadoDe)} {rotuloDeHora(janela.bloqueadoDe)} →{' '}
+                      {rotuloDeDia(janela.bloqueadoAte)} {rotuloDeHora(janela.bloqueadoAte)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 font-mono text-sm tracking-wide text-ink-950/50">
+                  INTERVALO BLOQUEADO EM VOLTA DE CADA SESSÃO, PRA DAR TEMPO DE VIRAR A SALA.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3.5">
           <CampoDeData id="data" label="DATA" valor={data} onChange={setData} />

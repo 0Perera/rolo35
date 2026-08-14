@@ -23,6 +23,7 @@ import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
+import br.com.rolo35.api.sessoes.dto.OcupacaoSalaDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -298,6 +299,24 @@ class SessaoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(100))
                 .andExpect(jsonPath("$[0].editavel").value(true));
+    }
+
+    @Test
+    void returns200WithOcupacaoDaSalaForGetOcupacao() throws Exception {
+        LocalDateTime dataHora = LocalDateTime.now().plusDays(3).withNano(0);
+        given(sessaoService.listarOcupacaoDaSala(1L)).willReturn(List.of(
+                new OcupacaoSalaDto(7L, dataHora, dataHora.minusHours(4), dataHora.plusHours(4))));
+
+        mockMvc.perform(get("/api/sessoes/ocupacao?salaId=1")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sessaoId").value(7))
+                .andExpect(jsonPath("$[0].bloqueadoDe").exists())
+                .andExpect(jsonPath("$[0].bloqueadoAte").exists())
+                // Nada de título nem de organizador: quem monta uma sessão precisa do horário
+                // ocupado, não de quem ocupou.
+                .andExpect(jsonPath("$[0].titulo").doesNotExist())
+                .andExpect(jsonPath("$[0].organizadorId").doesNotExist());
     }
 
     @Test

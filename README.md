@@ -327,6 +327,7 @@ local: `http://localhost:8080`. Autenticação via `Authorization: Bearer <token
 | `POST` | `/api/sessoes` | `ORGANIZADOR` | Cria sessão (valida data futura e conflito de sala) |
 | `GET` | `/api/sessoes` | **público** | Sessões futuras publicadas, com marcação de esgotada |
 | `GET` | `/api/sessoes/gestao` | `ORGANIZADOR` | Agenda de gestão do cinema (todas as sessões) |
+| `GET` | `/api/sessoes/ocupacao?salaId=` | `ORGANIZADOR` | Janelas bloqueadas da sala, com buffer aplicado (só o intervalo, sem título nem autor) |
 | `GET` | `/api/sessoes/{id}` | `ORGANIZADOR` | Sessão para gestão |
 | `PUT` | `/api/sessoes/{id}` | `ORGANIZADOR` | Edita sessão (bloqueado após venda) |
 | `GET` | `/api/sessoes/{id}/mapa-assentos` | **público** | Mapa com status por assento, sem identidade |
@@ -859,7 +860,6 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 |---|---|
 | Conflito de horário garantido por lock de aplicação, sem `EXCLUDE USING gist` | Escrita que não passe por `SessaoService` não é protegida pelo schema |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
-| Organizador não vê ocupação da sala ao criar sessão | `salas` é pool compartilhado, `sessoes` é isolada por dono: o organizador só descobre conflito ao submeter. Não é falha de segurança (o back valida sempre), é fricção de UX |
 | Cadastro de salas pela interface | Salas vêm do seed; criar sala pela UI foi adiado por falta de design, e o organizador tem 3 salas prontas pra usar |
 
 ### Fora de escopo por decisão (o enunciado dispensa)

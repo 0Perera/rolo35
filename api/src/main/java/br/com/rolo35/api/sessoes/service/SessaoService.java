@@ -23,6 +23,7 @@ import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
+import br.com.rolo35.api.sessoes.dto.OcupacaoSalaDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -202,6 +203,22 @@ public class SessaoService {
                         projecao.getId(), projecao.getSalaId(), projecao.getSalaNome(), projecao.getTitulo(),
                         projecao.getSinopse(), projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
                         projecao.getEditavel()))
+                .toList();
+    }
+
+    /**
+     * Ocupação da sala pro formulário mostrar o conflito antes do submit, em vez de deixar o
+     * organizador descobrir por {@code 409}. O buffer é aplicado aqui: a regra de conflito é do
+     * back-end, e duplicá-la no front garantiria que as duas cópias divergissem.
+     */
+    public List<OcupacaoSalaDto> listarOcupacaoDaSala(Long salaId) {
+        salaRepository.findById(salaId).orElseThrow(SalaNaoEncontradaException::new);
+        return sessaoRepository.listarOcupacaoDaSala(salaId, BUFFER_MINUTOS).stream()
+                .map(projecao -> new OcupacaoSalaDto(
+                        projecao.getId(),
+                        projecao.getDataHora(),
+                        projecao.getDataHora().minusMinutes(BUFFER_MINUTOS),
+                        projecao.getDataHora().plusMinutes(BUFFER_MINUTOS)))
                 .toList();
     }
 

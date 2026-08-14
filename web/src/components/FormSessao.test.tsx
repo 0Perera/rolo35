@@ -52,10 +52,73 @@ async function escolherSala(user: ReturnType<typeof userEvent.setup>, nome: RegE
   await user.click(screen.getByRole('option', { name: nome }));
 }
 
+const OCUPACAO: sessoesApi.OcupacaoSala[] = [
+  {
+    sessaoId: 9,
+    dataHora: '2030-01-05T20:00:00',
+    bloqueadoDe: '2030-01-05T16:00:00',
+    bloqueadoAte: '2030-01-06T00:00:00',
+  },
+];
+
 describe('FormSessao', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(filmesApi, 'buscarFilmes').mockResolvedValue([FILME]);
+    vi.spyOn(sessoesApi, 'listarOcupacaoDaSala').mockResolvedValue([]);
+  });
+
+  // O conflito de sala era descoberto só pelo 409 depois do submit; agora a janela bloqueada
+  // aparece assim que a sala é escolhida.
+  it('lists the blocked windows of the chosen room, buffer included', async () => {
+    const ocupacaoSpy = vi.spyOn(sessoesApi, 'listarOcupacaoDaSala').mockResolvedValue(OCUPACAO);
+    const user = userEvent.setup();
+
+    renderForm();
+    await escolherSala(user, /sala 1/i);
+
+    expect(ocupacaoSpy).toHaveBeenCalledWith(1);
+    expect(await screen.findByText(/16:00.*00:00/)).toBeInTheDocument();
+  });
+
+  it('says so when the room has no blocked window at all', async () => {
+    const user = userEvent.setup();
+
+    renderForm();
+    await escolherSala(user, /sala 2/i);
+
+    expect(await screen.findByText(/nenhum horário ocupado/i)).toBeInTheDocument();
+  });
+
+  // A sessão em edição não é obstáculo pra si mesma — o back já a exclui na checagem de conflito.
+  it('hides the window of the session currently being edited', async () => {
+    vi.spyOn(sessoesApi, 'listarOcupacaoDaSala').mockResolvedValue([
+      ...OCUPACAO,
+      {
+        sessaoId: SESSAO.id,
+        dataHora: SESSAO.dataHora,
+        bloqueadoDe: '2030-01-02T16:30:00',
+        bloqueadoAte: '2030-01-03T00:30:00',
+      },
+    ]);
+
+    renderForm(SESSAO);
+
+    expect(await screen.findByText(/16:00.*00:00/)).toBeInTheDocument();
+    expect(screen.queryByText(/16:30.*00:30/)).not.toBeInTheDocument();
+  });
+
+  // Aviso preventivo não é validação: quem decide se o horário serve continua sendo o POST, e um
+  // alerta de rede aqui competiria com o erro de verdade.
+  it('stays quiet when the occupancy call fails', async () => {
+    vi.spyOn(sessoesApi, 'listarOcupacaoDaSala').mockRejectedValue(new Error('falha de rede'));
+    const user = userEvent.setup();
+
+    renderForm();
+    await escolherSala(user, /sala 1/i);
+
+    expect(screen.queryByText(/sala já ocupada/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('creates a session with the chosen movie, room, date, time and price', async () => {

@@ -156,6 +156,29 @@ class SessaoGestaoRepositoryTest {
     }
 
     /**
+     * O recorte da ocupação é o fim da janela, não {@code data_hora}: uma sessão que começou há
+     * pouco continua bloqueando a sala enquanto o buffer não vence. Filtrar por sessão futura
+     * mostraria livre um horário que o {@code POST} recusaria — o 409-surpresa que a consulta
+     * existe pra evitar.
+     */
+    @Test
+    void ocupacaoIncluiSessaoRecemComecadaEIgnoraAQueJaVenceuOBuffer() {
+        Long salaId = salaRepository.findAll().get(0).getId();
+        var recem = sessaoService.criar(
+                requestEm(salaId, TITULO, LocalDateTime.now().plusDays(157).withNano(0)), ORGANIZADOR);
+        var antiga = sessaoService.criar(
+                requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(158).withNano(0)), ORGANIZADOR);
+        jdbcTemplate.update("UPDATE sessoes SET data_hora = now() - interval '1 hour' WHERE id = ?", recem.id());
+        jdbcTemplate.update("UPDATE sessoes SET data_hora = now() - interval '5 hours' WHERE id = ?", antiga.id());
+
+        List<Long> ocupada = sessaoRepository.listarOcupacaoDaSala(salaId, 240).stream()
+                .map(SessaoOcupacaoProjection::getId)
+                .toList();
+
+        assertThat(ocupada).contains(recem.id()).doesNotContain(antiga.id());
+    }
+
+    /**
      * O relógio do guard é o do banco ({@code now()}), o mesmo de {@code listarPublicadas} — se
      * fosse o da JVM, uma sessão podia sumir da vitrine e continuar reservável (ou o contrário)
      * por causa de skew entre os dois. Por isso a checagem é exercitada contra o Postgres, não em

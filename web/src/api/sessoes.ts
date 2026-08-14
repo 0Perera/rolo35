@@ -136,6 +136,19 @@ export function listarSessoesPublicadas(consulta: ConsultaSessoes = {}): Promise
   return apiFetch<Pagina<SessaoPublicada>>(`/api/sessoes${query ? `?${query}` : ''}`);
 }
 
+export interface OcupacaoSala {
+  sessaoId: number;
+  dataHora: string;
+  /** Janela bloqueada, com o buffer de conflito já aplicado pelo back-end. */
+  bloqueadoDe: string;
+  bloqueadoAte: string;
+}
+
+/** Horários em que a sala não aceita sessão nova — só o intervalo, sem dizer de quem é cada sessão. */
+export function listarOcupacaoDaSala(salaId: number): Promise<OcupacaoSala[]> {
+  return apiFetch<OcupacaoSala[]>(`/api/sessoes/ocupacao?salaId=${salaId}`);
+}
+
 /** Agenda do cinema inteiro: qualquer organizador gerencia qualquer sessão. */
 export function listarSessoesParaGestao(): Promise<SessaoGestao[]> {
   return apiFetch<SessaoGestao[]>('/api/sessoes/gestao');

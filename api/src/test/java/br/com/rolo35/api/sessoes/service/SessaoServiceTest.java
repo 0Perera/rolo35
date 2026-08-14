@@ -39,6 +39,7 @@ import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
 import br.com.rolo35.api.sessoes.repository.SessaoListagemProjection;
+import br.com.rolo35.api.sessoes.repository.SessaoOcupacaoProjection;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -380,6 +381,44 @@ class SessaoServiceTest {
         then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
         assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_PADRAO);
         assertThat(captor.getValue().getPageNumber()).isZero();
+    }
+
+    private SessaoOcupacaoProjection ocupacaoCom(Long id, LocalDateTime dataHora) {
+        SessaoOcupacaoProjection projecao = mock(SessaoOcupacaoProjection.class);
+        given(projecao.getId()).willReturn(id);
+        given(projecao.getDataHora()).willReturn(dataHora);
+        return projecao;
+    }
+
+    // O buffer é aplicado no back-end de propósito: se o formulário calculasse a janela, existiriam
+    // duas cópias da regra de conflito, e a do front seria a que ninguém lembra de atualizar.
+    @Test
+    void ocupacaoDaSalaDevolveAJanelaBloqueadaJaComOBufferAplicado() {
+        LocalDateTime dataHora = LocalDateTime.now().plusDays(3).withNano(0);
+        // A projeção é montada antes: um given() aninhado dentro de outro deixa o primeiro
+        // inacabado e o Mockito reclama de UnfinishedStubbing.
+        SessaoOcupacaoProjection projecao = ocupacaoCom(7L, dataHora);
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(sessaoRepository.listarOcupacaoDaSala(1L, 240)).willReturn(List.of(projecao));
+
+        var ocupacao = sessaoService.listarOcupacaoDaSala(1L);
+
+        assertThat(ocupacao).singleElement().satisfies(janela -> {
+            assertThat(janela.sessaoId()).isEqualTo(7L);
+            assertThat(janela.dataHora()).isEqualTo(dataHora);
+            assertThat(janela.bloqueadoDe()).isEqualTo(dataHora.minusHours(4));
+            assertThat(janela.bloqueadoAte()).isEqualTo(dataHora.plusHours(4));
+        });
+    }
+
+    @Test
+    void ocupacaoDeSalaInexistenteFalhaAntesDeConsultarSessoes() {
+        given(salaRepository.findById(99L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sessaoService.listarOcupacaoDaSala(99L))
+                .isInstanceOf(SalaNaoEncontradaException.class);
+
+        verify(sessaoRepository, never()).listarOcupacaoDaSala(any(), any(Integer.class));
     }
 
     private Sessao sessaoCom(Long id, Long organizadorId, Long salaId, String titulo, LocalDateTime dataHora) {
