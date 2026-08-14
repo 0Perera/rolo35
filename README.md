@@ -182,6 +182,7 @@ local.
 | `V6__turno_portaria.sql` | Tabela `turno_portaria` (sessão ativa por operador) |
 | `V7__indice_ingressos_por_sessao.sql` | Índice de `ingressos.sessao_id` para o painel do turno |
 | `V8__backstops_ingressos.sql` | FK composta de `ingressos` contra `assento_sessao` e `UNIQUE (reserva_id, assento_id)` |
+| `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3` |
 
 - `spring.jpa.hibernate.ddl-auto=validate`: o Hibernate **nunca** cria nem altera tabela. O schema
   é do Flyway; a aplicação só valida se o mapeamento casa.
@@ -630,6 +631,12 @@ Dois detalhes que só aparecem lendo o código:
 | `idx_sessoes_sala_id_data_hora` | Query de conflito de horário — o par `(sala, data_hora)` é exatamente o predicado |
 | `idx_reservas_cliente_id`, `idx_ingressos_reserva_id` | "Meus ingressos" (`ingressos` → `reservas` por cliente) |
 | `idx_assento_sessao_reserva_id` | Retomada do checkout: `reserva_id` deixou de ser só coluna gravada e virou critério de busca quando a tela de pagamento se reconstrói |
+| `idx_ingressos_sessao_id` | Painel do turno da portaria: conta e lista ingressos por sessão a cada validação |
+
+E o que **não** existe, pelo mesmo critério: `sessoes.organizador_id` não tem índice, porque nenhuma
+query filtra por ele — depois do CAP-1 a listagem de gestão traz o cinema inteiro e a coluna virou só
+registro de autoria. `idx_sessoes_sala_id` foi removido na `V9` por ser prefixo à esquerda do
+composto da `V3`: mesma cobertura, custo de manutenção a mais.
 
 Sobre N+1: as três listagens que juntam dado relacionado — sessões publicadas (com filme e sala),
 sessões do organizador e ingressos do cliente (com assento, sessão e sala) — usam uma query só, com
