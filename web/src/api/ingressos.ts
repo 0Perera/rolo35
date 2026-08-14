@@ -20,6 +20,8 @@ export interface IngressoPublico {
   salaNome: string;
   dataHora: string;
   status: 'VALIDO' | 'UTILIZADO';
+  /** Código curto pra ditar na portaria quando a câmera não lê. */
+  codigoCurto: string;
 }
 
 export interface ConsultaMeusIngressos {

@@ -51,7 +51,7 @@ function LinhaIngresso({ ingresso, onAbrir }: { ingresso: IngressoResumo; onAbri
             {ingresso.salaNome.toUpperCase()} · ASSENTO {assentoDe(ingresso)}
           </span>
         </button>
-        <AcoesDoIngresso codigo={ingresso.codigo} />
+        <AcoesDoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto} />
       </div>
     </li>
   );
@@ -116,15 +116,10 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
             {rotuloDeDia(ingresso.dataHora)} · {rotuloDeHora(ingresso.dataHora)} · ASSENTO{' '}
             {assentoDe(ingresso)}
           </p>
-          {/* break-all porque o código é `uuid.assinatura` — uma palavra só, longa o bastante pra
-              estourar o canhoto no mobile se ficar inquebrável. */}
-          <p className="mt-5 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">
-            CÓDIGO {ingresso.codigo}
+          <p className="mt-5 font-mono text-base tracking-wide text-[#9C9488]">
+            APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
           </p>
-          <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
-            ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
-          </p>
-          <AcoesDoIngresso codigo={ingresso.codigo} className="mt-5" />
+          <AcoesDoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto} className="mt-5" />
         </CanhotoIngresso>
       </div>
     </>

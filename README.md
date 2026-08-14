@@ -317,8 +317,9 @@ recarga de página e tentativa de acessar o que é de outro usuário.
    é emitido, os assentos voltam a *livre* na hora (confira no mapa) e a tela oferece volta para a
    sessão. Nada é cobrado — não existe cobrança.
 5. **Caminho da aprovação:** reserve de novo, escolha **aprovar** e confirme. Sai **um canhoto por
-   assento**, cada um com seu código assinado e um **QR escaneável** que aponta para o link público
-   daquele ingresso. Aponte a câmera do celular para o QR: ele abre a página pública do ingresso.
+   assento**, cada um com um **QR escaneável** e o **código curto de 8 caracteres** impresso ao
+   lado. O QR carrega o código assinado do ingresso, não uma URL — ele serve à leitura da portaria,
+   não a abrir página. Para compartilhar, use o botão **↗ COMPARTILHAR**, que copia o link público.
 6. **Resiliência do checkout:** com o checkout aberto, dê F5 — a tela se reconstrói inteira a partir
    de `GET /api/reservas/{id}`, sem depender de nada guardado no navegador. Reserva já paga
    redireciona para a carteira; reserva de outro cliente responde `403`, igual a um `reservaId` que
@@ -618,8 +619,9 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | O link público **não** valida nem consome o ingresso | Ninguém pode "gastar" seu ingresso abrindo o link, e a portaria não é bypassável por leitura |
 | A assinatura é verificada **antes** de qualquer consulta ao banco na rota pública | Código com HMAC inválido nunca toca o repositório: sem isso, a diferença entre "não existe" e "assinatura errada" seria um oráculo pra enumerar UUIDs |
 | "Não existe" e "assinatura inválida" devolvem o mesmo `404 INGRESSO_NAO_ENCONTRADO` | Mesmo motivo acima, agora no nível da resposta |
-| O **QR é renderizado no front** a partir do código assinado, não servido por um endpoint de imagem | O QR é só uma representação visual de uma URL que o cliente já tem em mãos. Um endpoint de imagem adicionaria uma rota, um content-type e um cache para gerar zero informação nova — e a autenticidade continua vindo do HMAC, não do desenho |
-| O QR carrega exatamente o **código assinado** (`uuid.assinatura`), não o link público | É o payload que `POST /api/portaria/validacoes` espera — o QR existe para ser validado na porta, e a digitação manual precisa produzir a mesma string. O link público continua sendo montado num único lugar (`lib/ingressos.ts`) e serve o botão de compartilhar. Já divergiu uma vez: com o QR carregando a URL, toda leitura por câmera devolvia `INVALIDO`; hoje a travessia entre as duas pontas é coberta por `ContratoQrPortaria.test.tsx` |
+| O **QR é renderizado no front** a partir do código assinado, não servido por um endpoint de imagem | O QR é só uma representação visual de um código que o cliente já tem em mãos. Um endpoint de imagem adicionaria uma rota, um content-type e um cache para gerar zero informação nova — e a autenticidade continua vindo do HMAC, não do desenho |
+| O QR carrega exatamente o **código assinado** (`uuid.assinatura`), não o link público | É um dos dois payloads que `POST /api/portaria/validacoes` aceita — o QR existe para ser validado na porta, não para abrir página. O link público continua sendo montado num único lugar (`lib/ingressos.ts`) e serve o botão de compartilhar. Já divergiu uma vez: com o QR carregando a URL, toda leitura por câmera devolvia `INVALIDO`; hoje a travessia entre as duas pontas é coberta por `ContratoQrPortaria.test.tsx` |
+| O canhoto imprime **só o código curto**; o assinado nunca aparece em tela | Imprimir ~80 caracteres num canhoto de cinema não servia a ninguém: não dá para ditar na fila nem selecionar com o dedo no celular. O assinado continua vivo dentro do QR e na URL do link público — só deixou de ser texto |
 
 ### 10.7 Portaria
 
@@ -674,10 +676,17 @@ Dois detalhes que só aparecem lendo o código:
   controle de acesso: o front só decide o que desenhar.
 - **Mapa de assentos não revela identidade**: mostra `LIVRE`/`RESERVADO`/`VENDIDO`, nunca quem
   reservou.
-- **Código curto do ingresso é credencial de balcão, não de internet**: 8 caracteres Base32
-  Crockford (40 bits, sem assinatura) valem exclusivamente em `POST /api/portaria/validacoes`, que
-  exige papel `PORTARIA` — força bruta ali pressupõe uma conta de operador. O QR, o link público e
-  a leitura por câmera continuam usando só o código assinado por HMAC.
+- **Código curto do ingresso é credencial de balcão, não de internet** — e é uma redução de
+  segurança assumida de propósito: 8 caracteres Base32 Crockford são 40 bits **sem assinatura**,
+  mais fracos que o HMAC por construção. Ele vale exclusivamente em
+  `POST /api/portaria/validacoes`, que exige papel `PORTARIA`, então força bruta ali pressupõe uma
+  conta de operador; e só serve código da sessão do turno, o que deixa a chance por tentativa na
+  ordem de 1 em bilhões. O que se compra com isso é a regra de negócio existir: sem código curto a
+  portaria não tem plano B quando a câmera falha — tela riscada, celular sem bateria, luz ruim — e
+  a validação manual vira letra morta. O QR e o identificador do link público continuam usando o
+  código assinado; o que mudou é que o curto passou a ser o único impresso no canhoto e o que o
+  botão de copiar entrega. Mitigação pendente, declarada em `deferred-work.md`: essa rota ainda
+  não tem rate limit.
 - **Respostas que não viram oráculo**: reserva de outro cliente ≡ reserva inexistente; ingresso
   inexistente ≡ assinatura inválida; login de e-mail inexistente equalizado em tempo com senha
   errada.

@@ -200,7 +200,8 @@ class IngressoServiceTest {
         String codigo = id + ".assinatura-valida";
         given(codigoIngressoService.extrairId(codigo)).willReturn(Optional.of(id));
         given(codigoIngressoService.validar(id, codigo)).willReturn(true);
-        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now());
+        // Código curto fixo, não o aleatório do helper: este teste afirma sobre o valor.
+        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, "SB68XVZG", StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findById(id)).willReturn(Optional.of(ingresso));
         Sessao sessao = Sessao.builder()
                 .id(1L)
@@ -222,6 +223,10 @@ class IngressoServiceTest {
         assertThat(dto.sessaoTitulo()).isEqualTo("Sessão fixture");
         assertThat(dto.salaNome()).isEqualTo("Sala 1");
         assertThat(dto.status()).isEqualTo(StatusIngresso.VALIDO);
+        // Quem recebeu o link compartilhado é quem vai entrar na sala: sem o código curto, a
+        // página pública não tem o que ditar na portaria quando a câmera falha. Não é exposição
+        // nova — a própria URL do link já carrega o código assinado, que a portaria também aceita.
+        assertThat(dto.codigoCurto()).isEqualTo("SB68XVZG");
     }
 
     // AC4/AD-9: leitura pública nunca muta estado como efeito colateral, nem hoje nem em

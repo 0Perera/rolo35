@@ -68,6 +68,9 @@ async function payloadDoQrNoCanhoto(): Promise<string> {
     salaNome: 'Sala 1',
     dataHora: '2030-01-01T20:00:00',
     status: 'VALIDO',
+    // Deliberadamente diferente do código assinado: o canhoto imprime este, e o QR precisa
+    // continuar gravando o outro. Se os dois trocassem de lugar, os testes abaixo acusam.
+    codigoCurto: '7ZK3QW9M',
   });
   render(
     <MemoryRouter initialEntries={[`/ingressos/${CODIGO}`]}>

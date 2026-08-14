@@ -153,3 +153,9 @@
 - source_spec: `_bmad-output/specs/spec-backlog-hardening/SPEC.md`
   summary: `SessaoService.editar` deixa mover pro futuro uma sessão cuja `data_hora` já passou.
   evidence: Valida que a `dataHora` nova é futura (`SessaoService.java:127-129`), nunca que a atual não passou. `existeIngressoConfirmado` já barra o caso com ingresso vendido; sobra remarcar sessão sem venda, que é plausivelmente legítimo. O CAP-2 recortou FR-10/FR-12 (reserva e pagamento) de propósito, então não é regressão deste ciclo.
+
+## Deferred from: canhoto sem código longo (2026-08-14)
+
+- source_spec: `docs/decisions.md` — entrada "O canhoto imprime só o código curto, e é ele que o botão copiar entrega"
+  summary: `POST /api/portaria/validacoes` não tem rate limit, e o código curto de 40 bits sem assinatura é um dos dois formatos que ela aceita.
+  evidence: A fraqueza está declarada e aceita na entrada de decisão — o que segura hoje é a autorização `@PreAuthorize("hasRole('PORTARIA')")` mais a razão de acerto (só serve código da sessão do turno, ~1 em bilhões por tentativa), não um limite de tentativas. Com o código curto agora impresso como único código do canhoto e entregue pelo botão de copiar, ele circula mais do que circulava. O padrão de mitigação já existe no projeto: `LimitadorDeCadastro` (janela fixa em memória, `429` no envelope da API), aplicado hoje só ao cadastro. Aplicar ali é trabalho pequeno; ficou fora por escopo, não por dificuldade.

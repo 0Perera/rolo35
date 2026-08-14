@@ -68,6 +68,11 @@ public class IngressoService {
         Ingresso ingresso = ingressoRepository.findById(id).orElseThrow(IngressoNaoEncontradoException::new);
         Sessao sessao = sessaoRepository.findById(ingresso.getSessaoId()).orElseThrow(SessaoNaoEncontradaException::new);
         Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
-        return new IngressoPublicoDto(sessao.getTitulo(), sala.getNome(), sessao.getDataHora(), ingresso.getStatus());
+        return new IngressoPublicoDto(
+                sessao.getTitulo(),
+                sala.getNome(),
+                sessao.getDataHora(),
+                ingresso.getStatus(),
+                ingresso.getCodigoCurto());
     }
 }

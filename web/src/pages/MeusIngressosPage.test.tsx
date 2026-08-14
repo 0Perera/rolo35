@@ -147,14 +147,17 @@ describe('MeusIngressosPage', () => {
     expect(screen.getByText('VALIDO')).toBeInTheDocument();
   });
 
-  it('opens the canhoto with the signed code and its QR', async () => {
+  it('opens the canhoto with the short code and its QR, never the signed code', async () => {
     vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
 
-    expect(screen.getByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
+    expect(screen.getByText('7ZK3QW9M')).toBeInTheDocument();
+    // Um código só em tela. O assinado não some do sistema — ele continua dentro do QR e na URL
+    // do link público —, só deixa de ser impresso, porque ninguém dita nem digita 80 caracteres.
+    expect(screen.queryByText(/CÓDIGO abc-123\.assinatura/)).not.toBeInTheDocument();
     // O QR carrega o código assinado, não o link público — o payload em si é coberto por
     // `ContratoQrPortaria.test.tsx`, que fecha a travessia até a chamada da portaria.
     expect(screen.getByTitle(/QR code do ingresso/)).toBeInTheDocument();
@@ -191,10 +194,10 @@ describe('MeusIngressosPage', () => {
     vi.unstubAllGlobals();
   });
 
-  // O código é `uuid.assinatura`: uma palavra só, longa, quebrada em várias linhas. Selecionar com
-  // o dedo é inviável, e é no celular que o cliente abre o ingresso — o botão é a única forma
-  // prática de levar o código pra digitação manual na portaria.
-  it('copies the signed code itself, not the public link', async () => {
+  // Copiar entrega o código curto, que é o que a portaria aceita digitado. Com 8 caracteres dá
+  // pra transcrever à mão — mas quem transcreve troca um caractere, e o outro lado chega na porta
+  // com um ingresso que não existe. O botão é o que fecha esse buraco.
+  it('copies the short code, not the signed code nor the public link', async () => {
     vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
@@ -203,7 +206,7 @@ describe('MeusIngressosPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
     await userEvent.click(screen.getByRole('button', { name: /copiar código/i }));
 
-    expect(writeText).toHaveBeenCalledWith('abc-123.assinatura');
+    expect(writeText).toHaveBeenCalledWith('7ZK3QW9M');
     expect(await screen.findByRole('button', { name: /código copiado/i })).toBeInTheDocument();
 
     vi.unstubAllGlobals();

@@ -77,7 +77,8 @@ class IngressoSecurityTest {
     @Test
     void buscarPublicoReturns200WithoutToken() throws Exception {
         given(ingressoService.buscarPublico(anyString()))
-                .willReturn(new IngressoPublicoDto("Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), null));
+                .willReturn(new IngressoPublicoDto(
+                        "Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), null, "SB68XVZG"));
 
         mockMvc.perform(get("/api/ingressos/algum-codigo")).andExpect(status().isOk());
     }

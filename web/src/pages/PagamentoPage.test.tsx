@@ -104,14 +104,14 @@ describe('PagamentoPage', () => {
     });
     expect(await screen.findByText(/ticket na mão/i)).toBeInTheDocument();
     expect(screen.getAllByText(/escaneie na portaria/i)).toHaveLength(2);
-    // `CÓDIGO ` no padrão: o código sozinho casaria também com o title do SVG do QR, que carrega a
-    // URL pública — e aí o teste passaria sem o canhoto mostrar código nenhum.
-    expect(screen.getByText(/CÓDIGO aaaa-1111\.assinatura1/)).toBeInTheDocument();
-    expect(screen.getByText(/CÓDIGO bbbb-2222\.assinatura2/)).toBeInTheDocument();
+    // O código assinado não é impresso em canhoto nenhum: ele vive no QR e na URL do link
+    // público. `CÓDIGO ` no padrão porque o código sozinho casaria também com o title do SVG.
+    expect(screen.queryByText(/CÓDIGO aaaa-1111\.assinatura1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/CÓDIGO bbbb-2222\.assinatura2/)).not.toBeInTheDocument();
   });
 
-  // O plano B da câmera só serve se estiver no canhoto: sem ele impresso ali, ninguém tem o que
-  // ditar quando a leitura falha na porta.
+  // É o único código impresso no canhoto, e o plano B da câmera só serve se estiver ali: sem ele
+  // em tela, ninguém tem o que ditar quando a leitura falha na porta.
   it('prints the short code on each ticket, next to the QR', async () => {
     vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
     vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);

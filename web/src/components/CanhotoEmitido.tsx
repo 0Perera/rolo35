@@ -45,15 +45,12 @@ export function CanhotoEmitido({ ingresso, reserva, rotuloAssento }: CanhotoEmit
         </div>
       </div>
 
-      {/* break-all: o código é `uuid.assinatura`, uma palavra só e longa o bastante pra
-          estourar o canhoto no mobile. */}
-      <p className="mt-5 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">CÓDIGO {ingresso.codigo}</p>
-      <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
-        ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
+      <p className="mt-5 font-mono text-base tracking-wide text-[#9C9488]">
+        APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
       </p>
       {/* É aqui que compartilhar faz mais falta: o cliente acabou de receber os ingressos e
           manda o do acompanhante antes de sair da tela. */}
-      <AcoesDoIngresso codigo={ingresso.codigo} className="mt-5" />
+      <AcoesDoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto} className="mt-5" />
     </CanhotoIngresso>
   );
 }

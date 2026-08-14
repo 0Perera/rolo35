@@ -224,12 +224,21 @@ implementadas estão marcadas explicitamente como pendentes.
 - **"Não existe" e "assinatura inválida" devolvem a mesma resposta**
   (404 `INGRESSO_NAO_ENCONTRADO`), pelo mesmo motivo
   (`GlobalExceptionHandler`, handler de `IngressoNaoEncontradoException`).
-- **Link público expõe só filme, sala, horário e status** — nada do comprador
-  (`IngressoPublicoDto`).
+- **Link público expõe só filme, sala, horário, status e o código curto** — nada do
+  comprador (`IngressoPublicoDto`). O código curto vai junto porque quem recebeu o
+  link é quem vai entrar na sala, e sem ele a página não tem o que ditar na portaria
+  se a câmera falhar; não é exposição nova, já que a própria URL carrega o código
+  assinado, que a portaria também aceita.
 - **QR é gerado no front a partir do código assinado**, não por endpoint de imagem
-  da API (`qrcode.react` em `components/CanhotoIngresso.tsx`); a URL que ele carrega
-  é montada num único lugar (`web/src/lib/ingressos.ts`) para que o QR da carteira e
-  o link da página pública nunca divirjam.
+  da API (`qrcode.react` em `components/CanhotoIngresso.tsx`). Ele carrega o código
+  em si, **não uma URL** — apontar a câmera do celular pra ele mostra texto, não abre
+  página. A URL pública é outra coisa: montada num único lugar
+  (`web/src/lib/ingressos.ts`), serve só ao botão de compartilhar, pra que o link da
+  carteira e o da página pública nunca divirjam. `ContratoQrPortaria.test.tsx` existe
+  pra vigiar exatamente essa confusão, que já virou bug uma vez.
+- **O canhoto imprime só o código curto**: o assinado não aparece em tela nenhuma —
+  vive dentro do QR e na URL do link público. O botão de copiar entrega o curto, que
+  é o formato que alguém consegue transcrever e ditar.
 - **Nenhum dado de cartão trafega ou é persistido**: o corpo de
   `POST /api/pagamentos/confirmar` aceita só `{reservaId, resultadoSimulado}`; os
   campos do checkout são validados no cliente (`web/src/lib/cartao.ts`) e descartados.
@@ -266,14 +275,23 @@ abaixo:
 - Retorno inequívoco da validação (`VALIDO` / `INVALIDO` / `JA_UTILIZADO` /
   `EVENTO_ERRADO`) como `200` + campo `resultado`, com sessão checada antes do
   status.
-- Assinatura HMAC conferida **antes** de qualquer consulta ou lock: um código
-  forjado nunca chega a segurar uma linha de `ingressos`.
+- **Dois formatos aceitos, um caminho** (`PortariaService.localizar`): texto na
+  forma `uuid.assinatura` tem a HMAC conferida e é buscado por id; qualquer outra
+  coisa é normalizada como código curto de 8 caracteres e resolvida por
+  `findByCodigoCurtoForUpdate`. Daí em diante o fluxo é idêntico. A leitura por
+  câmera usa o primeiro; a digitação manual, na prática, o segundo — é o que está
+  impresso no canhoto.
+- Formato recusado **antes** de qualquer consulta ou lock, nos dois caminhos:
+  assinatura inválida e código curto fora do alfabeto param na mesma porta, sem
+  chegar a segurar uma linha de `ingressos`.
+- Todo motivo de falha vira o mesmo `INVALIDO` — formato, assinatura adulterada,
+  código inexistente. A resposta não pode virar oráculo de quais códigos existem.
 - Não-validação-duplicada do mesmo ingresso sob concorrência real: lock
-  pessimista em `ingressos` (`findByIdForUpdate` + `SET LOCAL lock_timeout`),
-  provado por `PortariaValidacaoConcorrenciaTest` com duas threads contra
-  Postgres real — exatamente uma responde `VALIDO`.
-- O QR do ingresso carrega o **código assinado** (`uuid.assinatura`), que é o
-  payload que a validação espera — não o link público, que serve o botão de
+  pessimista em `ingressos` (`findByIdForUpdate` / `findByCodigoCurtoForUpdate` +
+  `SET LOCAL lock_timeout`), provado por `PortariaValidacaoConcorrenciaTest` com
+  duas threads contra Postgres real — exatamente uma responde `VALIDO`.
+- O QR do ingresso carrega o **código assinado** (`uuid.assinatura`), que é um dos
+  dois payloads que a validação aceita — não o link público, que serve o botão de
   compartilhar. A travessia entre as duas pontas é coberta por
   `web/src/pages/ContratoQrPortaria.test.tsx`.
 

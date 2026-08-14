@@ -9,10 +9,11 @@ interface CanhotoIngressoProps {
    */
   codigo: string;
   /**
-   * Código curto de digitação manual. Opcional porque a página pública do ingresso não recebe
-   * código nenhum do back — ela existe pra conferir o ingresso, não pra validá-lo.
+   * Código curto de digitação manual — o único código que o canhoto imprime. As três telas que
+   * montam canhoto recebem ele do back, inclusive a pública: quem abriu o link compartilhado é
+   * quem vai entrar na sala, e precisa ter o que ditar se a câmera falhar.
    */
-  codigoCurto?: string;
+  codigoCurto: string;
   children: ReactNode;
 }
 
@@ -50,13 +51,12 @@ export function CanhotoIngresso({ codigo, codigoCurto, children }: CanhotoIngres
         </div>
         <p className="text-center font-mono text-[17px] tracking-[2px] text-cyan-400">ESCANEIE NA PORTARIA</p>
         {/* O plano B da câmera, e por isso vem em corpo grande: quem está na fila precisa ler ele
-            em voz alta pro operador digitar. Sem I, L, O e U, por construção. */}
-        {codigoCurto && (
-          <p className="text-center font-mono text-[15px] tracking-[2px] text-[#9C9488]">
-            OU DITE O CÓDIGO
-            <span className="mt-1 block text-[26px] tracking-[6px] text-paper-50">{codigoCurto}</span>
-          </p>
-        )}
+            em voz alta pro operador digitar. Sem I, L, O e U, por construção. É o único código
+            impresso no canhoto — o assinado vive no QR acima e na URL do link público. */}
+        <p className="text-center font-mono text-[15px] tracking-[2px] text-[#9C9488]">
+          OU DITE O CÓDIGO
+          <span className="mt-1 block text-[26px] tracking-[6px] text-paper-50">{codigoCurto}</span>
+        </p>
       </div>
     </div>
   );

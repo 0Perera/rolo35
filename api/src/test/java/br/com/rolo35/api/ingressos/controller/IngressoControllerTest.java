@@ -71,8 +71,8 @@ class IngressoControllerTest {
 
     @Test
     void buscarPublicoReturns200SemDadoDoClienteOuCodigo() throws Exception {
-        IngressoPublicoDto dto =
-                new IngressoPublicoDto("Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), StatusIngresso.VALIDO);
+        IngressoPublicoDto dto = new IngressoPublicoDto(
+                "Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), StatusIngresso.VALIDO, "SB68XVZG");
         given(ingressoService.buscarPublico(anyString())).willReturn(dto);
 
         mockMvc.perform(get("/api/ingressos/algum-codigo"))
@@ -80,6 +80,9 @@ class IngressoControllerTest {
                 .andExpect(jsonPath("$.sessaoTitulo").value("Sessão fixture"))
                 .andExpect(jsonPath("$.salaNome").value("Sala 1"))
                 .andExpect(jsonPath("$.status").value("VALIDO"))
+                // O curto vem; o assinado não. São credenciais diferentes e só uma tem motivo de
+                // trafegar no corpo — a outra já está na URL de quem abriu o link.
+                .andExpect(jsonPath("$.codigoCurto").value("SB68XVZG"))
                 .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.clienteId").doesNotExist())
                 .andExpect(jsonPath("$.codigo").doesNotExist());
