@@ -19,15 +19,15 @@ services:
   - type: web
     name: rolo35-api
     runtime: docker
-    # Free, com o custo medido e aceito: num container com as restrições deste plano
-    # (`--cpus=0.1 --memory=512m`), o Spring Boot leva 179s pra subir. O trabalho de startup é quase
-    # todo CPU-bound e single-thread — carga de classes em modo interpretado, metamodel do Hibernate,
-    # springdoc varrendo os controllers —, então a 10% de um core cada etapa custa dezenas de vezes o
-    # normal. Como o serviço free ainda dorme após 15 min sem tráfego, a primeira requisição depois
-    # de uma pausa espera ~3min, não o "~1min" que a documentação do Render sugere. É por isso que o
-    # REQUEST_TIMEOUT_MS do front é 240s: com os 90s anteriores, essa primeira chamada era abortada
-    # pelo próprio cliente antes de a API terminar de subir. A RAM cabe com folga (318 MB medidos).
-    plan: free
+    # `starter` e não `free` por causa do boot: medido em container com as restrições do plano free
+    # (0.1 vCPU, 512 MB), o Spring Boot leva 179s pra subir — o trabalho de startup é quase todo
+    # CPU-bound e single-thread (carga de classes em modo interpretado, metamodel do Hibernate,
+    # springdoc varrendo os controllers), então a 10% de um core cada etapa custa dezenas de vezes o
+    # normal. Isso quebrava duas coisas: o serviço free dorme após 15 min, e a primeira requisição
+    # depois disso estourava o timeout de 90s do cliente HTTP do front. O `starter` dá 0.5 vCPU
+    # (~36s de boot) e, principalmente, não dorme — o cold start deixa de existir em vez de só
+    # encurtar. Mesma RAM dos 512 MB do free, que já era folgada: o teste estabilizou em 318 MB.
+    plan: starter
     # Sem `rootDir` de propósito: a documentação do Render se contradiz sobre a base de
     # `dockerfilePath` quando há root dir (o blueprint spec diz "relative to the repo root", a
     # página de monorepo diz relativo ao root dir), e errar isso quebra o build com "Dockerfile not

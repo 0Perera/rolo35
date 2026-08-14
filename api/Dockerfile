@@ -12,7 +12,8 @@ WORKDIR /app
 # organizador direto do <input type="datetime-local">. Sem fixar o fuso, o LocalDateTime.now()
 # do JVM roda em UTC na nuvem e rejeita como "no passado" qualquer horário nas próximas 3h.
 ENV TZ=America/Sao_Paulo
-# O container do plano free tem 512 MB. O default da JVM é heap = 25% da RAM (128 MB), o que sobra
+# O container tem 512 MB (o `starter` do Render dá a mesma RAM do free; o que muda é a CPU, ver
+# render.yaml). O default da JVM é heap = 25% da RAM (128 MB), o que sobra
 # pouco pro que Spring Boot + Hibernate + Flyway precisam e leva a OOM kill no boot; 70% deixa
 # margem pra metaspace e memória nativa. SerialGC porque com 0.1 CPU o paralelismo do G1 só custa.
 # Como é ENV, uma variável de mesmo nome no Render sobrescreve isto sem exigir mudança de imagem.

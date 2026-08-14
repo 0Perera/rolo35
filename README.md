@@ -36,7 +36,7 @@ negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
   - [3.4 Variáveis de ambiente](#34-variáveis-de-ambiente)
   - [3.5 Banco de dados, migrations e seed](#35-banco-de-dados-migrations-e-seed)
   - [3.6 Rodar os testes](#36-rodar-os-testes)
-  - [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free)
+  - [3.7 Deploy e notas de operação](#37-deploy-e-notas-de-operação)
 - [4. Dados de teste](#4-dados-de-teste)
 - [5. Roteiro de avaliação em 5 minutos](#5-roteiro-de-avaliação-em-5-minutos)
 - [6. Referência da API](#6-referência-da-api)
@@ -234,7 +234,7 @@ cd web && npm test        # front-end (Vitest + Testing Library)
 Os testes de integração sobem um Postgres real via Testcontainers, com `withReuse(true)` para não
 recriar o container em cada rodada.
 
-### 3.7 Deploy e limitações do plano free
+### 3.7 Deploy e notas de operação
 
 `render.yaml` na raiz é um **blueprint** que sobe os três serviços numa conta só — Static Site pro
 front, Web Service (Docker) pra API e Postgres gerenciado — em *Blueprints → New Blueprint
@@ -252,20 +252,17 @@ Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard,
   está em uso, então chutar no arquivo seria pior do que preencher com a URL real. `VITE_API_URL` é
   lida em tempo de build (o Vite inlina no bundle), então trocá-la exige redeploy do front.
 
-Limitações conhecidas do plano free, para quando a publicação acontecer:
+Notas de operação, para quando a publicação acontecer:
 
-- **A API dorme** após ~15 min sem tráfego, e acordar leva **cerca de 3 minutos** — não o "~1 min"
-  que a documentação do Render sugere. O número é medido, não estimado: rodando a imagem de produção
-  num container com as restrições reais do plano (`--cpus=0.1 --memory=512m`), o Spring Boot subiu
-  em **179s**. O motivo é CPU, não código — o trabalho de startup é quase todo CPU-bound e
-  single-thread (carga de classes em modo interpretado, metamodel do Hibernate, springdoc varrendo
-  os controllers), então a 10% de um core cada etapa custa dezenas de vezes o normal. **Na prática,
-  ao avaliar: se a aplicação estiver parada há um tempo, a primeira ação que fala com o servidor —
-  em geral o login — pode levar até uns 3 min. Isso acontece uma vez só; da segunda em diante o
-  sistema responde normal.** O `REQUEST_TIMEOUT_MS` do front é 240s justamente pra caber nessa
-  espera: com um teto menor, o próprio navegador desistiria antes de a API terminar de subir.
-- **O front não dorme**: Static Site é CDN, então a aplicação abre na hora. O que espera é a
-  primeira chamada de API.
+- **A API roda no plano `starter`, não no free, e a diferença é de CPU.** Medido num container com
+  as restrições do free (0.1 vCPU, 512 MB), o Spring Boot leva **179s** pra subir: o trabalho de
+  startup é quase todo CPU-bound e single-thread — carga de classes em modo interpretado, metamodel
+  do Hibernate, springdoc varrendo os controllers —, então a 10% de um core cada etapa custa dezenas
+  de vezes o normal. Somado ao fato de o serviço free dormir após 15 min sem tráfego, a primeira
+  requisição depois de qualquer pausa estourava o timeout de 90s do cliente HTTP do front. O
+  `starter` dá 0.5 vCPU (~36s de boot) e **não dorme**, então o cold start deixa de existir em vez
+  de só encurtar. A RAM é a mesma (512 MB) e já era folgada: o teste estabilizou em 318 MB.
+- **O front não dorme em nenhum plano**: Static Site é CDN, então a aplicação abre na hora.
 - O Postgres free expira depois de um período — o prazo aparece no dashboard ao criar o banco.
 - `TZ=America/Sao_Paulo` já vai fixada no blueprint. Ela não é cosmética: além do wall-clock de
   `sessoes.data_hora`, o `now()` que a listagem pública e o guard de reserva comparam vem do fuso da
@@ -959,7 +956,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 |---|---|
 | **Janela de seleção da sessão do turno** | Resolvido: `PortariaService.selecionarSessao()` agora recusa sessão fora da janela `-30min/+2h` em volta do horário, com `SESSAO_FORA_DA_JANELA_DO_TURNO`. A constante é própria, separada do buffer de 4h de conflito de sala — são conceitos diferentes. O que continua fora é uma tela dedicada de "sessões em andamento agora": o seletor ainda parte da listagem pública |
 | **Autocadastro com papel selecionável** | Entregue, e com uma consequência que prefiro declarar a esconder: `POST /api/auth/cadastro` é público (quem cria conta ainda não tem token) e aceita o papel no corpo, então qualquer visitante pode criar uma conta `ORGANIZADOR` ou `PORTARIA`. Foi escolha consciente — é o que torna as três telas avaliáveis sem seed manual — mas o CAP-1 tirou o *ownership* de sessão, que era o que limitava o estrago de uma conta dessas às sessões que ela própria tivesse criado. Num produto real o cadastro público criaria só `CLIENTE`, e staff viria por convite |
-| **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
+| **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e notas de operação](#37-deploy-e-notas-de-operação) |
 
 ### Dívida técnica que eu reconheço como dívida
 

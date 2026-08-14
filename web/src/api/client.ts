@@ -2,14 +2,12 @@ import { lerSessao, limparSessao } from '../lib/sessao';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
-// Dimensionado pelo cold start medido, não chutado: a API roda no plano free do Render, que dorme
-// após 15 min sem tráfego, e subir de novo leva 179s num container com as restrições reais desse
-// plano (0.1 vCPU) — o startup do Spring Boot é quase todo CPU-bound e single-thread. Os 90s que
-// este teto tinha antes ficavam abaixo disso, então o próprio cliente abortava a primeira chamada
-// depois de cada soneca e a tela mostrava erro de rede numa API que estava subindo normalmente.
-// 240s cobrem os 179s mais o tempo de o Render agendar o container. Esperar demais é ruim; inventar
-// uma falha que não existe é pior, porque manda o usuário refazer o que não precisava (AD-2).
-const REQUEST_TIMEOUT_MS = 240_000;
+// Folga deliberada, não estimativa de latência: a API sobe no plano `starter` do Render, que não
+// dorme, então em operação normal nenhuma chamada chega perto disto. O teto existe pro que sobra —
+// rede ruim e a janela de um redeploy — e é generoso porque cortar cedo demais transforma espera em
+// erro falso, que é o pior dos dois (AD-2). No plano free ele era pequeno demais: 90s contra 179s
+// de boot medidos a 0.1 vCPU, ou seja, a primeira chamada depois de cada soneca falhava sozinha.
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export class ApiRequestError extends Error {
   readonly status: number;
