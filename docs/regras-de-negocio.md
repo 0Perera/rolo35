@@ -1,8 +1,8 @@
 # Regras de negócio implementadas
 
 Levantamento do que está de fato codificado no back-end (`api/src/main/java`) e
-no schema (`api/src/main/resources/db/migration`) na branch
-`epic-4-pagamento-e-ingressos` (épico 4 fechado), na data deste documento. Não é um
+no schema (`api/src/main/resources/db/migration`), na data deste documento —
+já cobre os épicos 4 e 5 (pagamento/ingressos e portaria). Não é um
 espelho das stories/epics — é o que existe em código, com o arquivo/linha de
 origem pra cada regra. Regras descritas em stories mas ainda não
 implementadas estão marcadas explicitamente como pendentes.
@@ -122,6 +122,10 @@ implementadas estão marcadas explicitamente como pendentes.
 - **Seleção de 1 a 6 assentos, sem duplicados**, validada **antes** de qualquer
   lock — a transação que segura linhas de `assento_sessao` precisa ser a mais
   curta possível (`ReservaService.java:29`, `:50-54`).
+- **Sessão que já começou não pode receber nova reserva** (FR-10):
+  `SessaoJaComecouException`, checado contra `sessaoRepository.jaComecou(...)`
+  antes do lock — a vitrine só lista sessão futura, mas uma aba aberta há uma
+  hora não sabe disso (`ReservaService.java:68-73`).
 - **A seleção já cria o hold**: os assentos vão para `RESERVADO` com
   `expires_at = now() + 10min` e `reserva_id` preenchido; a `Reserva` nasce
   `ATIVA` com o mesmo `expires_at` (`ReservaService.java:30`, `:78-82`).
@@ -186,6 +190,10 @@ implementadas estão marcadas explicitamente como pendentes.
   `PagamentoConcorrenciaConflitanteTest`).
 - **Reserva expirada é recusada** (409 `RESERVA_EXPIRADA`), checada depois do
   lock, contra `now()` (`PagamentoService.java:79-81`).
+- **Sessão que já começou não pode ser paga** (FR-12): `SessaoJaComecouException`,
+  checada depois da idempotência (quem já confirmou continua recuperando os
+  ingressos) e depois da expiração — um hold ainda dentro dos 10 minutos não
+  basta se a sessão já começou nesse meio-tempo (`PagamentoService.java:86-92`).
 - **Aprovado**: `Reserva` vira `CONFIRMADA`, sai **um ingresso por assento**
   (`StatusIngresso.VALIDO`) e os assentos viram `VENDIDO` — estado final, não
   expira (`PagamentoService.java:88-101`).
@@ -263,6 +271,15 @@ implementadas estão marcadas explicitamente como pendentes.
   `sessoes.data_hora`, `sessoes.sala_id`, e o composto
   `sessoes (sala_id, data_hora)` (`V3__indice_sessoes_sala_data_hora.sql`)
   que serve exatamente a query de conflito de horário acima.
+- **Ingresso aponta pra uma linha real do mapa da sessão**: FK composta
+  `fk_ingressos_assento_sessao (sessao_id, assento_id)` contra `assento_sessao`
+  (`V8__backstops_ingressos.sql`) — as FKs simples de `sessao_id` e `assento_id`
+  isoladas não bastavam, pois cada uma valida sua coluna sem impedir um assento
+  de outra sala num ingresso de sessão diferente.
+- **Uma reserva não emite dois ingressos pro mesmo assento**:
+  `uq_ingressos_reserva_assento UNIQUE (reserva_id, assento_id)`
+  (`V8__backstops_ingressos.sql`) — backstop de banco pro mesmo invariante que
+  `PagamentoService.confirmar()` já garante por construção.
 
 ## Portaria (épico 5, implementado)
 
@@ -305,12 +322,13 @@ abaixo:
   conceitos diferentes. A tela repete o motivo da recusa em
   `SelecaoTurnoPortariaPage`, senão o operador tenta a mesma sessão pra sempre.
 
-Lacunas conhecidas nas regras **já implementadas** (achados de revisão
-adversarial, ainda abertos) estão em
-`_bmad-output/implementation-artifacts/business-rules-gaps.md` — as principais:
-reserva e pagamento não rejeitam sessão cujo horário já passou, e `ingressos`
-não tem `UNIQUE (reserva_id, assento_id)` nem FK composta contra
-`assento_sessao`.
+Os achados de revisão adversarial sobre as regras **já implementadas** estão em
+`_bmad-output/implementation-artifacts/business-rules-gaps.md`. Todos foram
+fechados, com uma exceção declarada: **não existe estratégia de rotação do
+secret HMAC** (AD-8). Se o secret precisar trocar, todo ingresso já emitido —
+inclusive link público, que não expira — vira inválido de uma vez, sem janela de
+migração. O fix correto (secret versionado com validação dupla durante a
+transição) não coube no prazo; a limitação está declarada também no README.
 
-Este documento cobre só o que existe hoje; ao implementar cada item acima,
-mover a entrada correspondente para a seção do módulo e apagar daqui.
+Este documento cobre só o que existe hoje; ao fechar um item, mover a entrada
+correspondente para a seção do módulo e apagar daqui.
