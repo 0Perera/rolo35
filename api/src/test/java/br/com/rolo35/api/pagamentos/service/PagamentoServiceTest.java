@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -101,6 +102,18 @@ class PagamentoServiceTest {
         return new Reserva(RESERVA_ID, CLIENTE_ID, SESSAO_ID, StatusReserva.ATIVA, Instant.now(), expiresAt);
     }
 
+    /**
+     * A emissão é um saveAll só, não um save por assento: o mock reflete isso, e é o que o teste de
+     * lote abaixo verifica explicitamente.
+     */
+    private void stubEmissaoEmLote() {
+        given(ingressoRepository.saveAll(anyList())).willAnswer(invocation -> {
+            List<Ingresso> ingressos = invocation.getArgument(0);
+            ingressos.forEach(ingresso -> ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID()));
+            return ingressos;
+        });
+    }
+
     private AssentoSessao assentoDaReserva(Long assentoId) {
         return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), StatusAssento.RESERVADO, RESERVA_ID, LocalDateTime.now().plusMinutes(5));
     }
@@ -115,11 +128,7 @@ class PagamentoServiceTest {
                 .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
         given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
                 .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
-        given(ingressoRepository.save(any(Ingresso.class))).willAnswer(invocation -> {
-            Ingresso ingresso = invocation.getArgument(0);
-            ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID());
-            return ingresso;
-        });
+        stubEmissaoEmLote();
         given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
         given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(2);
 
@@ -132,6 +141,37 @@ class PagamentoServiceTest {
         verify(assentoSessaoRepository).reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID);
     }
 
+    // A emissão é a única escrita da classe que ainda ia de um em um, destoando do padrão em lote
+    // do resto (saveAll de assento_sessao na criação de sessão, UPDATE único em reivindicarVendido).
+    // Com o teto de 6 assentos por reserva o ganho é pequeno, mas a inconsistência era gratuita.
+    @Test
+    void emiteOsIngressosNumSaveSoENaoUmPorAssento() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        List<Long> assentoIds = List.of(10L, 20L);
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID))
+                .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
+        given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
+                .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
+        stubEmissaoEmLote();
+        given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
+        given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(2);
+
+        pagamentoService.confirmar(
+                new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL);
+
+        verify(ingressoRepository, never()).save(any(Ingresso.class));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Ingresso>> captor = ArgumentCaptor.forClass(List.class);
+        verify(ingressoRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(2);
+        // Um createdAt só pra reserva inteira: os ingressos foram emitidos no mesmo ato, e
+        // IngressoRepository.buscarPorCliente() já depende de desempate estável pra paginar.
+        assertThat(captor.getValue()).extracting(Ingresso::getCreatedAt).containsOnly(
+                captor.getValue().get(0).getCreatedAt());
+    }
+
     @Test
     void aprovadoComLinhasAfetadasMenorQueEsperadoLancaAssentoIndisponivel() {
         setUp();
@@ -142,11 +182,7 @@ class PagamentoServiceTest {
                 .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
         given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
                 .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
-        given(ingressoRepository.save(any(Ingresso.class))).willAnswer(invocation -> {
-            Ingresso ingresso = invocation.getArgument(0);
-            ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID());
-            return ingresso;
-        });
+        stubEmissaoEmLote();
         // UPDATE afetou só 1 das 2 linhas esperadas — o WHERE de defesa em profundidade
         // (reservaId) recusou parte da atualização, mesmo já sob o lock pessimista de Reserva.
         given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(1);

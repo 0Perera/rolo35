@@ -99,11 +99,15 @@ public class PagamentoService {
         if (request.resultadoSimulado() == ResultadoSimulado.APROVADO) {
             reserva.confirmar();
             reservaRepository.save(reserva);
-            List<Ingresso> ingressos = assentoIds.stream()
-                    .map(assentoId -> ingressoRepository.save(new Ingresso(
+            // Um INSERT em lote, e um createdAt só pra reserva inteira: os ingressos foram emitidos
+            // no mesmo ato, e IngressoRepository.buscarPorCliente() já pagina desempatando por
+            // (createdAt, id) justamente porque a emissão em lote produz o mesmo instante.
+            Instant emitidoEm = Instant.now();
+            List<Ingresso> ingressos = ingressoRepository.saveAll(assentoIds.stream()
+                    .map(assentoId -> new Ingresso(
                             null, reserva.getId(), assentoId, reserva.getSessaoId(), StatusIngresso.VALIDO, null,
-                            Instant.now())))
-                    .toList();
+                            emitidoEm))
+                    .toList());
             int linhasAfetadas =
                     assentoSessaoRepository.reivindicarVendido(reserva.getSessaoId(), assentoIds, reserva.getId());
             if (linhasAfetadas != assentoIds.size()) {
