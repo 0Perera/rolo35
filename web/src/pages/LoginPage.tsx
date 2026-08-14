@@ -28,16 +28,46 @@ interface RetomadaDeCompra {
   assentoIds: number[];
 }
 
+interface ContaDemo {
+  email: string;
+  senha: string;
+  papel: Papel;
+  /** Fundo da etiqueta do papel: tom do handoff que não virou token, então vai literal. */
+  corEtiqueta: string;
+}
+
+/**
+ * As mesmas credenciais semeadas por `V2__seed.sql` e já publicadas no README (seção "Dados de
+ * teste"): o projeto é entregue como teste técnico, e quem avalia precisa dos três papéis sem
+ * inventar cadastro nem sair da tela pra procurar a senha.
+ */
+const CONTAS_DEMO: ContaDemo[] = [
+  { email: 'cliente1@rolo35.com.br', senha: 'cliente123', papel: 'CLIENTE', corEtiqueta: '#FFC414' },
+  { email: 'organizador@rolo35.com.br', senha: 'organizador123', papel: 'ORGANIZADOR', corEtiqueta: '#7ED9F2' },
+  { email: 'portaria@rolo35.com.br', senha: 'portaria123', papel: 'PORTARIA', corEtiqueta: '#E7DDCB' },
+];
+
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [estado, setEstado] = useState<EstadoLogin>('idle');
   const [mensagemErro, setMensagemErro] = useState('');
+  const [demoAberta, setDemoAberta] = useState(false);
+  // Só roteamento: para onde ir depois do login quando a credencial veio de uma conta de
+  // demonstração. Deliberadamente separado de `retomada` — ver o comentário em `handleSubmit`.
+  const [destinoDemo, setDestinoDemo] = useState<string | null>(null);
   const navigate = useNavigate();
   const { state } = useLocation() as { state: Partial<RetomadaDeCompra> | null };
   const retomada: RetomadaDeCompra | null = state?.retomarEm
     ? { retomarEm: state.retomarEm, assentoIds: state.assentoIds ?? [] }
     : null;
+
+  /** Preenche o formulário e nada mais: entrar continua sendo um clique consciente em ENTRAR. */
+  function escolherContaDemo(conta: ContaDemo) {
+    setEmail(conta.email);
+    setSenha(conta.senha);
+    setDestinoDemo(rotaPorPapel(conta.papel));
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,6 +77,13 @@ export function LoginPage() {
     try {
       const resposta = await login(email, senha);
       salvarSessao(resposta.token, resposta.papel);
+      // Conta de demonstração tem destino próprio, guardado fora do canal de retomada. `retomarEm`
+      // quer dizer "havia uma compra parada esperando login" — reusá-lo como rota da conta demo
+      // faria a plataforma tratar uma escolha de papel como compra que ninguém começou.
+      if (destinoDemo) {
+        navigate(destinoDemo);
+        return;
+      }
       // Compra interrompida por falta de login volta pro ponto onde parou. Só pra CLIENTE: entrar
       // com outro papel não continua uma compra, e mandar um organizador pro mapa de assentos só
       // adiaria a mesma negação pro clique seguinte.
@@ -93,7 +130,12 @@ export function LoginPage() {
               autoCorrect="off"
               spellCheck={false}
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                // Editar à mão descarta a conta demo: senão o destino escolhido lá atrás sobrevive
+                // a uma credencial que já é de outra pessoa.
+                setDestinoDemo(null);
+              }}
               required
             />
             <TextField
@@ -101,7 +143,10 @@ export function LoginPage() {
               label="SENHA"
               type="password"
               value={senha}
-              onChange={(event) => setSenha(event.target.value)}
+              onChange={(event) => {
+                setSenha(event.target.value);
+                setDestinoDemo(null);
+              }}
               required
             />
 
@@ -120,6 +165,45 @@ export function LoginPage() {
           <Link to="/cadastro" className={buttonClass('secondary', 'w-full')}>
             CRIAR MINHA FICHA
           </Link>
+
+          {/* Recolhido por padrão: é atalho de avaliação, não parte do caminho de quem já tem conta. */}
+          <div className="mt-[14px] border-t-2 border-dashed border-[#C7B694] pt-[14px]">
+            <button
+              type="button"
+              aria-expanded={demoAberta}
+              onClick={() => setDemoAberta((atual) => !atual)}
+              className="flex w-full items-center justify-between font-mono text-lg text-[#6D655B] hover:text-flame-600"
+            >
+              Contas de demonstração
+              <span aria-hidden className="text-flame-600">
+                {demoAberta ? '▴' : '▾'}
+              </span>
+            </button>
+
+            {demoAberta && (
+              <div className="mt-2 flex flex-col gap-2">
+                {CONTAS_DEMO.map((conta) => (
+                  <button
+                    key={conta.email}
+                    type="button"
+                    // O nome visível (e-mail + papel) não diz o que o clique faz. Em leitor de tela
+                    // isso vira "cliente1@rolo35.com.br CLIENTE, botão" — parece que entra na conta.
+                    aria-label={`Preencher com ${conta.email} (${conta.papel})`}
+                    onClick={() => escolherContaDemo(conta)}
+                    className="flex items-center justify-between gap-3 border-2 border-ink-950 bg-paper-100 px-3 py-2.5 text-left hover:bg-[#FFF3D0]"
+                  >
+                    <span className="min-w-0 truncate font-mono text-[17px]">{conta.email}</span>
+                    <span
+                      className="shrink-0 border-2 border-ink-950 px-2 py-[3px] text-[10px] font-extrabold tracking-[1.2px]"
+                      style={{ background: conta.corEtiqueta }}
+                    >
+                      {conta.papel}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </Card>
 
         <Link

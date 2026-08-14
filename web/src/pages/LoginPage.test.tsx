@@ -115,6 +115,123 @@ describe('LoginPage', () => {
     expect(await screen.findByText('painel do organizador')).toBeInTheDocument();
   });
 
+  it('keeps the demo accounts collapsed until someone asks for them', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    const gatilho = screen.getByRole('button', { name: /contas de demonstração/i });
+    expect(gatilho).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /organizador@rolo35\.com\.br/i })).not.toBeInTheDocument();
+
+    await user.click(gatilho);
+
+    expect(gatilho).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /cliente1@rolo35\.com\.br/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /organizador@rolo35\.com\.br/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /portaria@rolo35\.com\.br/i })).toBeInTheDocument();
+
+    await user.click(gatilho);
+
+    expect(gatilho).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('fills the form from a demo account without logging in by itself', async () => {
+    const loginSpy = vi.spyOn(authApi, 'login');
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /contas de demonstração/i }));
+    await user.click(screen.getByRole('button', { name: /organizador@rolo35\.com\.br/i }));
+
+    expect(screen.getByLabelText(/e-mail/i)).toHaveValue('organizador@rolo35.com.br');
+    expect(screen.getByLabelText(/senha/i)).toHaveValue('organizador123');
+    expect(loginSpy).not.toHaveBeenCalled();
+  });
+
+  it('sends a demo account straight to the screen of its own papel', async () => {
+    vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'PORTARIA' });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/portaria" element={<p>terminal de portaria</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /contas de demonstração/i }));
+    await user.click(screen.getByRole('button', { name: /portaria@rolo35\.com\.br/i }));
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+
+    expect(await screen.findByText('terminal de portaria')).toBeInTheDocument();
+  });
+
+  // O destino da conta demo mora fora do canal de retomada de propósito. Se dividissem a mesma
+  // variável, escolher uma conta demo seria indistinguível de uma compra parada esperando login.
+  it('does not treat a demo account as a purchase waiting to be resumed', async () => {
+    vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'CLIENTE' });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/login', state: { retomarEm: '/sessoes/5/assentos', assentoIds: [1, 2] } },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/sessoes/:id/assentos" element={<DestinoFalso />} />
+          <Route path="/" element={<p>vitrine</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /contas de demonstração/i }));
+    await user.click(screen.getByRole('button', { name: /cliente1@rolo35\.com\.br/i }));
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+
+    expect(await screen.findByText('vitrine')).toBeInTheDocument();
+  });
+
+  it('drops the demo destination once the credentials are edited by hand', async () => {
+    vi.spyOn(authApi, 'login').mockResolvedValue({ token: 'token-abc', papel: 'CLIENTE' });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/login', state: { retomarEm: '/sessoes/5/assentos', assentoIds: [1, 2] } },
+        ]}
+      >
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/sessoes/:id/assentos" element={<DestinoFalso />} />
+          <Route path="/" element={<p>vitrine</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /contas de demonstração/i }));
+    await user.click(screen.getByRole('button', { name: /cliente1@rolo35\.com\.br/i }));
+    await user.clear(screen.getByLabelText(/e-mail/i));
+    await user.type(screen.getByLabelText(/e-mail/i), 'cliente2@rolo35.com.br');
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+
+    expect(await screen.findByText('destino /sessoes/5/assentos com assentos 1,2')).toBeInTheDocument();
+  });
+
   // Teclado de celular capitaliza a primeira letra por padrão. O servidor já normaliza o e-mail
   // antes de consultar, então o login funciona de qualquer forma — mas ver "Cliente1@..." no
   // campo faz quem está tentando entrar achar que digitou errado, e corrigir à mão o que já
