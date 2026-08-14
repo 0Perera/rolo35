@@ -1,8 +1,15 @@
 import { act, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { Header } from './Header';
 import { limparSessao } from '../lib/sessao';
+
+/** Espelha o que o header mandou pro login: a tela de onde a pessoa saiu. */
+function DestinoDoLogin() {
+  const { state } = useLocation() as { state: { retomarEm?: string } | null };
+  return <p>login pra retomar {state?.retomarEm}</p>;
+}
 
 function renderHeader(papel?: string) {
   localStorage.clear();
@@ -54,6 +61,23 @@ describe('Header', () => {
 
     expect(screen.queryByRole('button', { name: /SAIR/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /entrar/i })).toBeInTheDocument();
+  });
+
+  // Sem isso, entrar pelo header devolve a pessoa na home do papel: ela clica em ENTRAR estando na
+  // carteira e volta pra vitrine, tendo que refazer o caminho até a tela que pediu login.
+  it('carries the current page in the login link, so the client comes back to it', async () => {
+    render(
+      <MemoryRouter initialEntries={['/meus-ingressos?pagina=2']}>
+        <Header />
+        <Routes>
+          <Route path="/login" element={<DestinoDoLogin />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole('link', { name: /entrar/i }));
+
+    expect(screen.getByText('login pra retomar /meus-ingressos?pagina=2')).toBeInTheDocument();
   });
 
   it('marks the wallet link as the current page while the client is on it', () => {

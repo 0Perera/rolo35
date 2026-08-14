@@ -73,6 +73,7 @@ class IngressoLeituraRepositoryTest {
 
     private Long salaCriadaId;
     private Long sessaoCriadaId;
+    private Long outraSessaoCriadaId;
     private Long reserva1Id;
     private Long reserva2Id;
 
@@ -85,6 +86,10 @@ class IngressoLeituraRepositoryTest {
         if (reserva2Id != null) {
             ingressoRepository.deleteAll(ingressoRepository.findByReservaId(reserva2Id));
             reservaRepository.deleteById(reserva2Id);
+        }
+        if (outraSessaoCriadaId != null) {
+            assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(outraSessaoCriadaId));
+            sessaoRepository.deleteById(outraSessaoCriadaId);
         }
         if (sessaoCriadaId != null) {
             assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(sessaoCriadaId));
@@ -237,6 +242,73 @@ class IngressoLeituraRepositoryTest {
             assentoSessaoRepository.save(
                     new AssentoSessao(new AssentoSessaoId(sessaoId, assento.getId()), StatusAssento.VENDIDO, null, null));
         }
+    }
+
+    /**
+     * A carteira é histórico de compra, não agenda: quem acabou de comprar abre a tela pra
+     * conferir o que comprou, e o ingresso novo tem que estar na primeira linha mesmo que a sessão
+     * dele seja anterior à de uma compra antiga. Ordenar pela data da sessão jogava a compra
+     * recente pro meio da lista — e, em DESC, ainda abria a carteira pela sessão mais distante.
+     */
+    @Test
+    void buscarPorClientePoeACompraMaisRecenteNoTopoAindaQueASessaoSejaMaisCedo() {
+        Sala sala = new Sala();
+        ReflectionTestUtils.setField(sala, "nome", "Sala ordem de compra (fixture)");
+        ReflectionTestUtils.setField(sala, "linhas", 1);
+        ReflectionTestUtils.setField(sala, "colunas", 2);
+        sala = salaRepository.save(sala);
+        salaCriadaId = sala.getId();
+
+        Assento a1 = novoAssento(sala.getId(), 1);
+        Assento a2 = novoAssento(sala.getId(), 2);
+
+        // A sessão da compra recente é a mais CEDO das duas: é exatamente o caso que a ordenação
+        // por data de sessão errava.
+        Sessao sessaoCedo = novaSessao(sala.getId(), "Sessão cedo (fixture)", 30);
+        sessaoCriadaId = sessaoCedo.getId();
+        Sessao sessaoTarde = novaSessao(sala.getId(), "Sessão tarde (fixture)", 120);
+        outraSessaoCriadaId = sessaoTarde.getId();
+        mapeiaNaSessao(sessaoCedo.getId(), a1);
+        mapeiaNaSessao(sessaoTarde.getId(), a2);
+
+        Long cliente1Id = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
+        Reserva reservaAntiga = reservaRepository.save(new Reserva(
+                null, cliente1Id, sessaoTarde.getId(), StatusReserva.CONFIRMADA,
+                Instant.now().truncatedTo(ChronoUnit.MICROS), null));
+        reserva1Id = reservaAntiga.getId();
+        Reserva reservaNova = reservaRepository.save(new Reserva(
+                null, cliente1Id, sessaoCedo.getId(), StatusReserva.CONFIRMADA,
+                Instant.now().truncatedTo(ChronoUnit.MICROS), null));
+        reserva2Id = reservaNova.getId();
+
+        Instant compraAntiga = Instant.now().truncatedTo(ChronoUnit.MICROS).minusSeconds(3600);
+        Instant compraRecente = compraAntiga.plusSeconds(3600);
+        Ingresso ingressoAntigo = ingressoRepository.save(new Ingresso(
+                null, reservaAntiga.getId(), a2.getId(), sessaoTarde.getId(), codigoCurtoDeTeste(),
+                StatusIngresso.VALIDO, null, compraAntiga));
+        Ingresso ingressoRecente = ingressoRepository.save(new Ingresso(
+                null, reservaNova.getId(), a1.getId(), sessaoCedo.getId(), codigoCurtoDeTeste(),
+                StatusIngresso.VALIDO, null, compraRecente));
+
+        List<IngressoResumoProjection> resultado =
+                ingressoRepository.buscarPorCliente(cliente1Id, Pageable.unpaged()).getContent();
+
+        assertThat(resultado).hasSize(2);
+        assertThat(resultado.get(0).getId()).isEqualTo(ingressoRecente.getId());
+        assertThat(resultado.get(1).getId()).isEqualTo(ingressoAntigo.getId());
+    }
+
+    private Sessao novaSessao(Long salaId, String titulo, int diasAFrente) {
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+        return sessaoRepository.save(Sessao.builder()
+                .organizadorId(organizadorId)
+                .salaId(salaId)
+                .tmdbId(550L)
+                .titulo(titulo)
+                .dataHora(LocalDateTime.now().plusDays(diasAFrente).withNano(0))
+                .preco(new BigDecimal("25.00"))
+                .createdAt(Instant.now())
+                .build());
     }
 
     @Test

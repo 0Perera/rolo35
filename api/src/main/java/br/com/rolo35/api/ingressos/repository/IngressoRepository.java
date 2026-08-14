@@ -34,10 +34,15 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
     // (Story 3.1): Ingresso guarda só IDs soltos (reservaId/assentoId/sessaoId), sem
     // associação @ManyToOne mapeada entre as entidades. Evita N+1 na tela "Meus Ingressos" —
     // 4 tabelas numa query só, em vez de uma consulta por ingresso.
-    // `i.id` fecha a ordenação: `dataHora` e `createdAt` empatam quando a emissão salva os
-    // ingressos de uma reserva no mesmo microssegundo, e com empate a ordem entre páginas fica por
-    // conta do plano do banco — a mesma linha pode voltar na página 2 e outra sumir. Sem paginação
-    // isso era invisível; com ela, é o tipo de defeito que ninguém reproduz sob demanda.
+    // Ordena por `createdAt`, a hora da compra, e não por `dataHora`, a hora da sessão: a carteira
+    // é histórico de compra, e quem sai do pagamento vem conferir o que acabou de comprar. Pela
+    // data da sessão, um ingresso comprado agora pra amanhã aparecia depois de outro comprado
+    // semana passada pra daqui a um mês — e, em DESC, a carteira abria pela sessão mais distante.
+    //
+    // `i.id` fecha a ordenação: `createdAt` empata quando a emissão salva os ingressos de uma
+    // reserva no mesmo microssegundo, e com empate a ordem entre páginas fica por conta do plano do
+    // banco — a mesma linha pode voltar na página 2 e outra sumir. Sem paginação isso era
+    // invisível; com ela, é o tipo de defeito que ninguém reproduz sob demanda.
     //
     // O countQuery é explícito não porque o derivado erre, mas porque contar não precisa de
     // Assento, Sessao nem Sala: o filtro é `r.clienteId`, e o derivado carregaria os quatro JOINs
@@ -54,7 +59,7 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
             JOIN Sessao s ON s.id = i.sessaoId
             JOIN Sala sa ON sa.id = s.salaId
             WHERE r.clienteId = :clienteId
-            ORDER BY s.dataHora DESC, i.createdAt DESC, i.id DESC
+            ORDER BY i.createdAt DESC, i.id DESC
             """,
             countQuery =
                     """

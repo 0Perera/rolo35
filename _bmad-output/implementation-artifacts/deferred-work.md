@@ -143,3 +143,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
   summary: `sprint-status.yaml` linha 44 não é YAML válido — o escalar de `last_updated` contém `Epic 5 fechado:` sem aspas.
   evidence: Presente desde `HEAD~10`, anterior a esta story. Não foi corrigido junto porque é um arquivo que a ferramentaria BMad reescreve, e mudar o estilo de aspas pode conflitar com as próprias escritas dela. Vale uma passada dedicada.
+
+## Deferred from: code review of SPEC.md — Grupo A (2026-08-14)
+
+- source_spec: `_bmad-output/specs/spec-backlog-hardening/SPEC.md`
+  summary: Rota `*` em `web/src/App.tsx` devolve 200 com página em branco em vez de 404.
+  evidence: Pré-existente e convenção comum de SPA. `web/nginx.conf` e as `routes` do `render.yaml` reescrevem qualquer caminho pra `index.html`, então o 404 real nunca chega ao navegador de todo jeito.
+
+- source_spec: `_bmad-output/specs/spec-backlog-hardening/SPEC.md`
+  summary: `SessaoService.editar` deixa mover pro futuro uma sessão cuja `data_hora` já passou.
+  evidence: Valida que a `dataHora` nova é futura (`SessaoService.java:127-129`), nunca que a atual não passou. `existeIngressoConfirmado` já barra o caso com ingresso vendido; sobra remarcar sessão sem venda, que é plausivelmente legítimo. O CAP-2 recortou FR-10/FR-12 (reserva e pagamento) de propósito, então não é regressão deste ciclo.

@@ -200,8 +200,10 @@ implementadas estão marcadas explicitamente como pendentes.
   (comparação em tempo constante); base64 malformado é rejeitado sem exceção
   vazando (`CodigoIngressoService.validar`, `:36-49`).
 - **"Meus ingressos" é filtrado por dono no banco**, via `reservas.cliente_id`,
-  numa query só com `JOIN` de assento/sessão/sala (sem N+1), ordenada por
-  `data_hora DESC` e desempatada por `created_at DESC`
+  numa query só com `JOIN` de assento/sessão/sala (sem N+1), ordenada pela
+  compra (`ingressos.created_at DESC`) e desempatada por `id DESC` — a carteira
+  é histórico de compra, não agenda: quem sai do pagamento acha o ingresso novo
+  na primeira linha, mesmo que a sessão dele seja anterior à de uma compra velha
   (`IngressoRepository.buscarPorCliente`, `:17-29`;
   `IngressoService.listarMinhas`, `:41-50`). Índices em
   `V4__indices_ingressos_por_cliente.sql`.
@@ -265,9 +267,15 @@ abaixo:
   compartilhar. A travessia entre as duas pontas é coberta por
   `web/src/pages/ContratoQrPortaria.test.tsx`.
 
-Pendências conhecidas do épico: `POST /api/portaria/turno` não valida
-server-side se a sessão é futura/publicada (a restrição vive só na lista do
-front), e não há janela dedicada de "sessões em andamento agora".
+- Janela operacional do turno: `POST /api/portaria/turno` só aceita sessão cujo
+  `data_hora` esteja entre 2h no passado e 30min no futuro a partir de agora —
+  fora disso, `409 SESSAO_FORA_DA_JANELA_DO_TURNO`. Existe porque a sessão ativa
+  é o que separa `VALIDO` de `EVENTO_ERRADO`: ativar por engano a sessão de
+  outro dia faz a fila inteira ser recusada com ingresso legítimo na mão. As
+  constantes são próprias (`JANELA_TURNO_ANTES_MINUTOS` /
+  `JANELA_TURNO_DEPOIS_HORAS`), separadas do buffer de 4h do conflito de sala —
+  conceitos diferentes. A tela repete o motivo da recusa em
+  `SelecaoTurnoPortariaPage`, senão o operador tenta a mesma sessão pra sempre.
 
 Lacunas conhecidas nas regras **já implementadas** (achados de revisão
 adversarial, ainda abertos) estão em
