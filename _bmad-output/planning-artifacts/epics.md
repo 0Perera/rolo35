@@ -219,7 +219,7 @@ So that eu consiga operar no sistema com o papel certo sem depender de um cadast
 
 **Acceptance Criteria:**
 
-**Given** um visitante na tela de cadastro, preenchendo nome, e-mail, senha, papel e aceite dos termos
+**Given** um visitante na tela de cadastro, preenchendo nome, e-mail, senha e papel
 **When** submete com todos os campos válidos (papel dentre `ORGANIZADOR`, `CLIENTE`, `PORTARIA`) e e-mail ainda não usado
 **Then** uma conta com o papel informado é criada, senha armazenada com hash (nunca em texto puro), e o fluxo segue pro login (ou já retorna token, a critério da implementação)
 

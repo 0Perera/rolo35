@@ -16,7 +16,7 @@ so that eu consiga operar no sistema com o papel certo sem depender de um cadast
 
 ## Acceptance Criteria
 
-1. Given nome/e-mail/senha/papel/aceite dos termos válidos (papel dentre `ORGANIZADOR`, `CLIENTE`, `PORTARIA`) e e-mail ainda não usado — When submete — Then uma conta com o papel informado é criada, senha armazenada com hash (nunca em texto puro), e o fluxo segue pro login (ou já retorna token, a critério da implementação).
+1. Given nome/e-mail/senha/papel válidos (papel dentre `ORGANIZADOR`, `CLIENTE`, `PORTARIA`) e e-mail ainda não usado — When submete — Then uma conta com o papel informado é criada, senha armazenada com hash (nunca em texto puro), e o fluxo segue pro login (ou já retorna token, a critério da implementação).
 2. Given um cadastro com e-mail já existente — When submetido — Then retorna erro claro via envelope `{codigo, mensagem}`, sem confirmar/negar implicitamente se o e-mail pertence a outra conta de forma que vaze dado sensível.
 3. Given o endpoint de cadastro chamado com `papel` ausente ou fora do conjunto `{ORGANIZADOR, CLIENTE, PORTARIA}` — When submetido — Then validação de campo rejeita antes de tocar o banco, sem criar conta.
 4. Given senha ou e-mail em formato inválido — When submetido — Then validação de campo (`@Valid`) rejeita antes de tocar o banco, com mensagem de erro por campo.
