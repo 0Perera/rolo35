@@ -17,6 +17,7 @@ import br.com.rolo35.api.pagamentos.dto.IngressoDto;
 import br.com.rolo35.api.pagamentos.dto.PagamentoDto;
 import br.com.rolo35.api.pagamentos.service.PagamentoService;
 import br.com.rolo35.api.reservas.StatusReserva;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -96,6 +97,24 @@ class PagamentoControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("RESERVA_EXPIRADA"));
+    }
+
+    /**
+     * Mesmo motivo do caso irmão em `ReservaControllerTest`: `PagamentoPage` liga a tela terminal
+     * de "sessão já começou" a esta string, e nada mais na suíte prendia o envelope que a produz.
+     */
+    @Test
+    void returns409WithSessaoJaComecouWhenServiceRejects() throws Exception {
+        given(pagamentoService.confirmar(any(ConfirmarPagamentoRequest.class), anyString()))
+                .willThrow(new SessaoJaComecouException());
+
+        mockMvc.perform(post("/api/pagamentos/confirmar")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("SESSAO_JA_COMECOU"))
+                .andExpect(jsonPath("$.mensagem").exists());
     }
 
     @Test

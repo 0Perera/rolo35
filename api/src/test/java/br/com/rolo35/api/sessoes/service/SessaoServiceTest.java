@@ -566,6 +566,25 @@ class SessaoServiceTest {
         assertThat(resposta.organizadorId()).isEqualTo(99L);
     }
 
+    // O CAP-1 também tirou o ownership de buscarPorId, e o único teste que cobria aquele caminho
+    // (o 403 de GET /api/sessoes/{id}) foi apagado junto, sem substituto: os três usos de
+    // buscarPorId em teste eram todos mock do próprio service, então o corpo do método nunca
+    // rodava. Reinstalar a checagem passava despercebido pela suíte inteira.
+    @Test
+    void buscaPorIdSessaoCriadaPorOutroOrganizador() {
+        stubOrganizador();
+        Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
+        given(sessaoRepository.findById(5L)).willReturn(Optional.of(deOutroOrganizador));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of());
+        given(sessaoRepository.existeIngressoConfirmado(5L)).willReturn(false);
+
+        var dto = sessaoService.buscarPorId(5L, "organizador@rolo35.com.br");
+
+        assertThat(dto.id()).isEqualTo(5L);
+        assertThat(dto.titulo()).isEqualTo("Clube da Luta");
+    }
+
     @Test
     void rejeitaEdicaoDeSessaoComIngressoConfirmadoSemSalvar() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);

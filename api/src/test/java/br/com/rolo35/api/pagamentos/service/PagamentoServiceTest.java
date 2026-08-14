@@ -320,6 +320,11 @@ class PagamentoServiceTest {
 
     // Idempotência vem antes do guard de sessão: uma compra que já foi confirmada continua
     // devolvendo os ingressos dela depois que a sessão começa — quem já pagou não perde o F5.
+    //
+    // Quem prende a ordem é o `verify(never())` no fim, não um stub de `jaComecou`: o early-return
+    // acontece antes da chamada, então stubar `true` seria stub inútil (o strict stubs do
+    // MockitoExtension recusa) e provaria menos — com o default `false` do Mockito, mover o guard
+    // pra cima do early-return deixaria este teste verde do mesmo jeito.
     @Test
     void reservaJaConfirmadaDevolveRespostaMesmoComSessaoJaComecada() {
         setUp();
@@ -334,6 +339,7 @@ class PagamentoServiceTest {
                 new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL);
 
         assertThat(dto.status()).isEqualTo(StatusReserva.CONFIRMADA);
+        verify(sessaoRepository, never()).jaComecou(anyLong());
     }
 
     @Test

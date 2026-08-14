@@ -10,6 +10,7 @@ import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.service.SessaoService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -23,7 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Contra o banco de verdade: as três queries nativas novas da Story 2.2 (lock de sessão, checagem
  * de conflito excluindo a própria sessão, checagem de ingresso confirmado) e a listagem de gestão
- * por organizador, que precisa trazer o flag `editavel` já agregado (sem N+1).
+ * do cinema inteiro (CAP-1 — não mais por organizador), que precisa trazer o flag `editavel` já
+ * agregado (sem N+1).
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -52,6 +54,9 @@ class SessaoGestaoRepositoryTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /** Organizadores criados sob demanda por {@link #outroOrganizadorId()}, pra apagar no fim. */
+    private final List<Long> organizadoresCriados = new ArrayList<>();
+
     @AfterEach
     void limpaSessoesDoTeste() {
         List<Sessao> criadas = sessaoRepository.findAll().stream()
@@ -63,6 +68,10 @@ class SessaoGestaoRepositoryTest {
             assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(sessao.getId()));
         });
         sessaoRepository.deleteAll(criadas);
+        // Depois das sessões, nunca antes: enquanto uma delas apontar pro organizador, a FK de
+        // sessoes.organizador_id recusa o DELETE.
+        organizadoresCriados.forEach(id -> jdbcTemplate.update("DELETE FROM usuarios WHERE id = ?", id));
+        organizadoresCriados.clear();
     }
 
     private CriarSessaoRequest requestEm(Long salaId, String titulo, LocalDateTime dataHora) {
@@ -205,13 +214,16 @@ class SessaoGestaoRepositoryTest {
 
     /**
      * Segundo organizador criado sob demanda: o seed traz um só, e sem um segundo não dá pra
-     * distinguir "traz todas" de "traz as minhas". Fica no banco depois do teste — é uma linha em
-     * {@code usuarios} com e-mail único, sem efeito sobre os outros casos.
+     * distinguir "traz todas" de "traz as minhas". É registrado em {@link #organizadoresCriados}
+     * pro {@code @AfterEach} apagar — depois do CAP-1 a listagem de gestão varre a tabela inteira,
+     * então resíduo de um caso passa a ser dado de entrada de todos os outros.
      */
     private Long outroOrganizadorId() {
         String email = "organizador-" + UUID.randomUUID() + "@rolo35.com.br";
-        return jdbcTemplate.queryForObject(
+        Long id = jdbcTemplate.queryForObject(
                 "INSERT INTO usuarios (nome, email, senha_hash, papel) VALUES (?, ?, 'x', 'ORGANIZADOR') RETURNING id",
                 Long.class, "Outro Organizador", email);
+        organizadoresCriados.add(id);
+        return id;
     }
 }

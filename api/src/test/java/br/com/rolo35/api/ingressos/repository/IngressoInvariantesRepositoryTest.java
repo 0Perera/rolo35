@@ -18,6 +18,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * Os backstops de banco da V8 exercitados por INSERT direto, e não pelo service: a graça deles é
  * justamente valer pra quem não passa por {@code PagamentoService.confirmar()}.
+ *
+ * <p>Cada caso nomeia a constraint que espera ver disparar, e não só o tipo da exceção: qualquer
+ * violação de integridade — um NOT NULL, uma das FKs de coluna única que já existiam antes da V8 —
+ * é {@code DataIntegrityViolationException}, então parar no tipo deixaria os testes verdes sem
+ * provar nada sobre os backstops. Não é hipótese: a V11 depois acrescentou {@code codigo_curto
+ * NOT NULL} e o INSERT manual daqui precisou ser remendado.
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -32,7 +38,10 @@ class IngressoInvariantesRepositoryTest {
 
     @BeforeEach
     void preparaReserva() {
-        sessaoId = jdbcTemplate.queryForObject("SELECT sessao_id FROM assento_sessao LIMIT 1", Long.class);
+        // ORDER BY não é preciosismo: sem ele o Postgres devolve a linha que quiser, e um teste que
+        // vai afirmar qual constraint disparou precisa saber sobre qual sessão está falando.
+        sessaoId = jdbcTemplate.queryForObject(
+                "SELECT sessao_id FROM assento_sessao ORDER BY sessao_id LIMIT 1", Long.class);
         assentoDaSessao = jdbcTemplate.queryForObject(
                 "SELECT assento_id FROM assento_sessao WHERE sessao_id = ? ORDER BY assento_id LIMIT 1",
                 Long.class, sessaoId);
@@ -81,7 +90,8 @@ class IngressoInvariantesRepositoryTest {
                 Long.class, sessaoId);
 
         assertThatThrownBy(() -> insereIngresso(assentoDeOutraSala))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_ingressos_assento_sessao");
     }
 
     @Test
@@ -89,7 +99,8 @@ class IngressoInvariantesRepositoryTest {
         assertThatCode(() -> insereIngresso(assentoDaSessao)).doesNotThrowAnyException();
 
         assertThatThrownBy(() -> insereIngresso(assentoDaSessao))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uq_ingressos_reserva_assento");
     }
 
     /** A linha do mapa que sustenta um ingresso emitido não pode mais ser apagada por baixo dele. */
@@ -100,7 +111,8 @@ class IngressoInvariantesRepositoryTest {
         assertThatThrownBy(() -> jdbcTemplate.update(
                         "DELETE FROM assento_sessao WHERE sessao_id = ? AND assento_id = ?",
                         sessaoId, assentoDaSessao))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_ingressos_assento_sessao");
     }
 
     /** Assentos diferentes da mesma reserva continuam sendo o caso normal de uma compra em lote. */
