@@ -22,7 +22,7 @@ FR-4: Busca de filmes via proxy TMDb — endpoint próprio do back-end faz proxy
 FR-5: Criação de sessão — organizador vincula filme (catálogo TMDb), sala (mapa de assentos existente), data/hora futura e preço; data/hora no passado é rejeitada; capacidade é derivada do mapa da sala, não um número livre.
 FR-6: Bloqueio de conflito de horário na sala — sistema rejeita criação de sessão cuja sala já tem outra sessão com sobreposição real de horário; sob duas criações concorrentes pra mesma sala/horário, exatamente uma é aceita (constraint/lock de banco).
 FR-7: Edição de sessão com trava pós-venda — assim que houver ≥1 ingresso confirmado, todos os campos (data, sala/capacidade, preço, título, sinopse) ficam bloqueados, sem exceção.
-FR-8: Listagem de sessões publicadas — sessão esgotada não some da listagem, aparece marcada como esgotada.
+FR-8 (revisada em 2026-08-13): Listagem de sessões publicadas — sessão esgotada não some da listagem, aparece marcada como esgotada; a listagem é paginada no servidor, com ordenação determinística, teto de tamanho de página e busca por filme, sala ou data/hora.
 FR-9: Mapa de assentos da sessão — distingue três estados por assento (livre, reservado temporariamente, vendido/pago); resposta não inclui identidade do cliente que reservou/comprou.
 FR-10: Reserva de assento(s) — cliente seleciona 1 a 6 assentos livres; a seleção já cria um hold de 10 min; reserva não confirmada em 10 min libera os assentos; reserva de múltiplos assentos é atômica (sem hold parcial se qualquer assento já está indisponível); seleção de assento já ocupado é rejeitada com erro claro, cliente permanece no mapa da mesma sessão.
 FR-11: Não venda duplicada de assento — garantida via constraint/lock de banco; sob duas requisições concorrentes pro mesmo assento/sessão (Testcontainers), exatamente uma é aceita.
@@ -35,6 +35,7 @@ FR-17: Seleção de sessão do turno — portaria seleciona a sessão ativa ante
 FR-18: Leitura de ingresso por câmera (via navegador) ou digitação manual — ambos os caminhos produzem o mesmo resultado pro mesmo código.
 FR-19: Retorno de validação inequívoco — exatamente um de: válido, inválido, já utilizado, evento errado; requisição com papel `CLIENTE`/`ORGANIZADOR` é rejeitada; resposta não inclui dado sensível do cliente além do necessário à operação.
 FR-20: Não validação duplicada de ingresso — garantida via constraint/lock de banco; sob duas validações concorrentes do mesmo ingresso (Testcontainers), exatamente uma retorna "válido" e a outra "já utilizado".
+FR-21: Painel de turno da portaria — leitura somente, derivada do estado que a FR-20 já persiste; conta entradas liberadas sobre ingressos emitidos (não sobre capacidade da sala); não expõe dado do cliente nem código assinado completo; não valida/consome ingresso.
 
 ### NonFunctional Requirements
 
@@ -99,6 +100,7 @@ FR17: Epic 5 - Seleção de sessão do turno
 FR18: Epic 5 - Leitura de ingresso (câmera ou manual)
 FR19: Epic 5 - Retorno de validação inequívoco
 FR20: Epic 5 - Não-validação-duplicada de ingresso
+FR21: Epic 5 - Painel de turno da portaria
 ```
 
 Todas as NFRs (NFR-1 a NFR-11) são transversais e se aplicam como critério de aceitação dentro das stories de cada épico, não como épico dedicado.
@@ -129,7 +131,7 @@ Cliente confirma pagamento simulado (aprovação/recusa determinística) da pró
 
 ### Epic 5: Validação na Portaria
 Portaria seleciona a sessão ativa do turno e valida ingressos por câmera ou digitação manual, com retorno inequívoco (válido/inválido/já utilizado/evento errado) e garantia de não-validação-duplicada sob concorrência.
-**FRs cobertos:** FR17, FR18, FR19, FR20
+**FRs cobertos:** FR17, FR18, FR19, FR20, FR21
 
 ## Epic 1: Autenticação e Catálogo de Filmes
 
@@ -320,6 +322,66 @@ So that eu descubra o que tem em cartaz mesmo sem conta.
 **Given** a listagem retorna erro (ex.: back-end indisponível)
 **When** o front-end recebe a falha
 **Then** mostra estado de erro distinto do estado de lista vazia
+
+### Story 2.4: Listagem Pública Paginada e com Busca
+
+As a visitante (sem login) ou operador de portaria,
+I want percorrer as sessões por página e filtrar por texto,
+So that eu ache a sessão que procuro sem carregar o catálogo inteiro nem rolar a lista toda.
+
+> Revisa o contrato de `GET /api/sessoes` fechado pela Story 2.3. Consumidores: vitrine pública,
+> terminal da portaria (Story 5.1) e detalhe do filme.
+
+**Acceptance Criteria:**
+
+**Given** mais sessões publicadas do que cabem numa página
+**When** a listagem é consultada
+**Then** a resposta traz uma página de resultados mais os metadados de navegação (página atual, tamanho, total de itens e total de páginas) — nunca o catálogo inteiro
+
+**Given** duas sessões com exatamente o mesmo `data_hora`
+**When** o cliente percorre todas as páginas em sequência
+**Then** cada sessão aparece exatamente uma vez no conjunto das páginas — nenhuma repetida, nenhuma perdida (ordenação com desempate determinístico)
+
+**Given** um cliente que pede um tamanho de página muito acima do razoável
+**When** a requisição é processada
+**Then** o servidor limita ao seu próprio teto — o parâmetro do cliente não transforma a listagem paginada numa listagem completa
+
+**Given** um número de página negativo ou um tamanho inválido
+**When** a requisição é processada
+**Then** os valores caem no padrão do servidor em vez de retornar erro — página é parâmetro de navegação, não entrada de negócio
+
+**Given** uma página além da última
+**When** consultada
+**Then** responde `200` com conteúdo vazio e o total correto, permitindo à tela se recolocar na última página válida
+
+**Given** um termo de busca
+**When** a listagem é consultada
+**Then** casa com título do filme, nome da sala e data/hora da sessão no formato brasileiro (ex.: "14/08", "20:30"); termo vazio ou em branco não filtra nada
+
+**Given** um termo contendo `%` ou `_`
+**When** a busca é executada
+**Then** os caracteres são tratados como texto literal — quem digita `_` não recebe a base inteira de volta
+
+**Given** um filtro de sala aplicado
+**When** o visitante troca de sala ou volta para "todas as salas"
+**Then** o filtro é aplicado no servidor e a navegação recomeça da primeira página — manter a página anterior costuma cair num vazio que parece "essa sala não tem sessão" quando o resultado filtrado tem uma página só
+
+**Given** a contagem total de resultados
+**When** calculada sobre uma consulta que faz `JOIN` com assentos
+**Then** o total reflete o número de sessões, não a soma das capacidades das salas (contagem em consulta própria)
+
+**Given** o detalhe de um filme específico
+**When** a tela busca as sessões daquele filme
+**Then** o filtro por filme acontece no servidor — nenhuma tela depende de receber o catálogo inteiro pra filtrar em memória
+
+**Given** a coluna usada no filtro por sessão
+**When** a consulta é executada
+**Then** é apoiada por índice (NFR-8)
+
+**Notas de implementação:**
+- Paginação por offset, não keyset: a tela oferece navegação por número de página, e cursor não sabe pular pra página N. Custo do offset é conhecido e aceito neste volume. Revisitar se a listagem crescer a ponto de o `OFFSET` alto pesar.
+- Envelope de resposta próprio em vez do `Page` do Spring serializado direto — AD-12 exige contrato explícito, e o JSON do `Page` muda entre versões do framework.
+- `ILIKE '%termo%'` não usa índice em banco nenhum. Aceito de forma deliberada neste volume; registrado pra não ser lido como esquecimento.
 
 ## Epic 3: Reserva de Assentos (Cliente)
 
@@ -519,6 +581,18 @@ So that toda validação seguinte já sabe contra qual sessão comparar o códig
 **When** carregando, vazia, ou com erro
 **Then** o front-end trata os três estados
 
+**Given** o terminal da portaria
+**When** a tela de seleção é aberta
+**Then** as sessões aparecem como lista navegável, com busca e paginação servidas pela Story 2.4 — não como um seletor que obriga a abrir um menu pra enxergar as opções
+
+**Given** uma sessão de turno já selecionada
+**When** ela aparece também na página de resultados da listagem
+**Then** é exibida uma única vez na tela — o card de turno ativo é a fonte, e a linha duplicada não aparece na lista abaixo
+
+**Given** uma sessão de turno já selecionada que já começou (e por isso saiu da listagem pública)
+**When** a tela é aberta, ou uma busca não retorna nada
+**Then** o turno ativo continua visível, e a tela não afirma "nenhuma sessão disponível" enquanto houver turno em andamento
+
 ### Story 5.2: Validação de Ingresso na Portaria
 
 As a usuário PORTARIA,
@@ -558,3 +632,53 @@ So that eu decido se libero a entrada com confiança, sem depender de julgamento
 **Given** duas validações concorrentes do mesmo ingresso (cenário Testcontainers)
 **When** disparadas ao mesmo tempo
 **Then** exatamente uma retorna "válido" e a outra "já utilizado", garantido por constraint/lock de banco — `POST /portaria/validacoes` é o único lugar que transiciona `VALIDO → UTILIZADO` (AD-9)
+
+### Story 5.3: Painel de Turno da Portaria
+
+As a usuário PORTARIA,
+I want ver quantas pessoas já entraram na sessão do meu turno e quais entradas foram liberadas,
+So that eu saiba se a sala está enchendo e responda "essa pessoa já entrou?" sem consultar o banco.
+
+**Acceptance Criteria:**
+
+**Given** uma sessão ativa selecionada com ingressos emitidos, parte deles já validados
+**When** a portaria consulta o painel do turno
+**Then** a contagem de entradas liberadas é apresentada sobre o total de ingressos **emitidos** pra essa sessão — nunca sobre a capacidade da sala
+
+**Given** uma sessão ativa selecionada
+**When** o painel é carregado
+**Then** lista as entradas já liberadas, mais recente primeiro, com fileira/número do assento, hora da validação e um prefixo curto do código — nunca o código assinado completo (FR-14)
+
+**Given** qualquer resposta do painel
+**When** inspecionada
+**Then** não inclui nome, e-mail nem telefone do cliente — mesma regra da FR-19
+
+**Given** uma portaria sem sessão do turno selecionada
+**When** consulta o painel
+**Then** é rejeitada com o mesmo `SESSAO_ATIVA_NAO_SELECIONADA` da FR-17
+
+**Given** um usuário CLIENTE ou ORGANIZADOR
+**When** tenta chamar o endpoint do painel
+**Then** rejeitado com `403`
+
+**Given** o painel consultado qualquer número de vezes
+**When** as respostas são montadas
+**Then** nenhum ingresso muda de estado — a rota é somente leitura, e `POST /portaria/validacoes` continua sendo o único lugar que transiciona `VALIDO → UTILIZADO` (AD-9)
+
+**Given** uma validação bem-sucedida na tela de validação
+**When** o resultado é exibido
+**Then** o painel reflete a nova entrada sem recarregar a página
+
+**Given** o painel
+**When** carregando, ainda sem nenhuma entrada, ou com erro
+**Then** o front-end trata os três estados (NFR-1)
+
+**Given** a consulta do painel
+**When** executada no banco
+**Then** o filtro por sessão é apoiado por índice em `ingressos (sessao_id)` — NFR-8, mesma razão do V4
+
+**Notas de implementação:**
+- Nenhuma tabela nova e nenhuma alteração no caminho de escrita. O histórico deriva de `ingressos.validated_at`, já persistido por `Ingresso.validar()` desde a Story 5.2. Migration nova é só o índice.
+- Consequência aceita e deliberada do escopo: o histórico mostra apenas entradas **liberadas**. `INVÁLIDO`, `JÁ UTILIZADO` e `EVENTO ERRADO` não são persistidos em lugar nenhum — registrá-los exigiria tabela de auditoria escrita dentro da transação de `PortariaService.validar()`, que é o caminho protegido por AD-5/AD-9 e coberto pelo teste de concorrência que sustenta a SM-2. Não vale o risco pelo ganho. Revisitar só se rastreabilidade de tentativa recusada virar requisito explícito.
+- DTO próprio por endpoint (AD-12); domínio `ingressos/` (Capability Map §4.8).
+- Testes: unitário do service + `@WebMvcTest` do endpoint cobrindo `403` pra `CLIENTE`/`ORGANIZADOR` e o caminho sem sessão selecionada. Sem Testcontainers — não há cenário de concorrência nesta story (NFR-10).

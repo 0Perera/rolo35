@@ -2,7 +2,7 @@
 title: "PRD: rolo35 — Plataforma de Eventos e Ingressos"
 status: final
 created: 2026-08-09
-updated: 2026-08-09
+updated: 2026-08-13
 ---
 
 # PRD: rolo35 — Plataforma de Eventos e Ingressos
@@ -154,6 +154,11 @@ Cliente lista/busca sessões publicadas; sessão esgotada continua visível, mar
 
 **Consequences (testable):**
 - Sessão sem assento livre não some da listagem — aparece com indicador de esgotado.
+- A listagem é paginada no servidor: a resposta traz uma página e o total, nunca o catálogo inteiro; o tamanho de página pedido pelo cliente é limitado por um teto do servidor.
+- A ordenação da listagem é determinística — duas requisições da mesma página devolvem as mesmas sessões, sem repetir nem perder linha entre páginas.
+- A busca por texto casa com título do filme, nome da sala e data/hora da sessão; termo vazio não filtra nada.
+- A listagem aceita filtro por sala e por filme, aplicados no servidor; trocar de filtro recomeça da primeira página, e existe caminho explícito de volta para "todas as salas".
+- Curinga de LIKE digitado pelo usuário (`%`, `_`) é tratado como texto literal, não como curinga.
 
 #### FR-9: Mapa de assentos da sessão
 
@@ -277,6 +282,19 @@ Sistema garante, via constraint/lock de banco, que o mesmo ingresso não é vali
 
 **Consequences (testable):**
 - Sob duas requisições concorrentes de validação do mesmo ingresso (Testcontainers), exatamente uma retorna "válido" e a outra retorna "já utilizado".
+
+#### FR-21: Painel de turno da portaria
+
+Portaria acompanha, durante o turno, quantas pessoas já entraram na sessão selecionada e quais entradas foram liberadas — leitura somente, derivada do estado que a validação (FR-20) já persiste. Não é dashboard analítico nem relatório: existe pra responder "a sala está enchendo?" e "essa pessoa já entrou?" sem consultar o banco manualmente.
+
+**Consequences (testable):**
+- O painel responde sobre a sessão selecionada pela portaria (FR-17); sem sessão selecionada, é rejeitado pela mesma regra da FR-17.
+- A contagem de entradas é apresentada sobre o total de ingressos **emitidos** para a sessão, não sobre a capacidade da sala — uma sessão parcialmente vendida não se apresenta como sessão vazia.
+- O painel não inclui dado do cliente (nome, e-mail, telefone), pela mesma regra da FR-19 — a portaria decide entrada por assento e estado, não por identidade.
+- O painel não expõe o código assinado completo de nenhum ingresso (FR-14); no máximo um prefixo curto, suficiente pra conferência visual e insuficiente pra reuso.
+- Consultar o painel não valida nem consome ingresso — leitura pura, sem bypass da FR-20, mesma separação da FR-16.
+- Requisição de papel `CLIENTE` ou `ORGANIZADOR` é rejeitada com erro de autorização.
+- A tela trata carregando, vazio e erro (§5, Interface).
 
 ## 5. Cross-Cutting NFRs
 
