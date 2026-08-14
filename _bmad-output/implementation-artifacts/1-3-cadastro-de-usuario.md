@@ -4,7 +4,7 @@ baseline_commit: 93a4c04
 
 # Story 1.3: Cadastro de Usuário
 
-Status: review
+Status: in-review
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra uma checagem de qualidade antes de dev-story. -->
 
@@ -47,7 +47,7 @@ so that eu consiga operar no sistema com o papel certo sem depender de um cadast
 
 - [x] **Task 5 — `POST /api/auth/cadastro` (AC: 1, 2, 3, 4)**
   - [x] **[RED]** `AuthControllerTest`: 200 com token pra cada um dos 3 papéis; 409 `EMAIL_JA_CADASTRADO` em duplicidade; 400 `PARAMETRO_INVALIDO` com `papel` ausente; 400 `CORPO_INVALIDO` com `papel` fora do conjunto (string inválida — deserialização de enum falha, cai no handler genérico de `HttpMessageNotReadableException` já existente); 400 `PARAMETRO_INVALIDO` com e-mail/senha mal formatados
-  - [x] **[GREEN]** Adiciona `@PostMapping("/cadastro")` em `AuthController`, delega pra `authService.cadastrar(request)`
+  - [x] **[GREEN]** Adiciona `@PostMapping("/api/auth/cadastro")` em `AuthController` (path completo: a classe não tem `@RequestMapping`, o `POST /login` vizinho também traz o path inteiro), delega pra `authService.cadastrar(request)`
   - [x] Commit: `feat(auth): endpoint POST /api/auth/cadastro (AC1-4)`
 
 - [x] **Task 6 — Libera a rota no filtro de segurança (AC: 1)**
@@ -60,7 +60,7 @@ so that eu consiga operar no sistema com o papel certo sem depender de um cadast
   - [x] Commit: `feat(web): cliente de API pra cadastro de usuário`
 
 - [x] **Task 8 — Tela de cadastro com seleção de papel (AC: 1, 3, 4)**
-  - [x] **[GREEN]** Cria `web/src/pages/CadastroPage.tsx`: mesmo shell de `LoginPage.tsx` (`PageShell variant="auth"`, `Card`, `TextField`, `Alert`, `Button`), campos nome/email/senha/aceite + seletor de papel (as 3 opções, sem pré-seleção — força escolha explícita); validação client-side espelhando as regras do back (senha ≥ 6, e-mail com `@`, papel obrigatório); ao sucesso grava `rolo35.token`/`rolo35.papel` em `localStorage` e navega via `rotaPorPapel` (importado de `LoginPage.tsx`); erro do back exibido via `Alert` (mesmo padrão de tratamento de `ApiRequestError` de `LoginPage.tsx`)
+  - [x] **[GREEN]** Cria `web/src/pages/CadastroPage.tsx`: mesmo shell de `LoginPage.tsx` (`PageShell variant="auth"`, `Card`, `TextField`, `Alert`, `Button`), campos nome/email/senha + seletor de papel em três botões com `aria-pressed` (as 3 opções, sem pré-seleção — força escolha explícita); validação client-side espelhando as regras do back (campos não-vazios pelo texto aparado como o `@NotBlank`, senha ≥ 6 medida no texto cru como o `@Size(min = 6)`, papel obrigatório); ao sucesso grava `rolo35.token`/`rolo35.papel` em `localStorage` via `salvarSessao` e navega via `rotaPorPapel` (importado de `LoginPage.tsx`); erro do back exibido via `Alert` (mesmo padrão de tratamento de `ApiRequestError` de `LoginPage.tsx`)
   - [x] Commit: `feat(web): tela de cadastro com seleção de papel`
 
 - [x] **Task 9 — Liga a rota real (AC: 1)**
@@ -74,7 +74,35 @@ so that eu consiga operar no sistema com o papel certo sem depender de um cadast
 
 ### Review Findings
 
-<!-- Preenchido depois do code review, no formato [Review][Patch]/[Review][Defer] — vazio até lá. -->
+- **[Review][Patch]** `cadastrar()` checava duplicidade e gravava em duas operações separadas, sem
+  atomicidade. Dois cadastros simultâneos do mesmo e-mail faziam o perdedor violar
+  `uk_usuarios_email` e cair no handler genérico como `500 ERRO_INTERNO`, contra a AC2. `save` virou
+  `saveAndFlush` dentro de `try/catch DataIntegrityViolationException` que relança
+  `EmailJaCadastradoException`. Coberto por `CadastroConcorrenciaEmailTest` (Testcontainers, duas
+  threads), verificado que falha sem o catch.
+- **[Review][Patch]** `CadastroRequest` não tinha limite superior: campo maior que a coluna
+  `VARCHAR(255)` estourava no INSERT como 500 em vez do 400 da AC4. `@Size(max = 255)` em `nome` e
+  `email`; `max = 72` em `senha`, o teto do BCrypt.
+- **[Review][Patch]** Nenhum teste persistia um `Usuario` de verdade — apagar o `createdAt` do
+  construtor deixava a suíte verde e quebrava todo cadastro real. Round-trip adicionado em
+  `UsuarioRepositorySmokeTest`, verificado que só ele pega essa regressão.
+- **[Review][Patch]** A allow-list pública estava enumerada em `README.md` (tabela de endpoints e
+  seção de segurança) e `docs/regras-de-negocio.md` sem a rota nova. Os três atualizados.
+- **[Review][Patch]** Validação client-side não aparava espaços (senha de seis espaços passava e
+  voltava 400), e `nome` era persistido com o padding. `trim()` no `AuthService` e no
+  `erroDePreenchimento` — no vazio, que espelha o `@NotBlank`; o mínimo de 6 continua medido no
+  texto cru, como o `@Size(min = 6)`, porque a senha viaja sem ser aparada.
+- **[Review][Patch]** Campos sem `autoComplete` nem `required`. Adicionados `name`/`email`/
+  `new-password`; `TextField` já repassava os atributos, não precisou mudar.
+- **[Review][Patch]** `AuthSecurityTest` aferia só o cadastro, deixando uma edição futura derrubar
+  `/api/auth/login` do mesmo matcher com a suíte verde. Asserção do login acrescentada.
+- **[Review][Patch]** Asserção tautológica no teste do 409 (`senhaHash` nunca poderia estar no DTO
+  de resposta) trocada pela que a AC2 teme de fato: o corpo ecoando o e-mail submetido. Removido o
+  `org.hamcrest.Matchers.containsString` qualificado onde já havia static import.
+- **[Review][Defer]** Não corrigidos por exigirem tocar `LoginPage.tsx` (que o usuário determinou
+  intocada) ou abrir escopo que nenhuma AC pede: duplicação do letreiro de marquee entre as duas
+  telas, `rotaPorPapel` morando em `LoginPage.tsx` em vez de `lib/sessao.ts`, ausência de teste de
+  roteamento no nível do `App`, e falta de rate limit no cadastro público.
 
 ## Dev Notes
 
@@ -177,9 +205,17 @@ case-sensitive).
   `normalizarEmail()`; normalizar só numa ponta faria a conta recém-criada não ser achada pela
   outra, e deixaria passar o mesmo e-mail em outra caixa na checagem de duplicidade.
 - **`PapelPlaceholderPage` continua importada** em `App.tsx`: a rota `/em-construcao` ainda usa.
-- Suítes completas verdes: back-end `mvn test` (290 testes) e front `npm test` (157 testes),
+- Suítes completas verdes: back-end `mvn test` (300 testes) e front `npm test` (160 testes),
   mais `npx tsc --noEmit`, `npm run lint` (só os 2 avisos de fast-refresh pré-existentes) e
   `npm run build`.
+- **Rodada de code review aplicada** (ver Review Findings): 8 patches, um commit por bloco temático.
+  Os dois achados críticos — a corrida de e-mail duplicado virando 500 e a falta de teto nos campos
+  — foram fechados com testes que provei falharem sem a correção, não só com testes que passam
+  depois dela.
+- **`sprint-status.yaml` estava com YAML inválido desde antes desta story**: o valor de
+  `last_updated` traz `Epic 5 fechado:` sem aspas, e `:` seguido de espaço abre mapping. O arquivo
+  não era carregável por parser nenhum. Como a linha já ia ser editada por esta story, o valor foi
+  posto entre aspas simples — o conteúdo é o mesmo, e agora o arquivo parseia.
 
 ### File List
 
@@ -196,10 +232,16 @@ case-sensitive).
 - `api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java` (update — `permitAll()` da rota)
 - `api/src/test/java/br/com/rolo35/api/auth/dto/CadastroRequestValidationTest.java`
 - `api/src/test/java/br/com/rolo35/api/auth/AuthSecurityTest.java`
+- `api/src/test/java/br/com/rolo35/api/auth/CadastroConcorrenciaEmailTest.java`
 - `api/src/test/java/br/com/rolo35/api/auth/AuthControllerTest.java` (update — cadastro)
 - `api/src/test/java/br/com/rolo35/api/auth/service/AuthServiceTest.java` (update — cadastro)
+- `api/src/test/java/br/com/rolo35/api/auth/UsuarioRepositorySmokeTest.java` (update — round-trip do
+  construtor de registro)
 - `web/src/api/auth.ts` (update — `cadastrar()`)
 - `web/src/pages/CadastroPage.tsx`
 - `web/src/pages/CadastroPage.test.tsx`
 - `web/src/App.tsx` (update — rota `/cadastro` real)
+- `README.md` (update — tabela de endpoints e allow-list pública)
+- `docs/regras-de-negocio.md` (update — allow-list pública)
+- `_bmad-output/planning-artifacts/epics.md` (update — "aceite dos termos" removido da AC1)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (update)
