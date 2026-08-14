@@ -28,14 +28,28 @@ A direção de dependência entre pacotes de domínio é parte do paradigma, nã
 ```mermaid
 graph LR
   sessoes --> auth
+  sessoes --> common
   reservas --> auth
+  reservas --> common
   reservas --> sessoes
   pagamentos --> auth
+  pagamentos --> common
   pagamentos --> reservas
+  pagamentos --> sessoes
+  pagamentos --> ingressos
   ingressos --> auth
+  ingressos --> common
   ingressos --> reservas
-  ingressos --> pagamentos
+  ingressos --> sessoes
 ```
+
+> **Atualizado durante a implementação** (verificado por inspeção dos imports, não de memória).
+> Três arestas faltavam no desenho original e são reais: `pagamentos → sessoes` e
+> `ingressos → sessoes` (as duas leem `assento_sessao`/`Sessao`), e o `common` transversal, que
+> todo domínio usa pelas exceções e pelo envelope de paginação. Uma aresta mudou de sentido: é
+> `pagamentos → ingressos` (a confirmação **emite** ingresso), não o contrário — `ingressos` nunca
+> importa de `pagamentos`. `common` é a única exceção à regra de ciclo: o `GlobalExceptionHandler`
+> importa exceção de todos os domínios, por definição de handler central (AD-11).
 
 No front, o paradigma espelha o back: a SPA nunca fala com a API fora de uma camada `api/` dedicada — ver AD-2.
 
@@ -105,7 +119,14 @@ No front, o paradigma espelha o back: a SPA nunca fala com a API fora de uma cam
 
 - **Binds:** toda resposta de erro da API
 - **Prevents:** cada tela do front parseando erro num formato próprio; stacktrace ou mensagem de infraestrutura (Postgres/Hibernate) vazando na resposta
-- **Rule:** toda exceção de negócio é mapeada por um `GlobalExceptionHandler` (`@RestControllerAdvice`) pra `{"codigo": "<ENUM_ESTAVEL>", "mensagem": "<texto>"}` com o status HTTP apropriado. Handler de fallback genérico cobre qualquer exceção não mapeada (`500`, `codigo=ERRO_INTERNO`, mensagem fixa) — nunca expõe detalhe interno. Códigos usados nesta spine (lista não exaustiva, cada story pode adicionar o seu): `ASSENTO_INDISPONIVEL`, `RESERVA_EXPIRADA`, `RESERVA_NAO_ATIVA`, `SESSAO_CONFLITANTE`, `EVENTO_ERRADO`, `NAO_AUTORIZADO`, `ERRO_INTERNO`.
+- **Rule:** toda exceção de negócio é mapeada por um `GlobalExceptionHandler` (`@RestControllerAdvice`) pra `{"codigo": "<ENUM_ESTAVEL>", "mensagem": "<texto>"}` com o status HTTP apropriado. Handler de fallback genérico cobre qualquer exceção não mapeada (`500`, `codigo=ERRO_INTERNO`, mensagem fixa) — nunca expõe detalhe interno. Códigos usados nesta spine (lista não exaustiva, cada story pode adicionar o seu): `ASSENTO_INDISPONIVEL`, `RESERVA_EXPIRADA`, `SESSAO_CONFLITANTE`, `NAO_AUTORIZADO`, `ERRO_INTERNO`.
+
+> **Correção pós-implementação.** A lista original citava `RESERVA_NAO_ATIVA` e `EVENTO_ERRADO` como códigos de erro; nenhum dos dois virou erro HTTP, e por decisão:
+>
+> - **`RESERVA_NAO_ATIVA` não existe.** Reserva já decidida não é erro — `PagamentoService.confirmar()` é idempotente e devolve `200` com o desfecho que já é verdade (AD-6). Devolver `409` aqui quebraria o F5 de quem já pagou.
+> - **`EVENTO_ERRADO` existe, mas como `resultado` no corpo de um `200`**, não como `codigo` de erro. Ele e os outros três desfechos de validação (`VALIDO`, `INVALIDO`, `JA_UTILIZADO`) são resultados de negócio que a portaria precisa tratar visualmente — tratá-los como falha de requisição obrigaria a tela a distinguir "erro de rede" de "ingresso já usado" pelo mesmo mecanismo. Decisão registrada em `docs/decisions.md` na Story 5.2.
+>
+> A lista de códigos que a API de fato usa vive no README §6, e é ela a referência corrente.
 
 ### AD-12 — DTO explícito por endpoint `[ADOPTED]`
 

@@ -393,6 +393,20 @@ nome vem do rolo de película 35mm.
 Tipografia: **Bungee** (display), **Archivo** (corpo/UI) e **VT323** (monospace retrô — códigos,
 contadores, texto de terminal), servidas localmente via `@fontsource` em vez de CDN.
 
+<!-- PENDENTE: prosa final desta subseção é do autor. O que está aqui é o esboço factual do que
+     aconteceu, pra não perder o registro — a versão autoral substitui este bloco. -->
+
+**Como o nome e o tema chegaram aqui** (esboço factual, ainda a ser reescrito com a voz do autor):
+o nome saiu do rolo de película de 35mm, a bitola padrão do cinema comercial durante o século XX —
+"rolo 35" é como o material era chamado na cabine, e carrega tanto o objeto quanto a gíria de
+"deu um rolo". A partir do nome veio a época: se a referência é a película, a interface é a do
+cinema de bairro que ainda projetava — daí a TV de tubo, a fita VHS e o cartaz de locadora. A
+paleta seguiu a mesma pista: o gradiente chama (vermelho → laranja → amarelo) é a cor de cartaz de
+sessão dupla e de letreiro de marquise; o roxo-preto do fundo é a sala escura; o ciano é o fósforo
+do tubo, e por isso é ele que marca foco de teclado. A direção foi materializada numa sessão de
+**Claude Design**, que produziu o protótipo `Rolo 35.dc.html` — as escolhas de cor e tipografia
+saíram de lá e viraram tokens antes da primeira tela existir.
+
 Decisões de tema que não são enfeite:
 
 - **Textura faz parte do sistema**, não é polimento opcional: scanline fixa sobre a viewport, grão e
@@ -739,6 +753,15 @@ esta seção documenta.
 | **Claude Design** | Sessão de design que gerou o protótipo `Rolo 35.dc.html`, de onde saiu a direção visual (paleta, tipografia, textura de tubo) |
 | **ai-memory** (MCP local) | Continuidade entre sessões de trabalho ao longo da semana |
 
+### Sobre a ausência de pull requests
+
+Não há PR neste repositório, e isso é decisão, não esquecimento. PR existe pra pedir revisão de
+outra pessoa e pra gatear merge por CI; aqui não há outra pessoa, e o gate roda antes de cada
+commit — teste primeiro, suíte inteira verde. O que substitui a revisão de terceiro são os ciclos
+de code review adversarial registrados em `_bmad-output/implementation-artifacts/`, com achados
+aplicados ou explicitamente recusados, e o `docs/decisions.md`, que deixa cada decisão auditável
+depois do fato. Registrado em `docs/decisions.md`.
+
 ### O ciclo de cada story: RED → GREEN → REFACTOR → COMMIT
 
 Nenhuma story virou código antes de existir como especificação com critério de aceitação. Dentro
@@ -867,8 +890,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 
 | Item | Situação |
 |---|---|
-| **Janela de seleção da sessão do turno** | A portaria escolhe a sessão do turno a partir da mesma listagem pública, que filtra `data_hora >= now()`. Sessões já iniciadas não aparecem na lista; a sessão ativa continua selecionável (é reinjetada no seletor), mas não existe uma janela dedicada do tipo "sessões em andamento agora". Simplificação consciente de escopo, não bug |
-| **Validação server-side da sessão do turno** | `POST /api/portaria/turno` aceita qualquer `sessaoId` existente, incluindo sessões passadas. A restrição a sessões futuras vive só na lista do front. Sem impacto de segurança sobre ingressos de terceiros (o operador só consegue transformar as próprias leituras em `EVENTO_ERRADO`), mas é validação que devia estar no servidor |
+| **Janela de seleção da sessão do turno** | Resolvido: `PortariaService.selecionarSessao()` agora recusa sessão fora da janela `-30min/+2h` em volta do horário, com `SESSAO_FORA_DA_JANELA_DO_TURNO`. A constante é própria, separada do buffer de 4h de conflito de sala — são conceitos diferentes. O que continua fora é uma tela dedicada de "sessões em andamento agora": o seletor ainda parte da listagem pública |
 | **Autocadastro de cliente** | Fora do sprint original; as contas vêm do seed. A rota `/cadastro` é um *placeholder* honesto, não um formulário que finge funcionar |
 | **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
 
@@ -877,6 +899,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 | Item | Impacto real |
 |---|---|
 | Conflito de horário garantido por lock de aplicação, sem `EXCLUDE USING gist` | Escrita que não passe por `SessaoService` não é protegida pelo schema |
+| Pacotes do back-end organizados só por subdomínio, sem camada | `sessoes` mistura entidade, exceção, DTO e serviço no mesmo pacote, e `portaria` vive dentro de `ingressos` apesar de ser outro subdomínio. Reorganizar agora seria um diff enorme em cima de código verde, no último dia de prazo — decisão explícita de **não** mexer, e não descuido |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
 | Cadastro de salas pela interface | Salas vêm do seed; criar sala pela UI foi adiado por falta de design, e o organizador tem 3 salas prontas pra usar |
 

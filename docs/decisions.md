@@ -603,3 +603,19 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Base32 Crockford, e não hexadecimal ou Base64**: o alfabeto exclui `I`, `L`, `O` e `U` — exatamente os caracteres que se confundem com `1`, `0` e entre si quando alguém dita por cima do balcão. A normalização aceita minúscula, hífen e as trocas confundíveis, então quem digita o que está escrito acerta.
 - **Sobre a segurança, explicitamente**: 8 caracteres Base32 são 40 bits, e não há assinatura — é mais fraco que o código HMAC, por construção. O que sustenta a decisão é onde ele vale: só em `POST /api/portaria/validacoes`, que exige token de papel `PORTARIA`. Força bruta contra esse endpoint pressupõe uma conta de operador válida, o que é uma categoria de ameaça diferente de "qualquer um na internet". O caminho principal (câmera + HMAC) não foi enfraquecido em nada, e o endpoint público de ingresso (`GET /api/ingressos/{codigo}`) **não** aceita código curto.
 - **Colisão**: 40 bits dão ~1,1 × 10¹² combinações; o índice único é o backstop. Numa colisão a emissão falha alto (erro de integridade) em vez de emitir dois ingressos com o mesmo código — o que é o comportamento certo, ainda que ríspido. Retentativa automática não foi implementada: a probabilidade nesse volume não justifica o código.
+
+---
+
+## Precedência da validação: "evento errado" vem antes de "já utilizado" (CAP-10)
+
+- **Decisão**: `PortariaService.validar()` checa a sessão **antes** do status. Um ingresso `UTILIZADO` de outra sessão devolve `EVENTO_ERRADO`, não `JA_UTILIZADO`. A ordem já era essa no código desde a Story 5.2, mas nunca tinha sido registrada como decisão — era uma escolha invisível de ordem de `if`.
+- **Por quê**: a pergunta que a portaria precisa responder na porta é "essa pessoa entra aqui?", e a resposta mais acionável pra um ingresso de outra sessão é mandá-la pra sala certa. `JA_UTILIZADO` sugeriria que a pessoa já entrou *nesta* sessão, que é falso e manda o operador procurar um problema que não existe. A informação de que aquele ingresso já foi usado em outro lugar não muda nada pra este operador — ele não valida a outra sessão.
+- **Consequência**: não existe resultado composto ("de outro evento e já usado"). Os quatro resultados continuam mutuamente exclusivos, que é o que a tela da portaria sabe desenhar.
+
+---
+
+## Sem pull request: merge direto na branch de trabalho (CAP-12)
+
+- **Decisão**: o projeto não usa pull requests. Cada capability vira um commit próprio direto na branch de trabalho, com mensagem no formato Conventional Commits explicando o porquê, e a integração é merge direto.
+- **Por quê**: PR existe pra pedir revisão de outra pessoa e pra gatear merge por CI. Aqui não há outra pessoa — é trabalho solo, com prazo de 7 dias — e o gate de qualidade que um PR daria já roda antes de cada commit: teste primeiro (RED → GREEN), suíte inteira verde antes de commitar. Abrir PR pra si mesmo adicionaria cerimônia sem adicionar nenhuma checagem que já não aconteça.
+- **O que substitui a revisão**: os ciclos de code review registrados em `_bmad-output/implementation-artifacts/` — feitos por agente, com achados aplicados ou explicitamente recusados — e este próprio arquivo, que é onde as decisões ficam auditáveis depois do fato.

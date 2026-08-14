@@ -627,7 +627,7 @@ So that eu decido se libero a entrada com confiança, sem depender de julgamento
 
 **Given** a resposta de qualquer validação
 **When** inspecionada
-**Then** não inclui dado sensível do cliente além do necessário à operação (sem e-mail, sem telefone)
+**Then** não inclui dado sensível do cliente além do necessário à operação — sem nome e sem e-mail, os únicos campos de identificação que `usuarios` tem (a AC citava "telefone", coluna que nunca existiu no schema)
 
 **Given** duas validações concorrentes do mesmo ingresso (cenário Testcontainers)
 **When** disparadas ao mesmo tempo
@@ -651,7 +651,7 @@ So that eu saiba se a sala está enchendo e responda "essa pessoa já entrou?" s
 
 **Given** qualquer resposta do painel
 **When** inspecionada
-**Then** não inclui nome, e-mail nem telefone do cliente — mesma regra da FR-19
+**Then** não inclui nome nem e-mail do cliente — mesma regra da FR-19 (a AC citava "telefone", coluna que nunca existiu no schema)
 
 **Given** uma portaria sem sessão do turno selecionada
 **When** consulta o painel
