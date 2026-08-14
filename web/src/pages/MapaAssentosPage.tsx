@@ -61,6 +61,17 @@ export function MapaAssentosPage() {
                 .map((assento) => assento.id),
             ),
           );
+          return;
+        }
+        // Quem volta do checkout pra trocar de assento reencontra a própria escolha já marcada,
+        // em vez de um mapa vazio com os lugares dele bloqueados. Trocar é desmarcar um e clicar
+        // noutro; reservar de novo cancela o hold anterior no servidor.
+        const meusAssentos = resultado.assentos
+          .filter((assento) => assento.status === 'MEU_HOLD')
+          .slice(0, MAX_ASSENTOS)
+          .map((assento) => assento.id);
+        if (meusAssentos.length > 0) {
+          setSelecionados(new Set(meusAssentos));
         }
       })
       .catch((error: unknown) => {
@@ -81,7 +92,10 @@ export function MapaAssentosPage() {
   }, [id]);
 
   function alternarSelecao(assento: AssentoMapa) {
-    if (assento.status !== 'LIVRE') {
+    // MEU_HOLD entra junto de LIVRE: o hold é do próprio cliente, então ele pode largar o assento
+    // ou mantê-lo. Guarda espelhada em GradeDeAssentos, que é quem desabilita o botão — as duas
+    // precisam concordar, senão um assento clicável não faria nada.
+    if (assento.status !== 'LIVRE' && assento.status !== 'MEU_HOLD') {
       return;
     }
     setSelecionados((atual) => {

@@ -16,6 +16,7 @@ import br.com.rolo35.api.sessoes.Sessao;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,8 @@ class ReservaAssentoLockRepositoryTest {
 
     private static final String NOME_SALA = "Sala lock (fixture)";
     private static final String ORGANIZADOR = "organizador@rolo35.com.br";
+    private static final String CLIENTE_1 = "cliente1@rolo35.com.br";
+    private static final String CLIENTE_2 = "cliente2@rolo35.com.br";
 
     @Autowired
     private SalaRepository salaRepository;
@@ -60,11 +63,15 @@ class ReservaAssentoLockRepositoryTest {
     private Long sessaoCriadaId;
     private Long reservaCriadaId;
 
+    private final List<Long> reservasExtras = new ArrayList<>();
+
     @AfterEach
     void limpaFixture() {
         if (sessaoCriadaId != null) {
             assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(sessaoCriadaId));
         }
+        reservasExtras.forEach(reservaRepository::deleteById);
+        reservasExtras.clear();
         if (reservaCriadaId != null) {
             reservaRepository.deleteById(reservaCriadaId);
         }
@@ -264,5 +271,128 @@ class ReservaAssentoLockRepositoryTest {
         assertThat(travados.get(0).getId().getAssentoId()).isEqualTo(a1.getId());
         assertThat(travados.get(1).getId().getAssentoId()).isEqualTo(a2.getId());
         assertThat(travados.get(2).getId().getAssentoId()).isEqualTo(a3.getId());
+    }
+
+    private Reserva reservaSalva(String clienteEmail, Long sessaoId, StatusReserva status) {
+        Long clienteId = usuarioRepository.findByEmail(clienteEmail).orElseThrow().getId();
+        Reserva reserva = reservaRepository.save(new Reserva(
+                null, clienteId, sessaoId, status, Instant.now(), LocalDateTime.now().plusMinutes(10).withNano(0)));
+        reservasExtras.add(reserva.getId());
+        return reserva;
+    }
+
+    // O cliente que voltava do checkout pra trocar de assento saía segurando dois conjuntos: o hold
+    // antigo só morria pelo TTL de 10min, bloqueando aqueles lugares pra todo mundo. liberarPorReserva
+    // devolve tudo que uma reserva segura sem precisar dos ids dos assentos.
+    @Test
+    @Transactional
+    void liberarPorReservaSoltaOsAssentosDaquelaReservaESoOsQueEstaoReservados() {
+        Sala sala = salaSalva(2, 2);
+        salaCriadaId = sala.getId();
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+
+        Assento a1 = assentoSalvo(sala.getId(), "A", 1);
+        Assento a2 = assentoSalvo(sala.getId(), "A", 2);
+        Assento a3 = assentoSalvo(sala.getId(), "B", 1);
+
+        Sessao sessao = sessaoSalva(sala.getId(), organizadorId);
+        sessaoCriadaId = sessao.getId();
+
+        Reserva minha = reservaSalva(CLIENTE_1, sessao.getId(), StatusReserva.ATIVA);
+        Reserva deOutro = reservaSalva(CLIENTE_2, sessao.getId(), StatusReserva.ATIVA);
+        LocalDateTime expiraEm = LocalDateTime.now().plusMinutes(10).withNano(0);
+
+        assentoSessaoRepository.saveAll(List.of(
+                new AssentoSessao(
+                        new AssentoSessaoId(sessao.getId(), a1.getId()),
+                        StatusAssento.RESERVADO,
+                        minha.getId(),
+                        expiraEm),
+                // Vendido apontando pra MESMA reserva: é o caso que o WHERE de status protege. Sem
+                // ele, liberar um hold abandonado devolveria pra venda um assento já pago.
+                new AssentoSessao(
+                        new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.VENDIDO, minha.getId(), null),
+                new AssentoSessao(
+                        new AssentoSessaoId(sessao.getId(), a3.getId()),
+                        StatusAssento.RESERVADO,
+                        deOutro.getId(),
+                        expiraEm)));
+
+        int liberados = assentoSessaoRepository.liberarPorReserva(minha.getId());
+
+        assertThat(liberados).isEqualTo(1);
+        List<AssentoSessao> recarregado = assentoSessaoRepository.findByIdSessaoId(sessao.getId());
+        AssentoSessao linhaA1 = linha(recarregado, a1.getId());
+        assertThat(linhaA1.getStatus()).isEqualTo(StatusAssento.LIVRE);
+        assertThat(linhaA1.getReservaId()).isNull();
+        assertThat(linhaA1.getExpiresAt()).isNull();
+        assertThat(linha(recarregado, a2.getId()).getStatus()).isEqualTo(StatusAssento.VENDIDO);
+        assertThat(linha(recarregado, a3.getId()).getStatus()).isEqualTo(StatusAssento.RESERVADO);
+    }
+
+    // Devolve lista e não Optional de propósito: antes deste fix o mesmo cliente acumulava várias
+    // reservas ativas na mesma sessão — era o próprio bug —, então um banco com dados anteriores
+    // faria Optional estourar em vez de recolher a sujeira.
+    @Test
+    @Transactional
+    void buscarAtivasDoClienteNaSessaoIgnoraOutroClienteEStatusQueNaoSejaAtiva() {
+        Sala sala = salaSalva(2, 2);
+        salaCriadaId = sala.getId();
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+        Sessao sessao = sessaoSalva(sala.getId(), organizadorId);
+        sessaoCriadaId = sessao.getId();
+
+        Reserva ativaDoCliente1 = reservaSalva(CLIENTE_1, sessao.getId(), StatusReserva.ATIVA);
+        reservaSalva(CLIENTE_2, sessao.getId(), StatusReserva.ATIVA);
+        // CANCELADA só existe depois da V14: se a migration não tiver rodado, este save estoura no
+        // CHECK da coluna e o teste acusa — é a cobertura do novo estado no banco.
+        reservaSalva(CLIENTE_1, sessao.getId(), StatusReserva.CANCELADA);
+        reservaSalva(CLIENTE_1, sessao.getId(), StatusReserva.CONFIRMADA);
+
+        Long clienteId = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
+        List<Reserva> ativas =
+                reservaRepository.buscarAtivasDoClienteNaSessaoForUpdate(clienteId, sessao.getId());
+
+        assertThat(ativas).extracting(Reserva::getId).containsExactly(ativaDoCliente1.getId());
+    }
+
+    // LEFT JOIN e não INNER: sem isso o assento livre sumiria do mapa, porque reserva_id é null nele.
+    @Test
+    @Transactional
+    void mapaTrazODonoDoHoldESegueTrazendoOsAssentosLivres() {
+        Sala sala = salaSalva(2, 2);
+        salaCriadaId = sala.getId();
+        Long organizadorId = usuarioRepository.findByEmail(ORGANIZADOR).orElseThrow().getId();
+
+        Assento a1 = assentoSalvo(sala.getId(), "A", 1);
+        Assento a2 = assentoSalvo(sala.getId(), "A", 2);
+
+        Sessao sessao = sessaoSalva(sala.getId(), organizadorId);
+        sessaoCriadaId = sessao.getId();
+
+        Reserva reserva = reservaSalva(CLIENTE_1, sessao.getId(), StatusReserva.ATIVA);
+        assentoSessaoRepository.saveAll(List.of(
+                new AssentoSessao(
+                        new AssentoSessaoId(sessao.getId(), a1.getId()),
+                        StatusAssento.RESERVADO,
+                        reserva.getId(),
+                        LocalDateTime.now().plusMinutes(10).withNano(0)),
+                new AssentoSessao(
+                        new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.LIVRE, null, null)));
+
+        List<AssentoMapaProjection> mapa = assentoSessaoRepository.buscarMapaPorSessao(sessao.getId());
+
+        Long clienteId = usuarioRepository.findByEmail(CLIENTE_1).orElseThrow().getId();
+        assertThat(mapa).hasSize(2);
+        assertThat(mapa.get(0).getClienteIdDoHold()).isEqualTo(clienteId);
+        assertThat(mapa.get(1).getStatus()).isEqualTo(StatusAssento.LIVRE.name());
+        assertThat(mapa.get(1).getClienteIdDoHold()).isNull();
+    }
+
+    private AssentoSessao linha(List<AssentoSessao> linhas, Long assentoId) {
+        return linhas.stream()
+                .filter(a -> a.getId().getAssentoId().equals(assentoId))
+                .findFirst()
+                .orElseThrow();
     }
 }

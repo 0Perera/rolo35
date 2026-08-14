@@ -72,6 +72,8 @@ public class ReservaService {
             throw new SessaoJaComecouException();
         }
 
+        recolherHoldAnterior(cliente.getId(), request.sessaoId());
+
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         List<AssentoSessao> travados;
         try {
@@ -101,6 +103,30 @@ public class ReservaService {
         }
 
         return new ReservaDto(reserva.getId(), request.sessaoId(), reserva.getStatus(), expiraEm, assentoIds);
+    }
+
+    /**
+     * Devolve à sala o hold que este cliente já tinha nesta sessão, antes de montar o novo.
+     *
+     * <p>Existe por causa do caminho mais banal do fluxo: escolher assentos, ir pro checkout e
+     * voltar pra trocar. Sem isto, o hold antigo seguia de pé — o cliente saía segurando dois
+     * conjuntos, e o abandonado ficava bloqueado até o TTL de 10min vencer, pra todo mundo. Numa
+     * sessão cheia isso é venda perdida, não só incômodo.
+     *
+     * <p>Roda <b>antes</b> do lock dos assentos novos de propósito: é o que permite reescolher
+     * exatamente os mesmos lugares. Liberando depois, a checagem de disponibilidade ainda veria o
+     * próprio hold do cliente e recusaria com {@code AssentoIndisponivelException} — o sintoma
+     * original.
+     *
+     * <p>Depois da validação de forma (AD-5): um clique com seleção inválida não pode destruir o
+     * hold que o cliente já tinha.
+     */
+    private void recolherHoldAnterior(Long clienteId, Long sessaoId) {
+        for (Reserva anterior : reservaRepository.buscarAtivasDoClienteNaSessaoForUpdate(clienteId, sessaoId)) {
+            assentoSessaoRepository.liberarPorReserva(anterior.getId());
+            anterior.cancelar();
+            reservaRepository.save(anterior);
+        }
     }
 
     /**

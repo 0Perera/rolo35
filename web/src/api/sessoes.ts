@@ -70,7 +70,12 @@ export interface AssentoMapa {
   id: number;
   fileira: string;
   numero: number;
-  status: 'LIVRE' | 'RESERVADO' | 'VENDIDO';
+  /**
+   * `MEU_HOLD` é status de leitura, não de banco: o servidor devolve ele no lugar de `RESERVADO`
+   * quando o hold é do cliente que fez a requisição. É o que deixa quem volta do checkout
+   * recuperar os próprios assentos em vez de encontrá-los bloqueados.
+   */
+  status: 'LIVRE' | 'RESERVADO' | 'VENDIDO' | 'MEU_HOLD';
 }
 
 export interface MapaAssentos {

@@ -90,15 +90,34 @@ public interface AssentoSessaoRepository extends JpaRepository<AssentoSessao, As
             """)
     int liberar(Long sessaoId, List<Long> assentoIds, Long reservaId);
 
+    // LEFT JOIN em Reserva, não INNER: assento LIVRE tem reservaId null e precisa continuar na
+    // lista. A coluna existe pra o mapa poder dizer "este hold é seu" — continua sendo uma query
+    // só, sem N+1, que é o motivo desta projeção existir.
     @Query(
             """
             SELECT a.id AS assentoId, a.fileira AS fileira, a.numero AS numero,
-                   asx.status AS status, asx.expiresAt AS expiresAt
-            FROM AssentoSessao asx JOIN Assento a ON a.id = asx.id.assentoId
+                   asx.status AS status, asx.expiresAt AS expiresAt, r.clienteId AS clienteIdDoHold
+            FROM AssentoSessao asx
+            JOIN Assento a ON a.id = asx.id.assentoId
+            LEFT JOIN Reserva r ON r.id = asx.reservaId
             WHERE asx.id.sessaoId = :sessaoId
             ORDER BY a.fileira, a.numero
             """)
     List<AssentoMapaProjection> buscarMapaPorSessao(Long sessaoId);
+
+    // Libera tudo que uma reserva segura, sem precisar dos ids dos assentos. Usado quando o
+    // cliente volta pra trocar de assento: a reserva nova cancela a anterior, e sem isso os
+    // assentos abandonados ficavam presos até o TTL vencer — pra todo mundo, não só pra ele.
+    //
+    // O WHERE de status é defesa em profundidade, no mesmo espírito de liberar(): assento VENDIDO
+    // nunca volta pra LIVRE por este caminho, mesmo que a reserva citada estivesse errada.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            """
+            UPDATE AssentoSessao a SET a.status = 'LIVRE', a.reservaId = null, a.expiresAt = null
+            WHERE a.reservaId = :reservaId AND a.status = 'RESERVADO'
+            """)
+    int liberarPorReserva(Long reservaId);
 
     // Leitura pura do contexto de checkout: os assentos de uma reserva já com título, sala, horário
     // e preço resolvidos. Uma query só, pelo mesmo motivo de buscarMapaPorSessao() — carregar as

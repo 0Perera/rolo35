@@ -10,6 +10,22 @@ const COR_POR_STATUS: Record<AssentoMapa['status'], string> = {
   LIVRE: 'border-[#7E7686] bg-[#221D28] text-[#A79E93]',
   RESERVADO: 'border-cyan-400 bg-[#12384F] text-cyan-400',
   VENDIDO: 'border-[#6B5A62] bg-[#6B5A62] text-[#463A41]',
+  // Igual a LIVRE de propósito: pra quem está olhando, um hold próprio é um assento disponível.
+  // Na prática ele quase nunca aparece assim — a página já entrega esses assentos selecionados,
+  // e esta cor só é vista no instante em que o cliente larga um deles.
+  MEU_HOLD: 'border-[#7E7686] bg-[#221D28] text-[#A79E93]',
+};
+
+// Só o que não é do cliente vira parede. O hold dele é dele: sem esta distinção, voltar do
+// checkout pra trocar de assento significava encontrar os próprios lugares travados.
+const STATUS_SELECIONAVEIS: AssentoMapa['status'][] = ['LIVRE', 'MEU_HOLD'];
+
+// `meu_hold` no leitor de tela não diz nada a ninguém; a frase diz.
+const DESCRICAO_POR_STATUS: Record<AssentoMapa['status'], string> = {
+  LIVRE: 'livre',
+  RESERVADO: 'reservado',
+  VENDIDO: 'vendido',
+  MEU_HOLD: 'reservado por você',
 };
 
 const COR_SELECIONADO =
@@ -86,13 +102,15 @@ export function GradeDeAssentos({ assentos, selecionados, onAlternar }: GradeDeA
               <div className="flex gap-[7px] lg:gap-2.5">
                 {assentosDaFileira.map((assento) => {
                   const selecionado = selecionados.has(assento.id);
-                  const livre = assento.status === 'LIVRE';
+                  const selecionavel = STATUS_SELECIONAVEIS.includes(assento.status);
                   const cor = selecionado
                     ? COR_SELECIONADO
                     : (COR_POR_STATUS[assento.status] ?? COR_STATUS_DESCONHECIDO);
                   // Mesma frase no title e no aria-label: a cor sozinha não diz o estado, e
                   // o leitor de tela precisa da mesma informação que o tooltip do mouse dá.
-                  const descricao = `Assento ${assento.fileira}${assento.numero} — ${assento.status.toLowerCase()}`;
+                  const descricao = `Assento ${assento.fileira}${assento.numero} — ${
+                    DESCRICAO_POR_STATUS[assento.status] ?? assento.status.toLowerCase()
+                  }`;
                   return (
                     <button
                       key={assento.id}
@@ -101,9 +119,9 @@ export function GradeDeAssentos({ assentos, selecionados, onAlternar }: GradeDeA
                       aria-label={descricao}
                       aria-pressed={selecionado}
                       data-status={assento.status}
-                      disabled={!livre}
+                      disabled={!selecionavel}
                       onClick={() => onAlternar(assento)}
-                      className={`${ASSENTO_BASE} ${cor} ${livre ? 'cursor-pointer hover:border-flame-400' : 'cursor-not-allowed'}`}
+                      className={`${ASSENTO_BASE} ${cor} ${selecionavel ? 'cursor-pointer hover:border-flame-400' : 'cursor-not-allowed'}`}
                     >
                       {assento.numero}
                     </button>

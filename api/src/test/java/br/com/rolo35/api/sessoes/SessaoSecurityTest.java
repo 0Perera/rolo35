@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -134,7 +135,7 @@ class SessaoSecurityTest {
     // herdaria .anyRequest().authenticated() em silêncio.
     @Test
     void returns200ForGetMapaAssentosWithoutAnyToken() throws Exception {
-        given(sessaoService.mapaAssentos(100L)).willReturn(null);
+        given(sessaoService.mapaAssentos(eq(100L), any())).willReturn(null);
 
         mockMvc.perform(get("/api/sessoes/100/mapa-assentos")).andExpect(status().isOk());
     }

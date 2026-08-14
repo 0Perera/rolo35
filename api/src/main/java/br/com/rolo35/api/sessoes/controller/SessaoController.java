@@ -94,8 +94,15 @@ public class SessaoController {
         return ResponseEntity.ok(sessaoService.editar(id, request, authentication.getName()));
     }
 
+    /**
+     * Rota pública, mas que aproveita o token quando ele vem: o filtro JWT roda em toda requisição
+     * (não tem {@code shouldNotFilter}), então visitante deslogado chega com {@code authentication}
+     * nulo e cliente logado chega identificado. É isso que deixa o mapa marcar o hold do próprio
+     * cliente sem fechar a rota.
+     */
     @GetMapping("/{id}/mapa-assentos")
-    public ResponseEntity<MapaAssentosDto> mapaAssentos(@PathVariable Long id) {
-        return ResponseEntity.ok(sessaoService.mapaAssentos(id));
+    public ResponseEntity<MapaAssentosDto> mapaAssentos(@PathVariable Long id, Authentication authentication) {
+        String clienteEmail = authentication == null ? null : authentication.getName();
+        return ResponseEntity.ok(sessaoService.mapaAssentos(id, clienteEmail));
     }
 }

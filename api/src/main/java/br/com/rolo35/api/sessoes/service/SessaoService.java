@@ -48,6 +48,10 @@ public class SessaoService {
 
     private static final int BUFFER_MINUTOS = 240;
 
+    // Fora de StatusAssento de propósito: aquele enum espelha a coluna, que tem CHECK de três
+    // valores. Este aqui é status de tela, calculado por requisição a partir de quem pergunta.
+    private static final String STATUS_MEU_HOLD = "MEU_HOLD";
+
     private final SalaRepository salaRepository;
     private final AssentoRepository assentoRepository;
     private final SessaoRepository sessaoRepository;
@@ -276,25 +280,55 @@ public class SessaoService {
         }
     }
 
-    public MapaAssentosDto mapaAssentos(Long sessaoId) {
+    /**
+     * Mapa de assentos da sessão. Rota pública: {@code clienteEmail} vem {@code null} pra visitante
+     * deslogado, e nesse caso todo hold é de terceiro.
+     *
+     * <p>Quando há cliente autenticado, o hold dele volta como {@code MEU_HOLD} em vez de
+     * {@code RESERVADO}. Sem essa distinção, quem voltava do checkout pra trocar de assento via os
+     * próprios assentos bloqueados e sem clique, trancado fora do que ele mesmo segurava até o TTL
+     * de 10min vencer.
+     */
+    public MapaAssentosDto mapaAssentos(Long sessaoId, String clienteEmail) {
         Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
         Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
         LocalDateTime agora = LocalDateTime.now();
+        // orElse(null) e não orElseThrow: um token válido de usuário já removido não pode derrubar
+        // uma rota pública — ele só deixa de ter hold próprio pra reconhecer.
+        Long clienteId = clienteEmail == null
+                ? null
+                : usuarioRepository.findByEmail(clienteEmail).map(Usuario::getId).orElse(null);
         List<AssentoMapaDto> assentos = assentoSessaoRepository.buscarMapaPorSessao(sessaoId).stream()
-                .map(p -> new AssentoMapaDto(p.getAssentoId(), p.getFileira(), p.getNumero(), statusEfetivo(p, agora)))
+                .map(p -> new AssentoMapaDto(
+                        p.getAssentoId(), p.getFileira(), p.getNumero(), statusEfetivo(p, agora, clienteId)))
                 .toList();
         return new MapaAssentosDto(
                 sessao.getId(), sessao.getTmdbId(), sessao.getTitulo(), sessao.getPosterUrl(), sala.getNome(),
                 sessao.getDataHora(), sessao.getPreco(), assentos);
     }
 
-    private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora) {
+    /**
+     * Status como a tela precisa ver, não como a coluna guarda.
+     *
+     * <p>{@code MEU_HOLD} é status de leitura e só existe aqui: a coluna
+     * {@code assento_sessao.status} continua com o {@code CHECK} de
+     * {@code LIVRE}/{@code RESERVADO}/{@code VENDIDO}, e nada persiste esse valor. Ele depende de
+     * quem pergunta, então nem faria sentido como estado guardado.
+     *
+     * <p>A ordem das checagens importa: hold vencido vira {@code LIVRE} <b>antes</b> de olhar de
+     * quem ele é. Um hold que o TTL lazy (AD-4) já derrubou não pode voltar a parecer do dono —
+     * qualquer outra pessoa pode reivindicar aquele assento no instante seguinte.
+     */
+    private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora, Long clienteId) {
         // A projeção vem de query nativa, então aqui o status ainda é o texto cru da coluna — o
         // enum entra na borda, comparando pelo name().
-        boolean holdVencido = StatusAssento.RESERVADO.name().equals(projecao.getStatus())
-                && projecao.getExpiresAt() != null
-                && projecao.getExpiresAt().isBefore(agora);
-        return holdVencido ? StatusAssento.LIVRE.name() : projecao.getStatus();
+        boolean reservado = StatusAssento.RESERVADO.name().equals(projecao.getStatus());
+        boolean holdVencido = reservado && projecao.getExpiresAt() != null && projecao.getExpiresAt().isBefore(agora);
+        if (holdVencido) {
+            return StatusAssento.LIVRE.name();
+        }
+        boolean holdEhMeu = reservado && clienteId != null && clienteId.equals(projecao.getClienteIdDoHold());
+        return holdEhMeu ? STATUS_MEU_HOLD : projecao.getStatus();
     }
 
     // Mesma regra de TTL lazy (AD-4) de statusEfetivo, aplicada a AssentoSessao em vez da

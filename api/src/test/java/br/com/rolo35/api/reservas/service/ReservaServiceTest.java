@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,6 +42,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -365,5 +367,97 @@ class ReservaServiceTest {
                 .isInstanceOf(AssentoEmDisputaException.class);
 
         verify(reservaRepository, never()).save(any());
+    }
+
+    // Voltar do checkout pra trocar de assento deixava o hold anterior de pé: o cliente saía
+    // segurando dois conjuntos, e o abandonado ficava bloqueado 10min pra todo mundo — inclusive
+    // pra quem ia comprar de verdade. Uma reserva nova na mesma sessão cancela a anterior.
+    @Test
+    void reservaNovaLiberaOHoldAnteriorDoMesmoClienteNaMesmaSessao() {
+        stubEntityManager();
+        stubCliente();
+        Reserva anterior = reservaAtivaCom(55L);
+        given(reservaRepository.buscarAtivasDoClienteNaSessaoForUpdate(7L, SESSAO_ID)).willReturn(List.of(anterior));
+        List<Long> assentoIds = List.of(10L);
+        given(assentoSessaoRepository.travarParaReserva(SESSAO_ID, assentoIds)).willReturn(List.of(assentoLivre(10L)));
+        stubSaveDaReservaNova();
+        given(assentoSessaoRepository.reivindicar(
+                        anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(1);
+
+        reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL);
+
+        verify(assentoSessaoRepository).liberarPorReserva(55L);
+        assertThat(anterior.getStatus()).isEqualTo(StatusReserva.CANCELADA);
+        verify(reservaRepository).save(anterior);
+    }
+
+    // A ordem é o que faz a troca funcionar: se o hold anterior só fosse liberado depois do lock,
+    // reescolher exatamente os mesmos assentos continuaria batendo em AssentoIndisponivel — que é
+    // o sintoma original.
+    @Test
+    void oHoldAnteriorEhLiberadoAntesDeTravarOsAssentosNovos() {
+        stubEntityManager();
+        stubCliente();
+        given(reservaRepository.buscarAtivasDoClienteNaSessaoForUpdate(7L, SESSAO_ID))
+                .willReturn(List.of(reservaAtivaCom(55L)));
+        List<Long> assentoIds = List.of(10L);
+        given(assentoSessaoRepository.travarParaReserva(SESSAO_ID, assentoIds)).willReturn(List.of(assentoLivre(10L)));
+        stubSaveDaReservaNova();
+        given(assentoSessaoRepository.reivindicar(
+                        anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(1);
+
+        reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL);
+
+        InOrder ordem = inOrder(assentoSessaoRepository);
+        ordem.verify(assentoSessaoRepository).liberarPorReserva(55L);
+        ordem.verify(assentoSessaoRepository).travarParaReserva(SESSAO_ID, assentoIds);
+    }
+
+    @Test
+    void semHoldAnteriorNadaEhLiberado() {
+        stubEntityManager();
+        stubCliente();
+        given(reservaRepository.buscarAtivasDoClienteNaSessaoForUpdate(7L, SESSAO_ID)).willReturn(List.of());
+        List<Long> assentoIds = List.of(10L);
+        given(assentoSessaoRepository.travarParaReserva(SESSAO_ID, assentoIds)).willReturn(List.of(assentoLivre(10L)));
+        stubSaveDaReservaNova();
+        given(assentoSessaoRepository.reivindicar(
+                        anyLong(), anyList(), anyLong(), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .willReturn(1);
+
+        reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, assentoIds), CLIENTE_EMAIL);
+
+        verify(assentoSessaoRepository, never()).liberarPorReserva(anyLong());
+    }
+
+    // Seleção inválida é recusada antes de qualquer escrita (AD-5) — inclusive antes de mexer no
+    // hold anterior. Sem isso, um clique errado destruiria o hold que o cliente já tinha.
+    @Test
+    void selecaoInvalidaNaoDestroiOHoldAnterior() {
+        assertThatThrownBy(() -> reservaService.reservar(
+                        new ReservarAssentosRequest(SESSAO_ID, List.of(10L, 10L)), CLIENTE_EMAIL))
+                .isInstanceOf(SelecaoAssentosInvalidaException.class);
+
+        verify(assentoSessaoRepository, never()).liberarPorReserva(anyLong());
+        verify(reservaRepository, never()).buscarAtivasDoClienteNaSessaoForUpdate(anyLong(), anyLong());
+    }
+
+    private Reserva reservaAtivaCom(Long id) {
+        Reserva reserva = new Reserva(
+                id, 7L, SESSAO_ID, StatusReserva.ATIVA, Instant.now(), LocalDateTime.now().plusMinutes(5));
+        ReflectionTestUtils.setField(reserva, "id", id);
+        return reserva;
+    }
+
+    private void stubSaveDaReservaNova() {
+        given(reservaRepository.save(any(Reserva.class))).willAnswer(invocation -> {
+            Reserva reserva = invocation.getArgument(0);
+            if (reserva.getId() == null) {
+                ReflectionTestUtils.setField(reserva, "id", 99L);
+            }
+            return reserva;
+        });
     }
 }

@@ -24,6 +24,16 @@ const mapa: MapaAssentos = {
   ],
 };
 
+/** Mesma sessão, mas com A1 segurado pelo próprio cliente e A2 por outra pessoa. */
+const mapaComHoldProprio: MapaAssentos = {
+  ...mapa,
+  assentos: [
+    { id: 1, fileira: 'A', numero: 1, status: 'MEU_HOLD' },
+    { id: 2, fileira: 'A', numero: 2, status: 'RESERVADO' },
+    { id: 3, fileira: 'B', numero: 1, status: 'VENDIDO' },
+  ],
+};
+
 function PaginaDePagamentoFalsa() {
   const { reservaId } = useParams<{ reservaId: string }>();
   return <p>página de pagamento da reserva {reservaId}</p>;
@@ -341,5 +351,33 @@ describe('MapaAssentosPage', () => {
     expect(screen.getByLabelText('Assento A2 — reservado')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('R$ 25,00')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeEnabled();
+  });
+
+  // Voltar do checkout pra trocar de assento é o caminho mais banal do fluxo, e era o que
+  // travava: os próprios assentos voltavam como RESERVADO, sem clique, e ficavam inalcançáveis
+  // até o hold de 10min vencer. MEU_HOLD é o servidor dizendo "este hold é seu".
+  it('brings back the seats the client is already holding, selected and clickable', async () => {
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapaComHoldProprio);
+
+    renderPage();
+
+    const meuAssento = await screen.findByLabelText('Assento A1 — reservado por você');
+    expect(meuAssento).toBeEnabled();
+    expect(meuAssento).toHaveAttribute('aria-pressed', 'true');
+    // O hold de outra pessoa continua bloqueado — a distinção é o ponto inteiro da mudança.
+    expect(screen.getByLabelText('Assento A2 — reservado')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeEnabled();
+  });
+
+  it('lets the client drop a seat they were holding', async () => {
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapaComHoldProprio);
+
+    renderPage();
+
+    const meuAssento = await screen.findByLabelText('Assento A1 — reservado por você');
+    await userEvent.click(meuAssento);
+
+    expect(meuAssento).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeDisabled();
   });
 });

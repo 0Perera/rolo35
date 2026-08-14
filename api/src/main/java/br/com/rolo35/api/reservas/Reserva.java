@@ -57,6 +57,11 @@ public class Reserva {
         this.status = StatusReserva.CONFIRMADA;
     }
 
+    /** Hold abandonado pelo próprio cliente ao reservar de novo na mesma sessão. */
+    public void cancelar() {
+        this.status = StatusReserva.CANCELADA;
+    }
+
     public void recusar() {
         this.status = StatusReserva.RECUSADA;
     }

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.verify;
@@ -414,7 +415,7 @@ class SessaoControllerTest {
                 100L, 550L, "Clube da Luta", "http://poster", "Sala 1", LocalDateTime.now().plusDays(7),
                 new BigDecimal("25.00"),
                 List.of(new AssentoMapaDto(1L, "A", 1, "LIVRE"), new AssentoMapaDto(2L, "A", 2, "RESERVADO")));
-        given(sessaoService.mapaAssentos(100L)).willReturn(dto);
+        given(sessaoService.mapaAssentos(eq(100L), any())).willReturn(dto);
 
         mockMvc.perform(get("/api/sessoes/100/mapa-assentos"))
                 .andExpect(status().isOk())
@@ -433,7 +434,7 @@ class SessaoControllerTest {
 
     @Test
     void returns404WithSessaoNaoEncontradaEnvelopeForGetMapaAssentos() throws Exception {
-        given(sessaoService.mapaAssentos(999L)).willThrow(new SessaoNaoEncontradaException());
+        given(sessaoService.mapaAssentos(eq(999L), any())).willThrow(new SessaoNaoEncontradaException());
 
         mockMvc.perform(get("/api/sessoes/999/mapa-assentos"))
                 .andExpect(status().isNotFound())

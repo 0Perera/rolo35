@@ -110,6 +110,14 @@ class SessaoServiceTest {
         return usuario;
     }
 
+    private Usuario clienteCom(Long id) {
+        Usuario usuario = new Usuario();
+        ReflectionTestUtils.setField(usuario, "id", id);
+        ReflectionTestUtils.setField(usuario, "email", "cliente1@rolo35.com.br");
+        ReflectionTestUtils.setField(usuario, "papel", "CLIENTE");
+        return usuario;
+    }
+
     private Assento assentoCom(Long id, Long salaId, String fileira, int numero) {
         Assento assento = new Assento();
         ReflectionTestUtils.setField(assento, "id", id);
@@ -660,12 +668,23 @@ class SessaoServiceTest {
 
     private AssentoMapaProjection projecaoMapaCom(
             Long assentoId, String fileira, Integer numero, String status, LocalDateTime expiresAt) {
+        return projecaoMapaCom(assentoId, fileira, numero, status, expiresAt, null);
+    }
+
+    private AssentoMapaProjection projecaoMapaCom(
+            Long assentoId,
+            String fileira,
+            Integer numero,
+            String status,
+            LocalDateTime expiresAt,
+            Long clienteIdDoHold) {
         AssentoMapaProjection projecao = mock(AssentoMapaProjection.class);
         given(projecao.getAssentoId()).willReturn(assentoId);
         given(projecao.getFileira()).willReturn(fileira);
         given(projecao.getNumero()).willReturn(numero);
         given(projecao.getStatus()).willReturn(status);
         lenient().when(projecao.getExpiresAt()).thenReturn(expiresAt);
+        lenient().when(projecao.getClienteIdDoHold()).thenReturn(clienteIdDoHold);
         return projecao;
     }
 
@@ -677,7 +696,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "LIVRE", null));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.sessaoId()).isEqualTo(7L);
         // O tmdbId é o que permite voltar do mapa pra tela de escolha de sessão do filme: sem ele,
@@ -701,7 +720,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5)));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
     }
@@ -714,7 +733,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().minusMinutes(5)));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.assentos().get(0).status()).isEqualTo("LIVRE");
         verify(assentoSessaoRepository, never()).save(any());
@@ -729,7 +748,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "VENDIDO", null));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.assentos().get(0).status()).isEqualTo("VENDIDO");
     }
@@ -738,6 +757,91 @@ class SessaoServiceTest {
     void rejeitaMapaAssentosDeSessaoInexistente() {
         given(sessaoRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> sessaoService.mapaAssentos(999L)).isInstanceOf(SessaoNaoEncontradaException.class);
+        assertThatThrownBy(() -> sessaoService.mapaAssentos(999L, null))
+                .isInstanceOf(SessaoNaoEncontradaException.class);
+    }
+
+    // O cliente que volta do checkout pra trocar de assento via os próprios assentos como
+    // RESERVADO e sem clique — trancado fora do que ele mesmo segurava, até o TTL de 10min vencer.
+    // MEU_HOLD existe só na leitura: é status de tela, nunca vai pro banco (a coluna continua com o
+    // CHECK de LIVRE/RESERVADO/VENDIDO).
+    @Test
+    void mapaAssentosMarcaComoMeuHoldOAssentoSeguradoPeloProprioCliente() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5), 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("MEU_HOLD");
+    }
+
+    @Test
+    void mapaAssentosMantemReservadoQuandoOHoldEhDeOutroCliente() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5), 99L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
+    }
+
+    // A rota é pública: visitante deslogado continua vendo o mapa, e pra ele todo hold é de
+    // terceiro. Sem este caso, resolver o cliente viraria requisito e a vitrine quebraria.
+    @Test
+    void mapaAssentosSemClienteAutenticadoNaoConsultaUsuarioENemMarcaMeuHold() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5), 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, null);
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
+        verify(usuarioRepository, never()).findByEmail(any());
+    }
+
+    // Hold vencido é LIVRE pra todo mundo, inclusive pro dono: MEU_HOLD não pode ressuscitar um
+    // hold que o TTL lazy (AD-4) já derrubou, senão o dono veria como seu um assento que qualquer
+    // outra pessoa pode reivindicar no instante seguinte.
+    @Test
+    void mapaAssentosNaoMarcaMeuHoldQuandoOProprioHoldJaVenceu() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().minusMinutes(5), 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("LIVRE");
+    }
+
+    // Assento já vendido é VENDIDO mesmo pra quem comprou: MEU_HOLD é sobre hold, não sobre posse.
+    @Test
+    void mapaAssentosNaoMarcaMeuHoldEmAssentoVendido() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "VENDIDO", null, 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("VENDIDO");
     }
 }
