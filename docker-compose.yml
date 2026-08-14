@@ -38,5 +38,23 @@ services:
       postgres:
         condition: service_healthy
 
+  web:
+    build:
+      context: ./web
+      args:
+        # Vai pro bundle em tempo de build, não em runtime: quem lê esta URL é o navegador do
+        # usuário, não o container. Por isso o default aponta pro localhost:8080 publicado pelo
+        # serviço `api` acima — de dentro da rede do compose o nome `api` resolveria, mas o
+        # navegador está fora dela.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    container_name: rolo35-web
+    restart: unless-stopped
+    # Mesma porta do `vite dev` de propósito: o endereço do front não muda conforme o modo de
+    # execução, e CORS_ALLOWED_ORIGINS continua valendo sem ajuste.
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
 volumes:
   rolo35-postgres-data:

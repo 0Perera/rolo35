@@ -98,16 +98,17 @@ Detalhamento honesto de tudo que falta, com o motivo, em
 
 ### 3.1 Pré-requisitos
 
-- **Docker** e **Docker Compose** (sobem Postgres + API; nada de Java instalado na máquina é
-  necessário pra rodar).
-- **Node.js 20+** e npm (front-end roda fora do compose, porque o destino dele é a Vercel).
+- **Docker** e **Docker Compose** (sobem Postgres, API e front; nada de Java nem de Node instalado
+  na máquina é necessário pra rodar).
+- **Node.js 20+** e npm — só pra desenvolver o front com hot reload (`3.3`). Pra apenas executar o
+  projeto, o compose basta.
 - Um **API Read Access Token do TMDb** (v4). Gere em
   <https://www.themoviedb.org/settings/api> — é o token longo (JWT), não a `api_key` v3 legada.
   Sem ele a API sobe normalmente, mas a busca de filmes responde `502 CATALOGO_INDISPONIVEL` — não
   existe segredo com fallback no código, por decisão de segurança. O resto do fluxo (sessão semeada,
   reserva, pagamento, ingresso) funciona sem TMDb.
 
-### 3.2 Subir back-end + banco
+### 3.2 Subir a aplicação inteira
 
 ```bash
 git clone <url-do-repo> && cd rolo35
@@ -116,24 +117,34 @@ cp .env.example .env          # os valores padrão já servem pro dev local
 docker compose up -d --build
 ```
 
+Um comando sobe os três serviços: Postgres, API e front.
+
 Verificação:
 
 ```bash
 curl -s localhost:8080/actuator/health     # {"status":"UP"}
 curl -s localhost:8080/api/sessoes         # lista a sessão semeada, sem token
+open http://localhost:5173                 # a aplicação
 ```
 
-O primeiro `up` compila a API dentro do Docker (multi-stage build) e pode levar alguns minutos. O
-Flyway aplica schema e seed automaticamente no boot da API — não há passo manual de banco.
+O primeiro `up` compila a API e o bundle do front dentro do Docker (multi-stage nos dois) e pode
+levar alguns minutos. O Flyway aplica schema e seed automaticamente no boot da API — não há passo
+manual de banco.
 
-### 3.3 Subir o front-end
+### 3.3 Desenvolver o front com hot reload
+
+O serviço `web` do compose serve o bundle estático por nginx — é o que se quer pra *executar* o
+projeto, não pra editá-lo. Pra desenvolver, derrube ele e use o Vite:
 
 ```bash
+docker compose stop web
 cd web
-cp .env.example .env          # já aponta pra API local em localhost:8080
 npm install
-npm run dev                   # SPA em http://localhost:5173
+npm run dev                   # mesma porta, http://localhost:5173, agora com hot reload
 ```
+
+`VITE_API_URL` tem default `http://localhost:8080` no código, então nem `.env` é preciso no caso
+local.
 
 ### 3.4 Variáveis de ambiente
 
