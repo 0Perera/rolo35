@@ -34,4 +34,18 @@ public class Usuario {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /**
+     * Conta nova. `createdAt` é carimbado aqui, e não deixado a cargo de quem chama, porque a coluna
+     * é `NOT NULL` e um esquecimento só apareceria como falha de constraint no insert. `senhaHash`
+     * no nome do parâmetro é lembrete de contrato: quem constrói já traz o hash, este construtor
+     * nunca vê senha em texto puro (AC1).
+     */
+    public Usuario(String nome, String email, String senhaHash, String papel) {
+        this.nome = nome;
+        this.email = email;
+        this.senhaHash = senhaHash;
+        this.papel = papel;
+        this.createdAt = Instant.now();
+    }
 }
