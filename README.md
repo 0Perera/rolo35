@@ -183,6 +183,7 @@ local.
 | `V7__indice_ingressos_por_sessao.sql` | Índice de `ingressos.sessao_id` para o painel do turno |
 | `V8__backstops_ingressos.sql` | FK composta de `ingressos` contra `assento_sessao` e `UNIQUE (reserva_id, assento_id)` |
 | `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3` |
+| `V10__seed_mais_sessoes.sql` | Mais 5 sessões publicadas, com dois filmes em mais de um horário |
 
 - `spring.jpa.hibernate.ddl-auto=validate`: o Hibernate **nunca** cria nem altera tabela. O schema
   é do Flyway; a aplicação só valida se o mapeamento casa.
@@ -251,10 +252,22 @@ pra avaliação):
 | Portaria | `portaria@rolo35.com.br` | `portaria123` |
 
 Também vêm semeadas **3 salas** de tamanhos diferentes — Sala 1 (8×10 = 80 assentos), Sala 2
-(5×6 = 30) e Sala 3 (10×14 = 140) — e **1 sessão publicada** na Sala 1: *Clube da Luta* (1999), com
-pôster e sinopse reais buscados uma vez no TMDb e congelados no SQL, e os 80 assentos dessa sessão
-livres. Salas 2 e 3 ficam sem sessão de propósito, pro organizador criar sessão durante a avaliação
-sem cair em conflito de horário.
+(5×6 = 30) e Sala 3 (10×14 = 140) — e **6 sessões publicadas**, espalhadas pelas três salas nos
+próximos dez dias, com todos os assentos livres:
+
+| Filme | Sessões | Onde |
+|---|---|---|
+| *Clube da Luta* (1999) | 2 | Sala 1 e Sala 3 |
+| *Matrix* (1999) | 2 | Sala 1 e Sala 2 |
+| *Cidade de Deus* (2002) | 1 | Sala 2 |
+| *A Origem* (2010) | 1 | Sala 3 |
+
+Pôster, sinopse e data de estreia são reais, buscados uma vez no TMDb e congelados no SQL — não se
+atualizam se o catálogo mudar depois. Dois filmes em mais de um horário existem pra que a tela de
+filme mostre o que ela faz: lista de horários, "a partir de" quando os preços divergem e o resumo
+de salas. Os horários deixam folga de sobra dentro de cada sala, então ainda dá pra criar sessão
+durante a avaliação sem esbarrar em conflito — e `SeedSessoesRepositoryTest` garante que o próprio
+seed respeita o buffer de 4h que a aplicação aplica.
 
 ---
 
