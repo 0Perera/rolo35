@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router';
 import { Layout } from './components/Layout';
 import { RolarAoTrocarDeRota } from './components/RolarAoTrocarDeRota';
+import { RotaProtegida } from './components/RotaProtegida';
 import { CadastroPage } from './pages/CadastroPage';
 import { LoginPage } from './pages/LoginPage';
 import { PapelPlaceholderPage } from './pages/PapelPlaceholderPage';
@@ -36,17 +37,47 @@ function App() {
             <Route path="/" element={<ListagemSessoesPage />} />
             <Route path="/filmes/:tmdbId" element={<FilmeDetalhePage />} />
             <Route path="/sessoes/:id/assentos" element={<MapaAssentosPage />} />
-            <Route path="/pagamento/:reservaId" element={<PagamentoPage />} />
+            <Route
+              path="/pagamento/:reservaId"
+              element={
+                <RotaProtegida papeis={['CLIENTE']}>
+                  <PagamentoPage />
+                </RotaProtegida>
+              }
+            />
+            {/* A carteira fica de fora de propósito: o link dela é aberto a visitante, e a própria
+                página convida a entrar em vez de desviar quem só queria ver o que tem lá. */}
             <Route path="/meus-ingressos" element={<MeusIngressosPage />} />
             <Route path="/ingressos/:codigo" element={<IngressoPublicoPage />} />
             <Route path="/sobre" element={<SobrePage />} />
             <Route path="/salas" element={<SalasPage />} />
             {/* O painel cria e edita sessão na própria tela; as rotas antigas de
                 busca/criação/edição em telas separadas caíram junto com elas. */}
-            <Route path="/organizador" element={<GerenciarSessoesPage />} />
+            <Route
+              path="/organizador"
+              element={
+                <RotaProtegida papeis={['ORGANIZADOR']}>
+                  <GerenciarSessoesPage />
+                </RotaProtegida>
+              }
+            />
             <Route path="/organizador/sessoes" element={<Navigate to="/organizador" replace />} />
-            <Route path="/portaria" element={<SelecaoTurnoPortariaPage />} />
-            <Route path="/portaria/validar" element={<ValidacaoPortariaPage />} />
+            <Route
+              path="/portaria"
+              element={
+                <RotaProtegida papeis={['PORTARIA']}>
+                  <SelecaoTurnoPortariaPage />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/portaria/validar"
+              element={
+                <RotaProtegida papeis={['PORTARIA']}>
+                  <ValidacaoPortariaPage />
+                </RotaProtegida>
+              }
+            />
             <Route path="/em-construcao" element={<PapelPlaceholderPage />} />
           </Route>
         </Routes>
