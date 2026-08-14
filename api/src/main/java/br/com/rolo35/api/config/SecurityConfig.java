@@ -60,6 +60,14 @@ public class SecurityConfig {
                         // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/minhas.
                         .requestMatchers(HttpMethod.GET, "/api/sessoes/*/mapa-assentos")
                         .permitAll()
+                        // O filtro de sala da vitrine é tão público quanto a vitrine: é esta rota
+                        // que monta a lista de opções do seletor. Sem o matcher, ela herda
+                        // .anyRequest().authenticated() e responde 401 pro visitante deslogado —
+                        // que vê o seletor abrir com "TODAS AS SALAS" e mais nada. Nada vaza: o
+                        // SalaResumoDto só traz id, nome e capacidade, e o nome da sala já aparece
+                        // em cada card da listagem pública.
+                        .requestMatchers(HttpMethod.GET, "/api/salas")
+                        .permitAll()
                         // /api/ingressos/minhas e /api/ingressos/{codigo} têm a mesma forma de
                         // path (um segmento só) — ordem importa aqui: o matcher específico e
                         // autenticado de /minhas precisa vir ANTES do matcher genérico público de
