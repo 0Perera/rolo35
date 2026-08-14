@@ -10,14 +10,20 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.auth.EmailJaCadastradoException;
 import br.com.rolo35.api.auth.JwtService;
+import br.com.rolo35.api.auth.Papel;
 import br.com.rolo35.api.auth.Usuario;
+import br.com.rolo35.api.auth.dto.CadastroRequest;
 import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -127,6 +133,69 @@ class AuthServiceTest {
         var resposta = authService.login(new LoginRequest("  cliente1@rolo35.com.br  ", "cliente123"));
 
         assertThat(resposta.token()).isEqualTo("token-abc");
+    }
+
+    @ParameterizedTest
+    @EnumSource(Papel.class)
+    void cadastrarCriaUsuarioComPapelInformadoERetornaToken(Papel papel) {
+        given(usuarioRepository.findByEmail("novo@rolo35.com.br")).willReturn(Optional.empty());
+        given(passwordEncoder.encode("senha123")).willReturn("hash-bcrypt");
+        given(jwtService.generateToken("novo@rolo35.com.br", papel.name())).willReturn("token-novo");
+
+        var resposta =
+                authService.cadastrar(new CadastroRequest("Fulano de Tal", "novo@rolo35.com.br", "senha123", papel));
+
+        ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(salvo.capture());
+        assertThat(salvo.getValue().getPapel()).isEqualTo(papel.name());
+        assertThat(salvo.getValue().getNome()).isEqualTo("Fulano de Tal");
+        assertThat(salvo.getValue().getEmail()).isEqualTo("novo@rolo35.com.br");
+        assertThat(resposta.token()).isEqualTo("token-novo");
+        assertThat(resposta.papel()).isEqualTo(papel.name());
+    }
+
+    // A senha nunca chega ao banco em texto puro (AC1) — o que a entidade carrega é o retorno do
+    // encoder, e a comparação direta com a senha digitada é a contraprova disso.
+    @Test
+    void cadastrarPersisteSenhaComHashENuncaEmTextoPuro() {
+        given(usuarioRepository.findByEmail("novo@rolo35.com.br")).willReturn(Optional.empty());
+        given(passwordEncoder.encode("senha123")).willReturn("hash-bcrypt");
+
+        authService.cadastrar(new CadastroRequest("Fulano de Tal", "novo@rolo35.com.br", "senha123", Papel.CLIENTE));
+
+        ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(salvo.capture());
+        assertThat(salvo.getValue().getSenhaHash()).isEqualTo("hash-bcrypt").isNotEqualTo("senha123");
+    }
+
+    @Test
+    void cadastrarLancaEmailJaCadastradoQuandoEmailExiste() {
+        Usuario existente = usuarioCom("ocupado@rolo35.com.br", "hash-valido", "CLIENTE");
+        given(usuarioRepository.findByEmail("ocupado@rolo35.com.br")).willReturn(Optional.of(existente));
+
+        assertThatThrownBy(() -> authService.cadastrar(
+                        new CadastroRequest("Fulano de Tal", "ocupado@rolo35.com.br", "senha123", Papel.CLIENTE)))
+                .isInstanceOf(EmailJaCadastradoException.class);
+
+        verify(usuarioRepository, never()).save(any());
+        verify(jwtService, never()).generateToken(any(), any());
+    }
+
+    // Mesma razão do login: e-mail é identidade. Se o cadastro gravasse "Novo@Rolo35.com.BR" cru, o
+    // login (que normaliza) nunca acharia a conta recém-criada — e a checagem de duplicidade
+    // deixaria passar o mesmo e-mail escrito com outra caixa.
+    @Test
+    void cadastrarNormalizaEmailAntesDeChecarDuplicidadeEPersistir() {
+        given(usuarioRepository.findByEmail("novo@rolo35.com.br")).willReturn(Optional.empty());
+        given(passwordEncoder.encode("senha123")).willReturn("hash-bcrypt");
+
+        authService.cadastrar(
+                new CadastroRequest("Fulano de Tal", "  Novo@Rolo35.com.BR  ", "senha123", Papel.CLIENTE));
+
+        ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(salvo.capture());
+        assertThat(salvo.getValue().getEmail()).isEqualTo("novo@rolo35.com.br");
+        verify(usuarioRepository).findByEmail("novo@rolo35.com.br");
     }
 
     // Contraprova das duas acima: a senha é segredo, não identidade — normalizar espaço nela

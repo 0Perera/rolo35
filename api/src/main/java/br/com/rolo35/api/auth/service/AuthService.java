@@ -1,8 +1,10 @@
 package br.com.rolo35.api.auth.service;
 
 import br.com.rolo35.api.auth.CredenciaisInvalidasException;
+import br.com.rolo35.api.auth.EmailJaCadastradoException;
 import br.com.rolo35.api.auth.JwtService;
 import br.com.rolo35.api.auth.Usuario;
+import br.com.rolo35.api.auth.dto.CadastroRequest;
 import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.dto.LoginResponse;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
@@ -29,15 +31,23 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
+    /**
+     * E-mail é identidade, não texto livre: `=` no Postgres é case-sensitive e o cadastro grava
+     * minúsculo, então sem normalizar um teclado de celular (que capitaliza a primeira letra) ou um
+     * autofill que cola espaço derrubam o login com a mensagem de credencial inválida —
+     * indistinguível de senha errada pra quem está tentando entrar. No service, não só no front,
+     * porque a rota atende qualquer cliente HTTP. As duas pontas (cadastro e login) passam por aqui
+     * de propósito: normalizar só numa delas faria a conta recém-criada não ser encontrada depois.
+     *
+     * <p>Locale.ROOT e não o default da JVM: em turco, "I".toLowerCase() vira "ı" (sem ponto), o que
+     * quebraria o login de qualquer e-mail com I maiúsculo num servidor nessa locale.
+     */
+    private static String normalizarEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
     public LoginResponse login(LoginRequest request) {
-        // E-mail é identidade, não texto livre: `=` no Postgres é case-sensitive e o cadastro
-        // grava minúsculo, então sem normalizar aqui um teclado de celular (que capitaliza a
-        // primeira letra) ou um autofill que cola espaço derrubam o login com a mensagem de
-        // credencial inválida — indistinguível de senha errada pra quem está tentando entrar.
-        // No service, não só no front, porque a rota atende qualquer cliente HTTP.
-        // Locale.ROOT e não o default da JVM: em turco, "I".toLowerCase() vira "ı" (sem ponto),
-        // o que quebraria o login de qualquer e-mail com I maiúsculo num servidor nessa locale.
-        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        String email = normalizarEmail(request.email());
         var usuarioOpt = usuarioRepository.findByEmail(email);
         String senhaHashParaComparar = usuarioOpt.map(Usuario::getSenhaHash).orElse(DUMMY_HASH);
         boolean senhaConfere = passwordEncoder.matches(request.senha(), senhaHashParaComparar);
@@ -49,5 +59,32 @@ public class AuthService {
         Usuario usuario = usuarioOpt.get();
         String token = jwtService.generateToken(usuario.getEmail(), usuario.getPapel());
         return new LoginResponse(token, usuario.getPapel());
+    }
+
+    /**
+     * Cria a conta com o papel escolhido por quem se cadastra — sem gate de autorização, de
+     * propósito: a AC1 não impõe nenhuma condição sobre quem faz a requisição, e exigir um
+     * ORGANIZADOR autenticado pra criar conta de PORTARIA obrigaria a depender de contas de seed
+     * pra exercitar o sistema.
+     *
+     * <p>Devolve o mesmo `LoginResponse` do login em vez de só um 201 vazio: cadastrar e entrar em
+     * seguida são o mesmo gesto pra quem está na tela, e uma segunda ida ao servidor só pra repetir
+     * a senha recém-digitada não acrescenta nada.
+     */
+    public LoginResponse cadastrar(CadastroRequest request) {
+        String email = normalizarEmail(request.email());
+        if (usuarioRepository.findByEmail(email).isPresent()) {
+            throw new EmailJaCadastradoException();
+        }
+
+        // `papel.name()` é a fronteira entre o enum (contrato da API) e a coluna VARCHAR: `Papel`
+        // não atravessa pra entidade, pro JwtService nem pro LoginResponse — todos já operam em
+        // String, e propagar o tipo seria refactor sem pedido de nenhuma AC.
+        String papel = request.papel().name();
+        String senhaHash = passwordEncoder.encode(request.senha());
+        usuarioRepository.save(new Usuario(request.nome(), email, senhaHash, papel));
+
+        String token = jwtService.generateToken(email, papel);
+        return new LoginResponse(token, papel);
     }
 }
