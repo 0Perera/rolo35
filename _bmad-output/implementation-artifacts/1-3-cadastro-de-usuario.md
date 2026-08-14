@@ -4,7 +4,7 @@ baseline_commit: 93a4c04
 
 # Story 1.3: Cadastro de Usuário
 
-Status: in-review
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra uma checagem de qualidade antes de dev-story. -->
 
@@ -245,3 +245,68 @@ case-sensitive).
 - `docs/regras-de-negocio.md` (update — allow-list pública)
 - `_bmad-output/planning-artifacts/epics.md` (update — "aceite dos termos" removido da AC1)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (update)
+
+## Suggested Review Order
+
+**Criação da conta — o coração da mudança**
+
+- Ponto de entrada: a dupla checagem de e-mail e por que nenhuma das duas sobra.
+  [`AuthService.java:75`](../../api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java#L75)
+
+- `saveAndFlush` em `try/catch`: com `save`, a violação escaparia do catch e viraria 500.
+  [`AuthService.java:92`](../../api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java#L92)
+
+- `papel.name()` é a única fronteira do enum; ele não atravessa pra entidade.
+  [`AuthService.java:88`](../../api/src/main/java/br/com/rolo35/api/auth/service/AuthService.java#L88)
+
+**Contrato de entrada e validação**
+
+- Limites superiores existem pra transformar estouro de coluna em 400, não 500.
+  [`CadastroRequest.java:17`](../../api/src/main/java/br/com/rolo35/api/auth/dto/CadastroRequest.java#L17)
+
+- `max = 72` na senha: acima disso o BCrypt trunca e duas senhas colidem.
+  [`CadastroRequest.java:20`](../../api/src/main/java/br/com/rolo35/api/auth/dto/CadastroRequest.java#L20)
+
+- Enum tipado aciona os dois handlers existentes de `papel` inválido, sem código novo.
+  [`Papel.java:1`](../../api/src/main/java/br/com/rolo35/api/auth/Papel.java#L1)
+
+**Superfície pública e mapeamento de erro**
+
+- Path exato, não `/api/auth/**`: rota futura de auth não nasce pública por herança.
+  [`SecurityConfig.java:54`](../../api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java#L54)
+
+- Endpoint devolve `LoginResponse` pra permitir autologin sem segunda requisição.
+  [`AuthController.java:30`](../../api/src/main/java/br/com/rolo35/api/auth/controller/AuthController.java#L30)
+
+- 409 com envelope `{codigo, mensagem}`, no padrão exato dos ~37 handlers vizinhos.
+  [`GlobalExceptionHandler.java:57`](../../api/src/main/java/br/com/rolo35/api/common/GlobalExceptionHandler.java#L57)
+
+**Persistência**
+
+- `createdAt` carimbado no construtor porque a coluna é `NOT NULL` sem `@CreationTimestamp`.
+  [`Usuario.java:44`](../../api/src/main/java/br/com/rolo35/api/auth/Usuario.java#L44)
+
+**Tela de cadastro**
+
+- Validação local espelha cada regra no valor que o servidor de fato mede.
+  [`CadastroPage.tsx:34`](../../web/src/pages/CadastroPage.tsx#L34)
+
+- Sucesso grava a sessão e roteia por papel, sem passar pela tela de login.
+  [`CadastroPage.tsx:71`](../../web/src/pages/CadastroPage.tsx#L71)
+
+- Cliente de API no mesmo padrão de `login()`, com o tipo do contrato real.
+  [`auth.ts:21`](../../web/src/api/auth.ts#L21)
+
+- Rota `/cadastro` deixa de ser placeholder e passa a montar a tela real.
+  [`App.tsx:34`](../../web/src/App.tsx#L34)
+
+**Testes que provam o que os outros não veem**
+
+- Corrida real via Testcontainers: sem o catch, o perdedor levava 500.
+  [`CadastroConcorrenciaEmailTest.java:34`](../../api/src/test/java/br/com/rolo35/api/auth/CadastroConcorrenciaEmailTest.java#L34)
+
+- Round-trip contra o schema: mock de repositório não vê constraint nenhuma.
+  [`UsuarioRepositorySmokeTest.java:14`](../../api/src/test/java/br/com/rolo35/api/auth/UsuarioRepositorySmokeTest.java#L14)
+
+- Filter chain de verdade — `AuthControllerTest` roda com `addFilters = false`.
+  [`AuthSecurityTest.java:30`](../../api/src/test/java/br/com/rolo35/api/auth/AuthSecurityTest.java#L30)
