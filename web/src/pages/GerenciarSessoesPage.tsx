@@ -3,6 +3,7 @@ import { listarSessoesParaGestao, listarSalas, type Sala, type SessaoGestao } fr
 import { buttonClass } from '../components/Button';
 import { FormSessao } from '../components/FormSessao';
 import { PageShell } from '../components/PageShell';
+import { Paginacao } from '../components/Paginacao';
 import { SectionTitle } from '../components/SectionTitle';
 
 type Estado = 'loading' | 'vazio' | 'erro' | 'pronto';
@@ -13,6 +14,9 @@ const LARGURA_MINIMA_DA_TABELA = 640;
 
 export function GerenciarSessoesPage() {
   const [sessoes, setSessoes] = useState<SessaoGestao[]>([]);
+  const [pagina, setPagina] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(0);
+  const [total, setTotal] = useState(0);
   const [salas, setSalas] = useState<Sala[]>([]);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
@@ -21,13 +25,15 @@ export function GerenciarSessoesPage() {
   useEffect(() => {
     let ativo = true;
     setEstado('loading');
-    listarSessoesParaGestao()
+    listarSessoesParaGestao(pagina)
       .then((resultado) => {
         if (!ativo) {
           return;
         }
-        setSessoes(resultado);
-        setEstado(resultado.length === 0 ? 'vazio' : 'pronto');
+        setSessoes(resultado.conteudo);
+        setTotal(resultado.total);
+        setTotalPaginas(resultado.totalPaginas);
+        setEstado(resultado.total === 0 ? 'vazio' : 'pronto');
       })
       .catch(() => {
         if (ativo) {
@@ -37,7 +43,7 @@ export function GerenciarSessoesPage() {
     return () => {
       ativo = false;
     };
-  }, [tentativa]);
+  }, [pagina, tentativa]);
 
   // Salas carregam à parte: elas alimentam o formulário, e uma falha aqui não pode
   // derrubar a listagem de sessões, que é o conteúdo principal da tela.
@@ -65,6 +71,8 @@ export function GerenciarSessoesPage() {
   }
 
   // Trava pós-venda da Story 2.2: sessão com ingresso confirmado chega com `editavel: false`.
+  // A conta é da página carregada, não do cinema — daí o rótulo dizer isso em vez de deixar o
+  // organizador ler um número parcial como se fosse total.
   const travadas = sessoes.filter((sessao) => !sessao.editavel).length;
 
   return (
@@ -77,10 +85,10 @@ export function GerenciarSessoesPage() {
           <div className="flex flex-wrap gap-3.5">
             <div className="border-[3px] border-ink-950 bg-paper-50 px-[18px] py-3 shadow-[5px_5px_0_var(--color-ink-950)]">
               <div className="font-mono text-base tracking-wide text-ink-950/60">SESSÕES ATIVAS</div>
-              <div className="font-display text-2xl">{sessoes.length}</div>
+              <div className="font-display text-2xl">{total}</div>
             </div>
             <div className="border-[3px] border-ink-950 bg-gradient-to-r from-flame-400 to-[#F7A81B] px-[18px] py-3 shadow-[5px_5px_0_var(--color-ink-950)]">
-              <div className="font-mono text-base tracking-wide text-[#6B4E00]">TRAVADAS PÓS-VENDA</div>
+              <div className="font-mono text-base tracking-wide text-[#6B4E00]">TRAVADAS NESTA PÁGINA</div>
               <div className="font-display text-2xl">{travadas}</div>
             </div>
           </div>
@@ -179,6 +187,16 @@ export function GerenciarSessoesPage() {
                   );
                 })}
               </div>
+            )}
+
+            {estado === 'pronto' && totalPaginas > 1 && (
+              <Paginacao
+                pagina={pagina}
+                totalPaginas={totalPaginas}
+                onIr={setPagina}
+                tone="papel"
+                rotulo="sessões"
+              />
             )}
           </div>
         </div>

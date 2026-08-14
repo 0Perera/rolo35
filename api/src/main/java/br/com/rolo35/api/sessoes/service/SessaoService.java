@@ -195,15 +195,18 @@ public class SessaoService {
     /**
      * Gestão lista o cinema inteiro, não a agenda pessoal de quem chamou (CAP-1). O e-mail continua
      * na assinatura só pra exigir uma conta viva por trás do token.
+     *
+     * <p>Paginada pelo mesmo {@link Paginacao} da vitrine: o teto de tamanho é regra de servidor e
+     * vale igual pros dois lados, senão a listagem de gestão vira a única rota sem limite.
      */
-    public List<SessaoGestaoDto> listarParaGestao(String organizadorEmail) {
+    public PaginaDto<SessaoGestaoDto> listarParaGestao(String organizadorEmail, int pagina, int tamanho) {
         usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
-        return sessaoRepository.findParaGestao().stream()
-                .map(projecao -> new SessaoGestaoDto(
+        return PaginaDto.de(
+                sessaoRepository.findParaGestao(Paginacao.de(pagina, tamanho)),
+                projecao -> new SessaoGestaoDto(
                         projecao.getId(), projecao.getSalaId(), projecao.getSalaNome(), projecao.getTitulo(),
                         projecao.getSinopse(), projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
-                        projecao.getEditavel()))
-                .toList();
+                        projecao.getEditavel()));
     }
 
     /**

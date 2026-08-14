@@ -21,7 +21,8 @@ describe('rotas protegidas por papel', () => {
     localStorage.clear();
     // Se a guarda falhar, a página protegida monta e chama a API — sem estes mocks a falha
     // apareceria como rejeição não tratada em vez da asserção que interessa.
-    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([]);
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao')
+      .mockResolvedValue({ conteudo: [], pagina: 0, tamanho: 12, total: 0, totalPaginas: 0 });
     vi.spyOn(sessoesApi, 'listarSalas').mockResolvedValue([]);
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue({
       conteudo: [],

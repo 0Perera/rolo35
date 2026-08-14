@@ -82,6 +82,15 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
      * {@code organizador_id} continua registrando quem criou cada sessão, mas não restringe mais
      * quem a vê ou edita — a equipe de organizadores é compartilhada (CAP-1, ver
      * {@code docs/decisions.md}).
+     *
+     * <p>Paginada pelo mesmo motivo que {@code listarPublicadas}: o {@code WHERE organizador_id = ?}
+     * que o CAP-1 removeu era o único recorte desta consulta, e sem ele a resposta é o histórico
+     * inteiro do cinema, crescendo indefinidamente com a agenda.
+     *
+     * <p>O {@code ORDER BY} desempata por {@code id}: {@code data_hora} sozinho não é único (duas
+     * salas podem ter sessão no mesmo horário), e ordem instável entre páginas faz uma sessão
+     * aparecer duas vezes ou nenhuma na travessia. O {@code countQuery} é explícito porque o
+     * {@code GROUP BY} faria a contagem derivada contar linhas de assento, não de sessão.
      */
     @Query(value = """
         SELECT s.id AS id, s.sala_id AS salaId, sa.nome AS salaNome, s.titulo AS titulo,
@@ -92,9 +101,16 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
         JOIN salas sa ON sa.id = s.sala_id
         JOIN assentos a ON a.sala_id = s.sala_id
         GROUP BY s.id, s.sala_id, sa.nome
-        ORDER BY s.data_hora
-        """, nativeQuery = true)
-    List<SessaoGestaoProjection> findParaGestao();
+        ORDER BY s.data_hora, s.id
+        """,
+            countQuery = """
+        SELECT COUNT(*)
+        FROM sessoes s
+        JOIN salas sa ON sa.id = s.sala_id
+        WHERE EXISTS (SELECT 1 FROM assentos a WHERE a.sala_id = s.sala_id)
+        """,
+            nativeQuery = true)
+    Page<SessaoGestaoProjection> findParaGestao(Pageable pageable);
 
     /**
      * Listagem pública paginada, com busca por título do filme, nome da sala ou data/hora escrita

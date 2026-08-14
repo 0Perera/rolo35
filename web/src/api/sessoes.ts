@@ -149,9 +149,14 @@ export function listarOcupacaoDaSala(salaId: number): Promise<OcupacaoSala[]> {
   return apiFetch<OcupacaoSala[]>(`/api/sessoes/ocupacao?salaId=${salaId}`);
 }
 
-/** Agenda do cinema inteiro: qualquer organizador gerencia qualquer sessão. */
-export function listarSessoesParaGestao(): Promise<SessaoGestao[]> {
-  return apiFetch<SessaoGestao[]>('/api/sessoes/gestao');
+/**
+ * Agenda do cinema inteiro: qualquer organizador gerencia qualquer sessão.
+ *
+ * Paginada pelo mesmo motivo que a vitrine — sem o recorte por dono que o CAP-1 removeu, esta
+ * resposta é o histórico completo do cinema, crescendo indefinidamente com a agenda.
+ */
+export function listarSessoesParaGestao(pagina = 0): Promise<Pagina<SessaoGestao>> {
+  return apiFetch<Pagina<SessaoGestao>>(`/api/sessoes/gestao?pagina=${pagina}`);
 }
 
 export function buscarSessao(id: number): Promise<SessaoGestao> {

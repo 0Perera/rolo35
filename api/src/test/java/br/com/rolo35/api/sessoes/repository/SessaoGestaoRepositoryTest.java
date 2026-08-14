@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import br.com.rolo35.api.TestcontainersConfiguration;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
-import br.com.rolo35.api.sessoes.AssentoSessao;
+import br.com.rolo35.api.common.Paginacao;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.service.SessaoService;
@@ -18,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -146,13 +148,34 @@ class SessaoGestaoRepositoryTest {
         jdbcTemplate.update(
                 "UPDATE sessoes SET organizador_id = ? WHERE id = ?", outroOrganizadorId(), sessao.id());
 
-        List<SessaoGestaoProjection> gestao = sessaoRepository.findParaGestao();
+        List<SessaoGestaoProjection> gestao =
+                sessaoRepository.findParaGestao(PageRequest.of(0, Paginacao.TAMANHO_MAXIMO)).getContent();
 
         assertThat(gestao).anySatisfy(p -> {
             assertThat(p.getId()).isEqualTo(sessao.id());
             assertThat(p.getTitulo()).isEqualTo(TITULO);
             assertThat(p.getEditavel()).isTrue();
         });
+    }
+
+    /**
+     * O CAP-1 tirou o {@code WHERE organizador_id = ?} e, com ele, o único recorte que a listagem
+     * de gestão tinha: a query passou a devolver o histórico inteiro do cinema. O teto de página é
+     * o mesmo de {@code listarPublicadas} e existe pela mesma razão — sem ele a resposta cresce
+     * junto com a agenda, indefinidamente.
+     */
+    @Test
+    void findParaGestaoRespeitaOTamanhoDaPaginaEContaOTotal() {
+        Long salaId = salaRepository.findAll().get(0).getId();
+        sessaoService.criar(requestEm(salaId, TITULO, LocalDateTime.now().plusDays(159).withNano(0)), ORGANIZADOR);
+        sessaoService.criar(
+                requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(160).withNano(0)), ORGANIZADOR);
+
+        Page<SessaoGestaoProjection> primeira = sessaoRepository.findParaGestao(PageRequest.of(0, 1));
+
+        assertThat(primeira.getContent()).hasSize(1);
+        assertThat(primeira.getTotalElements()).isGreaterThanOrEqualTo(2);
+        assertThat(primeira.getTotalPages()).isEqualTo((int) Math.ceil(primeira.getTotalElements() / 1.0));
     }
 
     @Test
@@ -162,7 +185,8 @@ class SessaoGestaoRepositoryTest {
                 requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(154).withNano(0)), ORGANIZADOR);
         confirmaIngressoPara(sessao.id());
 
-        List<SessaoGestaoProjection> gestao = sessaoRepository.findParaGestao();
+        List<SessaoGestaoProjection> gestao =
+                sessaoRepository.findParaGestao(PageRequest.of(0, Paginacao.TAMANHO_MAXIMO)).getContent();
 
         assertThat(gestao)
                 .filteredOn(p -> TITULO_COM_INGRESSO.equals(p.getTitulo()))

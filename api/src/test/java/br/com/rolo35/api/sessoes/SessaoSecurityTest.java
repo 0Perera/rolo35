@@ -154,7 +154,8 @@ class SessaoSecurityTest {
 
     @Test
     void returns200ForGetGestaoWithOrganizadorToken() throws Exception {
-        given(sessaoService.listarParaGestao(anyString())).willReturn(List.of());
+        given(sessaoService.listarParaGestao(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 12, 0, 0));
         String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
 
         mockMvc.perform(get("/api/sessoes/gestao").header("Authorization", "Bearer " + token))

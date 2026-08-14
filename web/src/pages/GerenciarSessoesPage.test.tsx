@@ -13,6 +13,11 @@ function renderPage() {
   );
 }
 
+/** Envelope paginado do servidor. A tela nunca vê a lista inteira — só a página que pediu. */
+function pagina(conteudo: sessoesApi.SessaoGestao[], totalPaginas = 1, total = conteudo.length) {
+  return { conteudo, pagina: 0, tamanho: 12, total, totalPaginas };
+}
+
 describe('GerenciarSessoesPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -29,7 +34,7 @@ describe('GerenciarSessoesPage', () => {
   });
 
   it('shows an empty-list message when the organizador has no sessions', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([]);
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue(pagina([]));
 
     renderPage();
 
@@ -45,7 +50,7 @@ describe('GerenciarSessoesPage', () => {
   });
 
   it('opens the inline edit form for editable sessions and keeps locked ones out of reach', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue(pagina([
       {
         id: 1,
         salaId: 1,
@@ -68,7 +73,7 @@ describe('GerenciarSessoesPage', () => {
         capacidade: 40,
         editavel: false,
       },
-    ]);
+    ]));
 
     const user = userEvent.setup();
     renderPage();
@@ -84,7 +89,7 @@ describe('GerenciarSessoesPage', () => {
   });
 
   it('leaves the edit form after cancelling, back to the creation form', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue(pagina([
       {
         id: 1,
         salaId: 1,
@@ -96,7 +101,7 @@ describe('GerenciarSessoesPage', () => {
         capacidade: 40,
         editavel: true,
       },
-    ]);
+    ]));
     const user = userEvent.setup();
     renderPage();
 
@@ -106,11 +111,47 @@ describe('GerenciarSessoesPage', () => {
     expect(screen.getByRole('button', { name: /publicar sessão/i })).toBeInTheDocument();
   });
 
+  /**
+   * A paginação é do servidor: a tela recebe só a página que pediu e, pra ver a próxima, faz uma
+   * chamada nova com o índice. O que este teste prende é justamente isso — se alguém trocar por um
+   * `.slice()` sobre uma lista carregada inteira de uma vez, a segunda chamada some e ele fica
+   * vermelho.
+   */
+  it('asks the server for the next page instead of slicing a local list', async () => {
+    const umaSessao = (id: number, titulo: string) => ({
+      id,
+      salaId: 1,
+      salaNome: 'Sala 1',
+      titulo,
+      sinopse: null,
+      dataHora: '2030-01-01T20:00:00',
+      preco: 25,
+      capacidade: 40,
+      editavel: true,
+    });
+    const spy = vi
+      .spyOn(sessoesApi, 'listarSessoesParaGestao')
+      .mockResolvedValueOnce({ conteudo: [umaSessao(1, 'Da página 1')], pagina: 0, tamanho: 12, total: 2, totalPaginas: 2 })
+      .mockResolvedValueOnce({ conteudo: [umaSessao(2, 'Da página 2')], pagina: 1, tamanho: 12, total: 2, totalPaginas: 2 });
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(await screen.findByText('Da página 1')).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledWith(0);
+
+    await user.click(screen.getByRole('button', { name: /página 2/i }));
+
+    expect(await screen.findByText('Da página 2')).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledWith(1);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
   it('retries loading sessions when the retry button is clicked', async () => {
     const spy = vi
       .spyOn(sessoesApi, 'listarSessoesParaGestao')
       .mockRejectedValueOnce(new Error('falha de rede'))
-      .mockResolvedValueOnce([]);
+      .mockResolvedValueOnce(pagina([]));
     const user = userEvent.setup();
 
     renderPage();

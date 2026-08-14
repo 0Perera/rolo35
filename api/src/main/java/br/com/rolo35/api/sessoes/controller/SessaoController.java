@@ -64,8 +64,11 @@ public class SessaoController {
      */
     @GetMapping("/gestao")
     @PreAuthorize("hasRole('ORGANIZADOR')")
-    public ResponseEntity<List<SessaoGestaoDto>> listarParaGestao(Authentication authentication) {
-        return ResponseEntity.ok(sessaoService.listarParaGestao(authentication.getName()));
+    public ResponseEntity<PaginaDto<SessaoGestaoDto>> listarParaGestao(
+            Authentication authentication,
+            @RequestParam(name = "pagina", defaultValue = "0") int pagina,
+            @RequestParam(name = "tamanho", defaultValue = "12") int tamanho) {
+        return ResponseEntity.ok(sessaoService.listarParaGestao(authentication.getName(), pagina, tamanho));
     }
 
     /**
