@@ -1,6 +1,7 @@
 package br.com.rolo35.api.sessoes;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.rolo35.api.auth.JwtService;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.config.SecurityConfig;
 import br.com.rolo35.api.sessoes.controller.SessaoController;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
@@ -121,7 +123,8 @@ class SessaoSecurityTest {
     // pra 401/403 herdado de .anyRequest().authenticated().
     @Test
     void returns200ForGetSessoesWithoutAnyToken() throws Exception {
-        given(sessaoService.listarPublicadas()).willReturn(List.of());
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 12, 0, 0));
 
         mockMvc.perform(get("/api/sessoes")).andExpect(status().isOk());
     }

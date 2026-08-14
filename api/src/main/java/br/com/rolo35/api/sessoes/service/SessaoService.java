@@ -2,6 +2,7 @@ package br.com.rolo35.api.sessoes.service;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
@@ -35,6 +36,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +45,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SessaoService {
 
     private static final int BUFFER_MINUTOS = 240;
+    static final int TAMANHO_PAGINA_PADRAO = 12;
+    static final int TAMANHO_PAGINA_MAXIMO = 50;
     private static final String STATUS_LIVRE = "LIVRE";
     private static final String STATUS_RESERVADO = "RESERVADO";
 
@@ -223,14 +228,46 @@ public class SessaoService {
                 sessao.getDataHora(), sessao.getPreco(), capacidade, editavel);
     }
 
-    public List<SessaoListagemDto> listarPublicadas() {
-        return sessaoRepository.listarPublicadas().stream()
-                .map(projecao -> new SessaoListagemDto(
+    public PaginaDto<SessaoListagemDto> listarPublicadas(
+            String busca, Long tmdbId, Long salaId, int pagina, int tamanho) {
+        Pageable paginacao = PageRequest.of(Math.max(pagina, 0), limitarTamanho(tamanho));
+        return PaginaDto.de(
+                sessaoRepository.listarPublicadas(
+                        padraoDeBusca(busca), tmdbId == null ? 0L : tmdbId, salaId == null ? 0L : salaId, paginacao),
+                projecao -> new SessaoListagemDto(
                         projecao.getId(), projecao.getSalaNome(), projecao.getTmdbId(), projecao.getTitulo(),
                         projecao.getPosterUrl(), projecao.getSinopse(), projecao.getDataEstreia(),
                         projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
-                        projecao.getAssentosLivres() == 0))
-                .toList();
+                        projecao.getAssentosLivres() == 0));
+    }
+
+    /**
+     * Teto de servidor: sem ele, um cliente pede {@code tamanho=1000000} e a "paginação" vira uma
+     * listagem completa disfarçada, com o custo de memória e de rede que a paginação existia pra
+     * evitar. Tamanho inválido cai no padrão em vez de estourar — página é parâmetro de navegação,
+     * não entrada de negócio.
+     */
+    private static int limitarTamanho(int tamanho) {
+        if (tamanho < 1) {
+            return TAMANHO_PAGINA_PADRAO;
+        }
+        return Math.min(tamanho, TAMANHO_PAGINA_MAXIMO);
+    }
+
+    /**
+     * Transforma o texto digitado num padrão LIKE. Os curingas do próprio LIKE precisam ser
+     * neutralizados antes: sem isso, quem digita {@code _} casa com qualquer caractere e quem
+     * digita {@code %} casa com a base inteira — o campo de busca deixa de buscar.
+     */
+    private static String padraoDeBusca(String busca) {
+        if (busca == null || busca.isBlank()) {
+            return "%";
+        }
+        String escapado = busca.trim()
+                .replace("!", "!!")
+                .replace("%", "!%")
+                .replace("_", "!_");
+        return "%" + escapado + "%";
     }
 
     private LocalDate parseDataEstreia(String dataEstreia) {

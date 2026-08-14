@@ -17,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -31,6 +33,8 @@ class SessaoListagemRepositoryTest {
     private static final String TITULO_LIVRE = "Listagem com vaga (fixture)";
     private static final String TITULO_ESGOTADA = "Listagem esgotada (fixture)";
     private static final String TITULO_PASSADA = "Listagem sessão passada (fixture)";
+    private static final String TITULO_TERCEIRA = "Listagem terceira (fixture)";
+    private static final String SUFIXO_FIXTURE = "(fixture)";
     private static final String ORGANIZADOR = "organizador@rolo35.com.br";
 
     @Autowired
@@ -50,9 +54,10 @@ class SessaoListagemRepositoryTest {
 
     @AfterEach
     void limpaSessoesDoTeste() {
+        // Por sufixo, não por lista de títulos: a lista silenciosamente deixava de limpar a
+        // fixture nova, e sessão vazada de um teste entra na contagem do seguinte.
         List<Sessao> criadas = sessaoRepository.findAll().stream()
-                .filter(sessao -> TITULO_LIVRE.equals(sessao.getTitulo()) || TITULO_ESGOTADA.equals(sessao.getTitulo())
-                        || TITULO_PASSADA.equals(sessao.getTitulo()))
+                .filter(sessao -> sessao.getTitulo() != null && sessao.getTitulo().endsWith(SUFIXO_FIXTURE))
                 .toList();
         criadas.forEach(
                 sessao -> assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(sessao.getId())));
@@ -83,7 +88,8 @@ class SessaoListagemRepositoryTest {
         assentosDaEsgotada.forEach(as -> ReflectionTestUtils.setField(as, "status", "VENDIDO"));
         assentoSessaoRepository.saveAll(assentosDaEsgotada);
 
-        List<SessaoListagemProjection> listagem = sessaoRepository.listarPublicadas();
+        List<SessaoListagemProjection> listagem =
+                sessaoRepository.listarPublicadas("%", 0L, 0L, Pageable.ofSize(100)).getContent();
 
         var projecaoComVaga = listagem.stream()
                 .filter(p -> TITULO_LIVRE.equals(p.getTitulo()))
@@ -120,8 +126,76 @@ class SessaoListagemRepositoryTest {
                 .build();
         sessaoRepository.save(sessaoPassada);
 
-        List<SessaoListagemProjection> listagem = sessaoRepository.listarPublicadas();
+        List<SessaoListagemProjection> listagem =
+                sessaoRepository.listarPublicadas("%", 0L, 0L, Pageable.ofSize(100)).getContent();
 
         assertThat(listagem).noneMatch(p -> TITULO_PASSADA.equals(p.getTitulo()));
+    }
+
+    /**
+     * A query principal multiplica linhas por assento antes de agrupar. Se a contagem da página
+     * saísse dela, o total viria como a soma das capacidades das salas — 80 em vez de 1 pra uma
+     * única sessão na Sala 1 — e a tela mostraria dezenas de páginas vazias. Só o banco de verdade
+     * prova que a {@code countQuery} separada não caiu nessa.
+     */
+    @Test
+    void contagemDaPaginaNaoEhMultiplicadaPelaCapacidadeDaSala() {
+        Long salaId = salaUmId();
+        LocalDateTime base = LocalDateTime.now().plusDays(140).withNano(0);
+        sessaoService.criar(requestCom(salaId, TITULO_LIVRE, base), ORGANIZADOR);
+
+        var pagina = sessaoRepository.listarPublicadas("%" + TITULO_LIVRE + "%", 0L, 0L, Pageable.ofSize(10));
+
+        assertThat(pagina.getTotalElements()).isEqualTo(1);
+        assertThat(pagina.getContent()).hasSize(1);
+    }
+
+    @Test
+    void buscaCasaPorTituloPorNomeDaSalaEPorDataEscritaComoNoBrasil() {
+        Long salaId = salaUmId();
+        LocalDateTime base = LocalDateTime.now().plusDays(160).withNano(0).withHour(20).withMinute(30);
+        sessaoService.criar(requestCom(salaId, TITULO_LIVRE, base), ORGANIZADOR);
+
+        String dataBr = base.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+        assertThat(sessaoRepository.listarPublicadas("%com vaga%", 0L, 0L, Pageable.ofSize(50)).getContent())
+                .anyMatch(p -> TITULO_LIVRE.equals(p.getTitulo()));
+        assertThat(sessaoRepository.listarPublicadas("%Sala 1%", 0L, 0L, Pageable.ofSize(50)).getContent())
+                .anyMatch(p -> TITULO_LIVRE.equals(p.getTitulo()));
+        assertThat(sessaoRepository.listarPublicadas("%" + dataBr + "%", 0L, 0L, Pageable.ofSize(50)).getContent())
+                .anyMatch(p -> TITULO_LIVRE.equals(p.getTitulo()));
+        assertThat(sessaoRepository.listarPublicadas("%nada que exista%", 0L, 0L, Pageable.ofSize(50)).getContent())
+                .isEmpty();
+    }
+
+    /**
+     * Sem o desempate por id no {@code ORDER BY}, duas sessões no mesmo horário podem trocar de
+     * posição entre duas consultas — e aí uma delas aparece em duas páginas enquanto a outra
+     * some de todas.
+     */
+    @Test
+    void paginacaoNaoRepeteNemPerdeLinhaEntrePaginas() {
+        Long salaId = salaUmId();
+        LocalDateTime base = LocalDateTime.now().plusDays(180).withNano(0);
+        sessaoService.criar(requestCom(salaId, TITULO_LIVRE, base), ORGANIZADOR);
+        sessaoService.criar(requestCom(salaId, TITULO_ESGOTADA, base.plusHours(5)), ORGANIZADOR);
+        sessaoService.criar(requestCom(salaId, TITULO_TERCEIRA, base.plusHours(10)), ORGANIZADOR);
+
+        String termo = "%(fixture)%";
+        var todos = sessaoRepository.listarPublicadas(termo, 0L, 0L, Pageable.ofSize(100)).getContent().stream()
+                .map(SessaoListagemProjection::getId)
+                .toList();
+
+        var acumulado = new java.util.ArrayList<Long>();
+        for (int pagina = 0; pagina < 60; pagina++) {
+            var conteudo = sessaoRepository.listarPublicadas(termo, 0L, 0L, PageRequest.of(pagina, 2)).getContent();
+            if (conteudo.isEmpty()) {
+                break;
+            }
+            conteudo.forEach(p -> acumulado.add(p.getId()));
+        }
+
+        assertThat(acumulado).containsExactlyElementsOf(todos);
+        assertThat(acumulado).doesNotHaveDuplicates();
     }
 }

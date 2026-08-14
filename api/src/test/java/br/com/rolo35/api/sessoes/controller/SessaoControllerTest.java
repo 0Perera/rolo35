@@ -2,9 +2,11 @@ package br.com.rolo35.api.sessoes.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -12,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
@@ -197,28 +200,85 @@ class SessaoControllerTest {
     }
 
     @Test
-    void returns200WithSessaoListagemArrayForGetSessoes() throws Exception {
+    void returns200WithPaginaDeSessoesForGetSessoes() throws Exception {
         SessaoListagemDto dto = new SessaoListagemDto(
                 100L, "Sala 1", 550L, "Clube da Luta", "http://poster", "sinopse", LocalDate.parse("1999-10-15"),
                 LocalDateTime.now().plusDays(7), new BigDecimal("25.00"), 40, false);
-        given(sessaoService.listarPublicadas()).willReturn(List.of(dto));
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(dto), 0, 12, 1, 1));
 
         mockMvc.perform(get("/api/sessoes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(100))
-                .andExpect(jsonPath("$[0].salaNome").value("Sala 1"))
-                .andExpect(jsonPath("$[0].titulo").value("Clube da Luta"))
-                .andExpect(jsonPath("$[0].esgotada").value(false));
+                .andExpect(jsonPath("$.conteudo[0].id").value(100))
+                .andExpect(jsonPath("$.conteudo[0].salaNome").value("Sala 1"))
+                .andExpect(jsonPath("$.conteudo[0].titulo").value("Clube da Luta"))
+                .andExpect(jsonPath("$.conteudo[0].esgotada").value(false))
+                .andExpect(jsonPath("$.pagina").value(0))
+                .andExpect(jsonPath("$.tamanho").value(12))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.totalPaginas").value(1));
     }
 
     @Test
-    void returns200WithEmptyArrayForGetSessoesWhenNoneExist() throws Exception {
-        given(sessaoService.listarPublicadas()).willReturn(List.of());
+    void returns200WithEmptyContentForGetSessoesWhenNoneExist() throws Exception {
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 12, 0, 0));
 
         mockMvc.perform(get("/api/sessoes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.conteudo").isArray())
+                .andExpect(jsonPath("$.conteudo").isEmpty())
+                .andExpect(jsonPath("$.total").value(0));
+    }
+
+    // Sem esta checagem, um erro de nome no @RequestParam passaria despercebido: a resposta
+    // continuaria 200 e a tela continuaria mostrando a primeira página em toda navegação.
+    @Test
+    void passesSearchAndPaginationParamsThroughToService() throws Exception {
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 2, 8, 0, 0));
+
+        mockMvc.perform(get("/api/sessoes").param("q", "jurassic").param("pagina", "2").param("tamanho", "8"))
+                .andExpect(status().isOk());
+
+        then(sessaoService).should().listarPublicadas("jurassic", null, null, 2, 8);
+    }
+
+    // O detalhe do filme depende deste filtro pra achar as sessões de um filme específico. Sem ele,
+    // a página só encontraria filmes que caíssem por acaso na primeira página da listagem.
+    @Test
+    void passesTmdbIdFilterThroughToService() throws Exception {
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 50, 0, 0));
+
+        mockMvc.perform(get("/api/sessoes").param("tmdbId", "550").param("tamanho", "50"))
+                .andExpect(status().isOk());
+
+        then(sessaoService).should().listarPublicadas(null, 550L, null, 0, 50);
+    }
+
+    // Página fora do intervalo é navegação, não erro: link antigo ou URL editada à mão devolve
+    // conteúdo vazio com o total correto, e a tela consegue se recolocar na última página válida.
+    @Test
+    void returns200WithEmptyContentForPageBeyondTheLast() throws Exception {
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 99, 12, 5, 1));
+
+        mockMvc.perform(get("/api/sessoes").param("pagina", "99"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conteudo").isEmpty())
+                .andExpect(jsonPath("$.total").value(5))
+                .andExpect(jsonPath("$.totalPaginas").value(1));
+    }
+
+    @Test
+    void usesDefaultPaginationWhenParamsAreAbsent() throws Exception {
+        given(sessaoService.listarPublicadas(any(), any(), any(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 12, 0, 0));
+
+        mockMvc.perform(get("/api/sessoes")).andExpect(status().isOk());
+
+        then(sessaoService).should().listarPublicadas(null, null, null, 0, 12);
     }
 
     private EditarSessaoRequest editarRequestValido() {

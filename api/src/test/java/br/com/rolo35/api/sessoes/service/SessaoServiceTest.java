@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -43,6 +45,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -295,35 +300,85 @@ class SessaoServiceTest {
         return projecao;
     }
 
+    private void stubListagem(SessaoListagemProjection... projecoes) {
+        given(sessaoRepository.listarPublicadas(anyString(), anyLong(), anyLong(), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(projecoes)));
+    }
+
     @Test
     void listarPublicadasMarcaEsgotadaFalseQuandoHaAssentoLivre() {
-        SessaoListagemProjection projecao = projecaoCom(1L, 12L);
-        given(sessaoRepository.listarPublicadas()).willReturn(List.of(projecao));
+        stubListagem(projecaoCom(1L, 12L));
 
-        var listagem = sessaoService.listarPublicadas();
+        var pagina = sessaoService.listarPublicadas(null, null, null, 0, 12);
 
-        assertThat(listagem).hasSize(1);
-        assertThat(listagem.get(0).esgotada()).isFalse();
+        assertThat(pagina.conteudo()).hasSize(1);
+        assertThat(pagina.conteudo().get(0).esgotada()).isFalse();
     }
 
     @Test
     void listarPublicadasMarcaEsgotadaTrueQuandoZeroAssentosLivres() {
-        SessaoListagemProjection projecao = projecaoCom(2L, 0L);
-        given(sessaoRepository.listarPublicadas()).willReturn(List.of(projecao));
+        stubListagem(projecaoCom(2L, 0L));
 
-        var listagem = sessaoService.listarPublicadas();
+        var pagina = sessaoService.listarPublicadas(null, null, null, 0, 12);
 
-        assertThat(listagem).hasSize(1);
-        assertThat(listagem.get(0).esgotada()).isTrue();
+        assertThat(pagina.conteudo()).hasSize(1);
+        assertThat(pagina.conteudo().get(0).esgotada()).isTrue();
     }
 
     @Test
-    void listarPublicadasRetornaListaVaziaSemLancarExcecaoQuandoRepositoryNaoTemNada() {
-        given(sessaoRepository.listarPublicadas()).willReturn(List.of());
+    void listarPublicadasRetornaPaginaVaziaSemLancarExcecaoQuandoRepositoryNaoTemNada() {
+        stubListagem();
 
-        var listagem = sessaoService.listarPublicadas();
+        var pagina = sessaoService.listarPublicadas(null, null, null, 0, 12);
 
-        assertThat(listagem).isEmpty();
+        assertThat(pagina.conteudo()).isEmpty();
+        assertThat(pagina.total()).isZero();
+    }
+
+    // Busca em branco não pode virar filtro: sem o '%' o LIKE casaria só com título vazio e a
+    // listagem sumiria inteira assim que o operador apagasse o que digitou.
+    @Test
+    void buscaVaziaViraPadraoQueCasaComTudo() {
+        stubListagem(projecaoCom(1L, 5L));
+
+        sessaoService.listarPublicadas("   ", null, null, 0, 12);
+
+        then(sessaoRepository).should().listarPublicadas(eq("%"), eq(0L), eq(0L), any(Pageable.class));
+    }
+
+    // Quem digita '%' ou '_' está buscando esses caracteres, não pedindo curinga. Sem escapar,
+    // um '_' solto casa com a base inteira e o campo de busca deixa de filtrar.
+    @Test
+    void escapaCuringasDoLikeVindosDaBusca() {
+        stubListagem();
+
+        sessaoService.listarPublicadas("100%_de_ação", null, null, 0, 12);
+
+        then(sessaoRepository).should().listarPublicadas(eq("%100!%!_de!_ação%"), eq(0L), eq(0L), any(Pageable.class));
+    }
+
+    // Sem teto, "paginação" com tamanho absurdo é só a listagem completa com outro nome.
+    @Test
+    void limitaOTamanhoDePaginaPedidoPeloCliente() {
+        stubListagem();
+
+        sessaoService.listarPublicadas(null, null, null, 0, 1_000_000);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(SessaoService.TAMANHO_PAGINA_MAXIMO);
+    }
+
+    @Test
+    void trocaTamanhoInvalidoPeloPadraoEmVezDeFalhar() {
+        stubListagem();
+
+        sessaoService.listarPublicadas(null, null, null, -3, 0);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(SessaoService.TAMANHO_PAGINA_PADRAO);
+        assertThat(captor.getValue().getPageNumber()).isZero();
     }
 
     private Sessao sessaoCom(Long id, Long organizadorId, Long salaId, String titulo, LocalDateTime dataHora) {

@@ -1,5 +1,6 @@
 package br.com.rolo35.api.sessoes.controller;
 
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -39,9 +41,20 @@ public class SessaoController {
         return ResponseEntity.status(HttpStatus.CREATED).body(resposta);
     }
 
+    /**
+     * Página numerada, não cursor: a tela oferece "ir pra página 2", e keyset só sabe avançar e
+     * voltar de um em um. O custo do offset é conhecido e aceito nesse volume; o que a paginação
+     * não pode é ficar sem ordenação determinística nem sem teto de tamanho — as duas coisas vivem
+     * na query e no service, não aqui.
+     */
     @GetMapping
-    public ResponseEntity<List<SessaoListagemDto>> listar() {
-        return ResponseEntity.ok(sessaoService.listarPublicadas());
+    public ResponseEntity<PaginaDto<SessaoListagemDto>> listar(
+            @RequestParam(name = "q", required = false) String busca,
+            @RequestParam(name = "tmdbId", required = false) Long tmdbId,
+            @RequestParam(name = "salaId", required = false) Long salaId,
+            @RequestParam(name = "pagina", defaultValue = "0") int pagina,
+            @RequestParam(name = "tamanho", defaultValue = "12") int tamanho) {
+        return ResponseEntity.ok(sessaoService.listarPublicadas(busca, tmdbId, salaId, pagina, tamanho));
     }
 
     @GetMapping("/minhas")
