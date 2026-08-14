@@ -15,6 +15,10 @@
   --color-flame-500: #f26522;
   --color-flame-400: #ffc414;
 
+  /* superfícies do terminal escuro da portaria — cartão em repouso e o mesmo cartão sob o cursor */
+  --color-ink-800: #201925;
+  --color-ink-700: #2b2130;
+
   /* ciano — contraste/foco */
   --color-cyan-400: #7ed9f2;
 

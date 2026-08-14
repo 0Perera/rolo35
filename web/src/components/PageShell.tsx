@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-type Variant = 'public' | 'auth';
+type Variant = 'public' | 'auth' | 'terminal';
 
 const authBackground = {
   backgroundImage: 'radial-gradient(115% 80% at 50% 0%, #2A2130 0%, var(--color-ink-950) 55%, var(--color-ink-900) 100%)',
@@ -28,6 +28,13 @@ export function PageShell({ variant = 'public', children, className = '' }: Page
         {children}
       </main>
     );
+  }
+
+  // Portaria não é tela de público: é terminal de operação, olhado de perto numa sala escura
+  // com o filme já começando. Sem grade de papel e sem fundo claro — o veredito precisa ser
+  // a coisa mais brilhante em cena.
+  if (variant === 'terminal') {
+    return <main className={`min-h-screen bg-ink-950 font-body text-paper-100 ${className}`}>{children}</main>;
   }
 
   return (
