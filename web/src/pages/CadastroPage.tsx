@@ -24,8 +24,15 @@ const PAPEIS: readonly Papel[] = ['CLIENTE', 'ORGANIZADOR', 'PORTARIA'];
 
 const rotuloDeCampo = 'block font-mono text-lg tracking-wide text-ink-950/60';
 
+/**
+ * Espelha o servidor campo a campo, inclusive em qual valor cada regra mede. O vazio é medido no
+ * texto aparado, como o `@NotBlank` — sem isso, uma senha de seis espaços passa aqui e leva um 400
+ * do back, exatamente o round-trip que esta validação existe pra evitar. Já o tamanho mínimo é
+ * medido no texto cru, como o `@Size(min = 6)`: a senha vai pro servidor sem aparar (ela é segredo,
+ * não identidade), então medir o aparado recusaria aqui senhas que o back aceita.
+ */
 function erroDePreenchimento(nome: string, email: string, senha: string): string | null {
-  if (!nome.trim() || !email.trim() || !senha) {
+  if (!nome.trim() || !email.trim() || !senha.trim()) {
     return 'Preencha nome, e-mail e senha.';
   }
   if (senha.length < TAMANHO_MINIMO_DA_SENHA) {
@@ -122,18 +129,38 @@ export function CadastroPage() {
           <div className="my-4 h-1 bg-gradient-to-r from-cyan-400 via-flame-400 to-flame-600" />
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-            <TextField id="nome" label="NOME COMPLETO" type="text" value={nome} onChange={aoDigitar(setNome)} />
+            <TextField
+              id="nome"
+              label="NOME COMPLETO"
+              type="text"
+              autoComplete="name"
+              value={nome}
+              onChange={aoDigitar(setNome)}
+              required
+            />
             <TextField
               id="email"
               label="E-MAIL"
               type="email"
+              autoComplete="email"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               value={email}
               onChange={aoDigitar(setEmail)}
+              required
             />
-            <TextField id="senha" label="SENHA" type="password" value={senha} onChange={aoDigitar(setSenha)} />
+            {/* `new-password`, não `current-password`: é o que faz o gerenciador de senhas oferecer
+                gerar uma senha nova aqui, em vez de tentar preencher com a de alguma conta antiga. */}
+            <TextField
+              id="senha"
+              label="SENHA"
+              type="password"
+              autoComplete="new-password"
+              value={senha}
+              onChange={aoDigitar(setSenha)}
+              required
+            />
 
             <div>
               <span id="rotulo-papel" className={rotuloDeCampo}>

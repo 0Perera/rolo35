@@ -119,6 +119,52 @@ describe('CadastroPage', () => {
     expect(cadastrarSpy).not.toHaveBeenCalled();
   });
 
+  // Seis espaços têm length 6 mas o servidor os reprova no @NotBlank: a checagem local mede o
+  // texto aparado justamente pra não gastar essa ida e volta.
+  it('does not call the API when a field holds only whitespace', async () => {
+    const cadastrarSpy = vi.spyOn(authApi, 'cadastrar');
+    const user = userEvent.setup();
+    renderizar();
+
+    await user.type(screen.getByLabelText(/nome completo/i), 'Fulano de Tal');
+    await user.type(screen.getByLabelText(/e-mail/i), 'novo@rolo35.com.br');
+    await user.type(screen.getByLabelText(/senha/i), '      ');
+    await user.click(screen.getByRole('button', { name: 'CLIENTE' }));
+    await user.click(screen.getByRole('button', { name: /criar ficha/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Preencha nome, e-mail e senha.');
+    expect(cadastrarSpy).not.toHaveBeenCalled();
+  });
+
+  // Contraprova da de cima: o mínimo de 6 é medido no texto cru, como o @Size(min = 6) do servidor.
+  // A senha viaja sem ser aparada — é segredo, não identidade —, então medir o aparado recusaria
+  // aqui senhas que o back aceita.
+  it('accepts a password whose length only reaches six counting its spaces', async () => {
+    const cadastrarSpy = vi
+      .spyOn(authApi, 'cadastrar')
+      .mockResolvedValue({ token: 'token-novo', papel: 'CLIENTE' });
+    const user = userEvent.setup();
+    renderizar();
+
+    await user.type(screen.getByLabelText(/nome completo/i), 'Fulano de Tal');
+    await user.type(screen.getByLabelText(/e-mail/i), 'novo@rolo35.com.br');
+    await user.type(screen.getByLabelText(/senha/i), ' abcd ');
+    await user.click(screen.getByRole('button', { name: 'CLIENTE' }));
+    await user.click(screen.getByRole('button', { name: /criar ficha/i }));
+
+    await waitFor(() => {
+      expect(cadastrarSpy).toHaveBeenCalledWith('Fulano de Tal', 'novo@rolo35.com.br', ' abcd ', 'CLIENTE');
+    });
+  });
+
+  it('offers the password manager a new-password field to fill', () => {
+    renderizar();
+
+    expect(screen.getByLabelText(/nome completo/i)).toHaveAttribute('autocomplete', 'name');
+    expect(screen.getByLabelText(/e-mail/i)).toHaveAttribute('autocomplete', 'email');
+    expect(screen.getByLabelText(/senha/i)).toHaveAttribute('autocomplete', 'new-password');
+  });
+
   it('clears the error message as soon as any field is typed into', async () => {
     const user = userEvent.setup();
     renderizar();
