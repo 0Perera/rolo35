@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
+import { Link, useSearchParams } from 'react-router';
+import { listarSalas, listarSessoesPublicadas, type Sala, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
+import { CampoDeBusca } from '../components/CampoDeBusca';
 import { PageShell } from '../components/PageShell';
+import { Paginacao } from '../components/Paginacao';
 import { SectionTitle } from '../components/SectionTitle';
+import { SeletorDeOpcao } from '../components/SeletorDeOpcao';
+import { nomeExibidoDaSala } from '../lib/salas';
 import {
   contagemDeSessoes,
   formatarPreco,
@@ -75,22 +79,53 @@ function metaDoFilme(filme: FilmeAgrupado): string {
     .join(' · ');
 }
 
+const TAMANHO_PAGINA = 12;
+
 export function ListagemSessoesPage() {
+  const [parametros, setParametros] = useSearchParams();
+  const busca = parametros.get('q') ?? '';
+  const salaId = parametros.get('sala') ?? '';
+  const pagina = Number(parametros.get('pagina') ?? '0');
+
   const [sessoes, setSessoes] = useState<SessaoPublicada[]>([]);
+  const [salas, setSalas] = useState<Sala[]>([]);
+  const [totalPaginas, setTotalPaginas] = useState(0);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
   const [heroIdx, setHeroIdx] = useState(0);
 
+  // As salas não dependem da busca nem da página, então são buscadas uma vez só. Uma falha aqui
+  // deixa o filtro vazio, mas não pode derrubar a vitrine — o catálogo é o conteúdo principal.
+  useEffect(() => {
+    let ativo = true;
+    listarSalas()
+      .then((resultado) => {
+        if (ativo) {
+          setSalas(resultado);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
   useEffect(() => {
     let ativo = true;
     setEstado('loading');
-    listarSessoesPublicadas()
+    listarSessoesPublicadas({
+      busca,
+      salaId: salaId ? Number(salaId) : undefined,
+      pagina,
+      tamanho: TAMANHO_PAGINA,
+    })
       .then((resultado) => {
         if (!ativo) {
           return;
         }
-        setSessoes(resultado);
-        setEstado(resultado.length === 0 ? 'vazio' : 'pronto');
+        setSessoes(resultado.conteudo);
+        setTotalPaginas(resultado.totalPaginas);
+        setEstado(resultado.conteudo.length === 0 ? 'vazio' : 'pronto');
       })
       .catch(() => {
         if (ativo) {
@@ -100,7 +135,53 @@ export function ListagemSessoesPage() {
     return () => {
       ativo = false;
     };
-  }, [tentativa]);
+  }, [busca, salaId, pagina, tentativa]);
+
+  // "TODAS AS SALAS" é opção de verdade na lista, não só placeholder: sem ela não há como desfazer
+  // o filtro depois de escolher uma sala.
+  const opcoesDeSala = [
+    { valor: '', rotulo: 'TODAS AS SALAS' },
+    ...salas.map((sala) => ({ valor: String(sala.id), rotulo: nomeExibidoDaSala(sala.nome) })),
+  ];
+
+  function filtrarPorSala(valor: string) {
+    const proximos = new URLSearchParams(parametros);
+    if (valor) {
+      proximos.set('sala', valor);
+    } else {
+      proximos.delete('sala');
+    }
+    proximos.delete('pagina');
+    setParametros(proximos);
+    setHeroIdx(0);
+  }
+
+  function limparFiltros() {
+    const proximos = new URLSearchParams(parametros);
+    proximos.delete('q');
+    proximos.delete('sala');
+    proximos.delete('pagina');
+    setParametros(proximos);
+  }
+
+  function irPara(novaPagina: number) {
+    const proximos = new URLSearchParams(parametros);
+    proximos.set('pagina', String(novaPagina));
+    setParametros(proximos);
+    setHeroIdx(0);
+  }
+
+  function buscar(termo: string) {
+    const proximos = new URLSearchParams(parametros);
+    if (termo.trim()) {
+      proximos.set('q', termo.trim());
+    } else {
+      proximos.delete('q');
+    }
+    proximos.delete('pagina');
+    setParametros(proximos);
+    setHeroIdx(0);
+  }
 
   const totalDeCanais = Math.min(agruparPorFilme(sessoes).length, MAXIMO_DE_CANAIS);
 
@@ -125,7 +206,7 @@ export function ListagemSessoesPage() {
     <PageShell>
       {estado === 'pronto' && destaque && (
         <section
-          className="flex justify-center border-b-[3px] border-ink-950 px-6 py-11"
+          className="flex justify-center border-b-[3px] border-ink-950 px-4 py-8 sm:px-6 sm:py-11"
           style={{
             backgroundImage: 'radial-gradient(120% 90% at 50% 0%, #2A2130 0%, #171219 60%, #100C13 100%)',
           }}
@@ -140,11 +221,12 @@ export function ListagemSessoesPage() {
                 borderRadius: 'clamp(22px,5cqw,46px) clamp(22px,5cqw,46px) clamp(14px,3cqw,30px) clamp(14px,3cqw,30px)',
               }}
             >
+              {/* A borda do tubo encolhe no mobile: 12px de cada lado custam caro numa tela de 390px. */}
               <div
-                className="relative animate-[rolo-flick_7s_infinite] overflow-hidden rounded-[28px]"
-                style={{ background: '#05060A', border: '12px solid #14100E', boxShadow: 'inset 0 0 60px rgba(0,0,0,0.9)' }}
+                className="relative animate-[rolo-flick_7s_infinite] overflow-hidden rounded-[28px] border-[8px] border-[#14100E] sm:border-[12px]"
+                style={{ background: '#05060A', boxShadow: 'inset 0 0 60px rgba(0,0,0,0.9)' }}
               >
-                <div className="relative min-h-[clamp(360px,92cqw,460px)]">
+                <div className="relative">
                   {destaque.posterUrl && (
                     <img
                       src={destaque.posterUrl}
@@ -153,8 +235,17 @@ export function ListagemSessoesPage() {
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   )}
+                  {/* O véu horizontal só funciona quando o texto ocupa a metade esquerda. No mobile ele
+                      atravessa a largura toda, então lá o escurecimento vem de cima pra baixo. */}
                   <div
-                    className="pointer-events-none absolute inset-0"
+                    className="pointer-events-none absolute inset-0 sm:hidden"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(180deg, rgba(5,6,10,0.62) 0%, rgba(5,6,10,0.86) 42%, rgba(5,6,10,0.94) 100%)',
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 hidden sm:block"
                     style={{
                       backgroundImage:
                         'linear-gradient(90deg, rgba(5,6,10,0.94) 0%, rgba(5,6,10,0.72) 38%, rgba(5,6,10,0.1) 70%, rgba(126,217,242,0.12) 100%)',
@@ -173,9 +264,15 @@ export function ListagemSessoesPage() {
                     style={{ backgroundImage: 'linear-gradient(180deg, transparent, #7ED9F2, transparent)' }}
                   />
 
-                  <div className="absolute inset-0 flex flex-col justify-center gap-[clamp(8px,1.4cqw,18px)] px-[clamp(18px,4cqw,56px)]">
-                    <div className="font-mono text-xl tracking-[3px] text-cyan-400">▶ TOCANDO AGORA · CANAL 35</div>
-                    <h1 className="max-w-[560px] font-display text-[clamp(30px,5.4cqw,60px)] leading-[0.92] text-flame-400 [text-shadow:4px_4px_0_var(--color-flame-600),8px_8px_0_rgba(0,0,0,0.45)]">
+                  {/* O texto fica no fluxo (e é ele quem carrega o `min-h`), não em `absolute`: como
+                      absoluto ele não empurrava altura nenhuma e um título longo em tela estreita era
+                      cortado pelo `overflow-hidden` do tubo. O pôster atrás estica junto via `inset-0`.
+                      O `pb` extra no mobile reserva a faixa das bolinhas de canal. */}
+                  <div className="relative flex min-h-[clamp(340px,92cqw,460px)] flex-col justify-center gap-[clamp(8px,1.4cqw,18px)] px-[clamp(16px,4cqw,56px)] py-8 pb-14 sm:pb-8">
+                    <div className="font-mono text-lg tracking-[2px] text-cyan-400 sm:text-xl sm:tracking-[3px]">
+                      ▶ TOCANDO AGORA<span className="hidden sm:inline"> · CANAL 35</span>
+                    </div>
+                    <h1 className="max-w-[560px] font-display text-[clamp(26px,5.4cqw,60px)] leading-[0.92] text-flame-400 [text-shadow:4px_4px_0_var(--color-flame-600),8px_8px_0_rgba(0,0,0,0.45)]">
                       {destaque.titulo}
                     </h1>
                     {proximaSessaoDestaque && (
@@ -200,28 +297,38 @@ export function ListagemSessoesPage() {
                   </div>
 
                   {canais.length > 1 && (
-                    <div className="absolute bottom-5 right-8 flex items-center gap-2.5">
+                    // A bolinha continua com 10px, mas quem recebe o toque é o botão de 24px em volta:
+                    // 10px é alvo pequeno demais pro dedo.
+                    <div className="absolute right-2 bottom-2 flex items-center sm:right-6 sm:bottom-3">
                       {canais.map((filme, i) => (
                         <button
                           key={filme.tmdbId}
                           type="button"
                           aria-label={`Destaque ${i + 1}`}
                           onClick={() => setHeroIdx(i)}
-                          className="h-2.5 w-2.5 rounded-full border-2 border-paper-100"
-                          style={{ background: i === heroIdx % canais.length ? '#FFC414' : 'transparent' }}
-                        />
+                          className="grid h-6 w-6 place-items-center sm:h-7 sm:w-7"
+                        >
+                          <span
+                            className="h-2.5 w-2.5 rounded-full border-2 border-paper-100"
+                            style={{ background: i === heroIdx % canais.length ? '#FFC414' : 'transparent' }}
+                          />
+                        </button>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="mt-[18px] flex items-center justify-between px-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-3 w-[62px] rounded-sm" style={{ background: '#14100E' }} />
-                  <div className="font-mono text-lg tracking-[2px] text-[#C9BCA9]">ROLO 35 TRINITRON</div>
+              {/* A grade do alto-falante sai no mobile: ela e os botões não cabem na mesma linha
+                  numa tela estreita e o nome do aparelho fica espremido. */}
+              <div className="mt-[18px] flex items-center justify-between gap-3 px-1 sm:px-2">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="hidden h-3 w-[62px] rounded-sm sm:block" style={{ background: '#14100E' }} />
+                  <div className="truncate font-mono text-base tracking-[2px] text-[#C9BCA9] sm:text-lg">
+                    ROLO 35 TRINITRON
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                   <div
                     className="h-[26px] w-[26px] rounded-full border-2"
                     style={{ backgroundImage: 'linear-gradient(150deg, #8A8175, #423C35)', borderColor: '#14100E' }}
@@ -243,11 +350,52 @@ export function ListagemSessoesPage() {
       )}
 
       <div className="mx-auto max-w-6xl px-5 py-10 sm:px-6">
-        <SectionTitle>O QUE TÁ PASSANDO?</SectionTitle>
+        {/* Título e controles em extremidades opostas da mesma faixa. `flex-wrap` em vez de
+            breakpoint: quando os dois não cabem lado a lado, o grupo de controles desce inteiro pra
+            linha de baixo mantendo o mesmo gap — não há largura mágica a acertar, quem decide é o
+            espaço que sobrou. */}
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          {/* `whitespace-nowrap` só a partir de sm: empilhado o título não divide linha com
+              ninguém, e travado em uma linha ele vazaria da tela num aparelho de 320px. */}
+          <SectionTitle className="shrink-0 sm:whitespace-nowrap">O QUE TÁ PASSANDO?</SectionTitle>
+
+          <div className="flex flex-wrap items-center gap-[14px]">
+            <CampoDeBusca
+              className="w-[240px] max-w-full"
+              valor={busca}
+              onBuscar={buscar}
+              label="Buscar sessão"
+              placeholder="Buscar filme…"
+            />
+            <SeletorDeOpcao
+              // 220px iguala gatilho e painel. Sem piso, "SALA 2 — DRIVE-IN" era cortado no botão
+              // enquanto aparecia inteiro na lista aberta logo abaixo.
+              className="w-[220px] max-w-full"
+              variante="filtro"
+              labelOculto
+              label="Filtrar por sala"
+              opcoes={opcoesDeSala}
+              valor={salaId}
+              placeholder="TODAS AS SALAS"
+              onEscolher={filtrarPorSala}
+            />
+          </div>
+        </div>
 
         {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
+        {/* Caixa tracejada no lugar da grade, não uma frase solta: o vazio ocupa o mesmo espaço que
+            o conteúdo ocuparia, então a tela não parece meio carregada. */}
         {estado === 'vazio' && (
-          <p className="mt-8 font-mono text-lg text-ink-950/60">Nenhuma sessão disponível no momento.</p>
+          <div className="mt-8 border-[3px] border-dashed border-[#C7B694] p-10 text-center">
+            <p className="font-mono text-xl text-[#6D655B]">
+              {busca || salaId ? 'Nenhum filme encontrado em cartaz.' : 'Nenhuma sessão disponível no momento.'}
+            </p>
+            {(busca || salaId) && (
+              <button type="button" onClick={limparFiltros} className={buttonClass('secondary', 'mt-5')}>
+                LIMPAR FILTROS
+              </button>
+            )}
+          </div>
         )}
         {estado === 'erro' && (
           <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
@@ -255,7 +403,14 @@ export function ListagemSessoesPage() {
           </p>
         )}
 
-        {(estado === 'erro' || estado === 'vazio') && (
+        {/* "Tentar novamente" só faz sentido quando a lista falhou. No vazio por filtro, o caminho
+            de saída é limpar o filtro — recarregar traria o mesmo nada. */}
+        {estado === 'erro' && (
+          <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary', 'mt-4')}>
+            TENTAR NOVAMENTE
+          </button>
+        )}
+        {estado === 'vazio' && !busca && !salaId && (
           <button type="button" onClick={() => setTentativa((atual) => atual + 1)} className={buttonClass('secondary', 'mt-4')}>
             TENTAR NOVAMENTE
           </button>
@@ -321,6 +476,10 @@ export function ListagemSessoesPage() {
               );
             })}
           </div>
+        )}
+
+        {estado === 'pronto' && (
+          <Paginacao rotulo="sessões" pagina={pagina} totalPaginas={totalPaginas} onIr={irPara} />
         )}
       </div>
     </PageShell>

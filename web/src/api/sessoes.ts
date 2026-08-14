@@ -95,8 +95,45 @@ export function criarSessao(request: CriarSessaoRequest): Promise<Sessao> {
   });
 }
 
-export function listarSessoesPublicadas(): Promise<SessaoPublicada[]> {
-  return apiFetch<SessaoPublicada[]>('/api/sessoes');
+export interface Pagina<T> {
+  conteudo: T[];
+  pagina: number;
+  tamanho: number;
+  total: number;
+  totalPaginas: number;
+}
+
+export interface ConsultaSessoes {
+  /** Casa com título do filme, nome da sala e data/hora escrita como no Brasil ("14/08", "20:30"). */
+  busca?: string;
+  /** Filtra por filme. O detalhe do filme depende disto — sem ele só acharia o que caísse na página 1. */
+  tmdbId?: number;
+  /** Filtra por sala. */
+  salaId?: number;
+  pagina?: number;
+  tamanho?: number;
+}
+
+export function listarSessoesPublicadas(consulta: ConsultaSessoes = {}): Promise<Pagina<SessaoPublicada>> {
+  const parametros = new URLSearchParams();
+  const busca = consulta.busca?.trim();
+  if (busca) {
+    parametros.set('q', busca);
+  }
+  if (consulta.tmdbId !== undefined) {
+    parametros.set('tmdbId', String(consulta.tmdbId));
+  }
+  if (consulta.salaId !== undefined) {
+    parametros.set('salaId', String(consulta.salaId));
+  }
+  if (consulta.pagina !== undefined) {
+    parametros.set('pagina', String(consulta.pagina));
+  }
+  if (consulta.tamanho !== undefined) {
+    parametros.set('tamanho', String(consulta.tamanho));
+  }
+  const query = parametros.toString();
+  return apiFetch<Pagina<SessaoPublicada>>(`/api/sessoes${query ? `?${query}` : ''}`);
 }
 
 export function listarMinhasSessoes(): Promise<SessaoGestao[]> {

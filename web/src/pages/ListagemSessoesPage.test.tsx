@@ -28,6 +28,20 @@ const sessaoEsgotada: SessaoPublicada = {
   esgotada: true,
 };
 
+function pagina(
+  conteudo: SessaoPublicada[],
+  extras: Partial<sessoesApi.Pagina<SessaoPublicada>> = {},
+): sessoesApi.Pagina<SessaoPublicada> {
+  return {
+    conteudo,
+    pagina: 0,
+    tamanho: 12,
+    total: conteudo.length,
+    totalPaginas: conteudo.length === 0 ? 0 : 1,
+    ...extras,
+  };
+}
+
 function renderPagina() {
   return render(
     <MemoryRouter>
@@ -43,6 +57,47 @@ function grade() {
 describe('ListagemSessoesPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Sem este stub a página chamaria a rede de verdade pra montar o filtro de sala. Ela trata a
+    // falha e segue, então o teste passaria mesmo assim — mas com uma requisição solta a cada caso.
+    vi.spyOn(sessoesApi, 'listarSalas').mockResolvedValue([
+      { id: 1, nome: 'Sala 1 — Centro', capacidade: 120 },
+      { id: 2, nome: 'Sala 2 — Drive-in', capacidade: 80 },
+    ]);
+  });
+
+  it('filters by sala on the server and drops the page when the filter changes', async () => {
+    const listarSpy = vi
+      .spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValue(pagina([sessaoComVaga], { total: 30, totalPaginas: 3 }));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+
+    await user.click(screen.getByRole('button', { name: /página 2/i }));
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ pagina: 1 }));
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+
+    // Página volta a zero junto com o filtro: manter a 2 costuma cair num vazio que parece
+    // "essa sala não tem sessão" quando o resultado filtrado tem uma página só.
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ salaId: 2, pagina: 0 }));
+  });
+
+  it('offers a way back to every sala after filtering', async () => {
+    const listarSpy = vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga]));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /todas as salas/i }));
+
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.not.objectContaining({ salaId: expect.anything() }));
   });
 
   it('shows a loading state while sessions are being fetched', async () => {
@@ -54,7 +109,7 @@ describe('ListagemSessoesPage', () => {
   });
 
   it('shows an empty-list message when there are no sessions', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([]);
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([]));
 
     renderPagina();
 
@@ -70,7 +125,7 @@ describe('ListagemSessoesPage', () => {
   });
 
   it('lists movies with vaga and esgotada, keeping the esgotada one visible', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoComVaga, sessaoEsgotada]);
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga, sessaoEsgotada]));
 
     renderPagina();
 
@@ -81,7 +136,7 @@ describe('ListagemSessoesPage', () => {
   });
 
   it('does not show the esgotada badge for a movie with available seats', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoComVaga]);
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga]));
 
     renderPagina();
 
@@ -89,11 +144,38 @@ describe('ListagemSessoesPage', () => {
     expect(screen.queryByText('Esgotada')).not.toBeInTheDocument();
   });
 
+  // Paginação de verdade é decidida no servidor: sem os parâmetros na requisição, a barra
+  // navegaria entre páginas que ninguém pediu e a tela mostraria sempre o mesmo conteúdo.
+  it('asks the server for the page, not the whole list', async () => {
+    const listarSpy = vi
+      .spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValue(pagina([sessaoComVaga], { totalPaginas: 3, total: 30 }));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+
+    expect(listarSpy).toHaveBeenCalledWith(expect.objectContaining({ pagina: 0, tamanho: 12 }));
+
+    await user.click(screen.getByRole('button', { name: /página 2/i }));
+
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ pagina: 1 }));
+  });
+
+  it('hides the pagination bar when everything fits in one page', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga]));
+
+    renderPagina();
+
+    await screen.findByTestId('grade-filmes');
+    expect(screen.queryByRole('navigation', { name: /paginação/i })).not.toBeInTheDocument();
+  });
+
   it('retries loading the sessions when the retry button is clicked', async () => {
     const listarSpy = vi
       .spyOn(sessoesApi, 'listarSessoesPublicadas')
       .mockRejectedValueOnce(new Error('falha de rede'))
-      .mockResolvedValueOnce([sessaoComVaga]);
+      .mockResolvedValueOnce(pagina([sessaoComVaga]));
     const user = userEvent.setup();
 
     renderPagina();

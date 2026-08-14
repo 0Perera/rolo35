@@ -33,12 +33,14 @@ export function FilmeDetalhePage() {
   useEffect(() => {
     let ativo = true;
     setEstado('loading');
-    listarSessoesPublicadas()
+    // Filtra no servidor, não aqui: desde que a listagem virou paginada, pegar só a primeira
+    // página e filtrar em memória faria todo filme fora dela virar "não encontrado".
+    listarSessoesPublicadas({ tmdbId: Number(tmdbId), tamanho: 50 })
       .then((resultado) => {
         if (!ativo) {
           return;
         }
-        const doFilme = resultado.filter((sessao) => String(sessao.tmdbId) === tmdbId);
+        const doFilme = resultado.conteudo;
         setSessoesDoFilme(doFilme);
         setEstado(doFilme.length === 0 ? 'nao-encontrado' : 'pronto');
       })
