@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { SessaoExpiradaError } from '../api/client';
 import { listarMeusIngressos, type IngressoResumo } from '../api/ingressos';
 import { AcoesDoIngresso } from '../components/AcoesDoIngresso';
 import { buttonClass } from '../components/Button';
 import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
+import { Paginacao } from '../components/Paginacao';
 import { SectionTitle } from '../components/SectionTitle';
 import { SeloStatusIngresso } from '../components/SeloStatusIngresso';
 import { useSessao } from '../lib/sessao';
@@ -18,6 +19,8 @@ import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
  * quando o que faltava era login.
  */
 type Estado = 'loading' | 'sem-sessao' | 'vazio' | 'erro' | 'expirada' | 'pronto';
+
+const TAMANHO_PAGINA = 12;
 
 function assentoDe(ingresso: IngressoResumo): string {
   return `${ingresso.assentoFileira}${ingresso.assentoNumero}`;
@@ -96,7 +99,13 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
 }
 
 export function MeusIngressosPage() {
+  // A página vive na URL, como na vitrine: o cliente que compartilha o link ou volta pelo histórico
+  // do navegador cai onde estava, e não na primeira página.
+  const [parametros, setParametros] = useSearchParams();
+  const pagina = Number(parametros.get('pagina') ?? '0');
+
   const [ingressos, setIngressos] = useState<IngressoResumo[]>([]);
+  const [totalPaginas, setTotalPaginas] = useState(0);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
   const [abertoId, setAbertoId] = useState<string | null>(null);
@@ -111,14 +120,15 @@ export function MeusIngressosPage() {
     }
     let ativo = true;
     setEstado('loading');
-    listarMeusIngressos()
+    listarMeusIngressos({ pagina, tamanho: TAMANHO_PAGINA })
       .then((resultado) => {
         if (!ativo) {
           return;
         }
-        setIngressos(resultado);
+        setIngressos(resultado.conteudo);
+        setTotalPaginas(resultado.totalPaginas);
         setAbertoId(null);
-        setEstado(resultado.length === 0 ? 'vazio' : 'pronto');
+        setEstado(resultado.conteudo.length === 0 ? 'vazio' : 'pronto');
       })
       .catch((erro: unknown) => {
         if (ativo) {
@@ -131,7 +141,13 @@ export function MeusIngressosPage() {
     // `token` entra nas dependências pra carteira se recarregar sozinha quando o `apiFetch`
     // derruba a sessão numa outra aba — sem isso a tela ficaria mostrando ingressos de uma sessão
     // que já não vale.
-  }, [tentativa, token]);
+  }, [tentativa, token, pagina]);
+
+  function irPara(novaPagina: number) {
+    const proximos = new URLSearchParams(parametros);
+    proximos.set('pagina', String(novaPagina));
+    setParametros(proximos);
+  }
 
   const aberto = ingressos.find((ingresso) => ingresso.id === abertoId) ?? null;
 
@@ -202,11 +218,16 @@ export function MeusIngressosPage() {
         )}
 
         {estado === 'pronto' && !aberto && (
-          <ul className="mt-8 flex flex-col gap-5">
-            {ingressos.map((ingresso) => (
-              <LinhaIngresso key={ingresso.id} ingresso={ingresso} onAbrir={() => setAbertoId(ingresso.id)} />
-            ))}
-          </ul>
+          <>
+            <ul className="mt-8 flex flex-col gap-5">
+              {ingressos.map((ingresso) => (
+                <LinhaIngresso key={ingresso.id} ingresso={ingresso} onAbrir={() => setAbertoId(ingresso.id)} />
+              ))}
+            </ul>
+            {/* Fora do canhoto aberto: lá a lista não está na tela, e uma barra de páginas sem
+                lista pra paginar só confunde. */}
+            <Paginacao pagina={pagina} totalPaginas={totalPaginas} onIr={irPara} rotulo="ingressos" />
+          </>
         )}
       </div>
     </PageShell>

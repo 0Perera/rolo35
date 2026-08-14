@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MeusIngressosPage } from './MeusIngressosPage';
 import * as ingressosApi from '../api/ingressos';
 import type { IngressoResumo } from '../api/ingressos';
+import type { Pagina } from '../api/sessoes';
 import { SessaoExpiradaError } from '../api/client';
 
 const ingresso: IngressoResumo = {
@@ -18,6 +19,20 @@ const ingresso: IngressoResumo = {
   dataHora: '2030-01-01T20:00:00',
   codigo: 'abc-123.assinatura',
 };
+
+function paginaDe(
+  conteudo: IngressoResumo[],
+  extras: Partial<Pagina<IngressoResumo>> = {},
+): Pagina<IngressoResumo> {
+  return {
+    conteudo,
+    pagina: 0,
+    tamanho: 12,
+    total: conteudo.length,
+    totalPaginas: conteudo.length === 0 ? 0 : 1,
+    ...extras,
+  };
+}
 
 function renderDeslogado() {
   return render(
@@ -49,7 +64,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('shows an empty state with a link to the sessões when the client has no ingressos', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([]));
 
     renderPage();
 
@@ -93,8 +108,35 @@ describe('MeusIngressosPage', () => {
     expect(listar).not.toHaveBeenCalled();
   });
 
+  // Carteira sem paginação cresce sem limite: o histórico só aumenta, e cada linha custa um código
+  // assinado no servidor. A página tem que ser decidida lá, não recortada aqui.
+  it('asks the server for one page of the wallet, not the whole history', async () => {
+    const listarSpy = vi
+      .spyOn(ingressosApi, 'listarMeusIngressos')
+      .mockResolvedValue(paginaDe([ingresso], { total: 30, totalPaginas: 3 }));
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText('Clube da Luta');
+
+    expect(listarSpy).toHaveBeenCalledWith(expect.objectContaining({ pagina: 0, tamanho: 12 }));
+
+    await user.click(screen.getByRole('button', { name: /página 2/i }));
+
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ pagina: 1 }));
+  });
+
+  it('hides the pagination bar when the whole wallet fits in one page', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
+
+    renderPage();
+
+    await screen.findByText('Clube da Luta');
+    expect(screen.queryByRole('navigation', { name: /paginação/i })).not.toBeInTheDocument();
+  });
+
   it('renders each ingresso with session title, sala and assento', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
@@ -105,7 +147,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('opens the canhoto with the signed code and its QR', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
@@ -119,7 +161,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('goes back to the list from the canhoto', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
@@ -131,7 +173,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('copies the public link when sharing', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 
@@ -152,7 +194,7 @@ describe('MeusIngressosPage', () => {
   // o dedo é inviável, e é no celular que o cliente abre o ingresso — o botão é a única forma
   // prática de levar o código pra digitação manual na portaria.
   it('copies the signed code itself, not the public link', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 
@@ -170,7 +212,7 @@ describe('MeusIngressosPage', () => {
   // implementado pelo jsdom. O que não pode acontecer é o clique não dizer nada: antes o erro era
   // engolido e o usuário ficava sem saber se copiou.
   it('says out loud when copying is not possible instead of failing silently', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
 
     renderPage();

@@ -3,12 +3,15 @@ package br.com.rolo35.api.ingressos.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.Paginacao;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.ingressos.Ingresso;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.StatusIngresso;
@@ -26,6 +29,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -107,26 +113,45 @@ class IngressoServiceTest {
         setUp();
         stubCliente();
         UUID ingressoId = UUID.randomUUID();
-        given(ingressoRepository.buscarPorCliente(CLIENTE_ID)).willReturn(List.of(projecao(ingressoId)));
+        given(ingressoRepository.buscarPorCliente(eq(CLIENTE_ID), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(projecao(ingressoId))));
         given(codigoIngressoService.gerar(ingressoId)).willReturn("codigo-gerado");
 
-        List<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL);
+        PaginaDto<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL, 0, 12);
 
-        assertThat(resultado).hasSize(1);
-        assertThat(resultado.get(0).id()).isEqualTo(ingressoId);
-        assertThat(resultado.get(0).codigo()).isEqualTo("codigo-gerado");
-        assertThat(resultado.get(0).status()).isEqualTo(StatusIngresso.VALIDO);
+        assertThat(resultado.conteudo()).hasSize(1);
+        assertThat(resultado.conteudo().get(0).id()).isEqualTo(ingressoId);
+        assertThat(resultado.conteudo().get(0).codigo()).isEqualTo("codigo-gerado");
+        assertThat(resultado.conteudo().get(0).status()).isEqualTo(StatusIngresso.VALIDO);
+    }
+
+    // Teto de servidor: sem ele, `tamanho=1000000` faria a carteira assinar o histórico inteiro a
+    // cada abertura — o custo que a paginação existe pra evitar.
+    @Test
+    void listarMinhasLimitaTamanhoDePaginaPedidoPeloCliente() {
+        setUp();
+        stubCliente();
+        given(ingressoRepository.buscarPorCliente(eq(CLIENTE_ID), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of()));
+
+        ingressoService.listarMinhas(CLIENTE_EMAIL, 0, 1_000_000);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(ingressoRepository).buscarPorCliente(eq(CLIENTE_ID), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_MAXIMO);
     }
 
     @Test
     void listarMinhasDevolveListaVaziaQuandoClienteNaoTemIngresso() {
         setUp();
         stubCliente();
-        given(ingressoRepository.buscarPorCliente(CLIENTE_ID)).willReturn(List.of());
+        given(ingressoRepository.buscarPorCliente(eq(CLIENTE_ID), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of()));
 
-        List<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL);
+        PaginaDto<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL, 0, 12);
 
-        assertThat(resultado).isEmpty();
+        assertThat(resultado.conteudo()).isEmpty();
+        assertThat(resultado.total()).isZero();
     }
 
     @Test

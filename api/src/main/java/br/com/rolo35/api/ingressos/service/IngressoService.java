@@ -2,6 +2,8 @@ package br.com.rolo35.api.ingressos.service;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.Paginacao;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.ingressos.Ingresso;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.dto.IngressoPublicoDto;
@@ -38,15 +40,20 @@ public class IngressoService {
         this.codigoIngressoService = codigoIngressoService;
     }
 
-    public List<IngressoResumoDto> listarMinhas(String clienteEmail) {
+    /**
+     * Carteira paginada. O código assinado de cada ingresso é gerado por linha devolvida, então
+     * página sem teto significaria assinar a carteira inteira a cada abertura da tela — o custo
+     * cresce com o histórico do cliente, que só aumenta.
+     */
+    public PaginaDto<IngressoResumoDto> listarMinhas(String clienteEmail, int pagina, int tamanho) {
         Usuario cliente =
                 usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
-        return ingressoRepository.buscarPorCliente(cliente.getId()).stream()
-                .map(p -> new IngressoResumoDto(
+        return PaginaDto.de(
+                ingressoRepository.buscarPorCliente(cliente.getId(), Paginacao.de(pagina, tamanho)),
+                p -> new IngressoResumoDto(
                         p.getId(), p.getStatus(), p.getAssentoFileira(), p.getAssentoNumero(),
                         p.getSessaoTitulo(), p.getSessaoPosterUrl(), p.getSalaNome(), p.getDataHora(),
-                        codigoIngressoService.gerar(p.getId())))
-                .toList();
+                        codigoIngressoService.gerar(p.getId())));
     }
 
     // Assinatura checada antes de qualquer consulta ao banco (AC5, AD-8): um código com HMAC

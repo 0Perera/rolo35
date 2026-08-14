@@ -1,5 +1,6 @@
 package br.com.rolo35.api.ingressos;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.rolo35.api.auth.JwtService;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.config.SecurityConfig;
 import br.com.rolo35.api.ingressos.controller.IngressoController;
 import br.com.rolo35.api.ingressos.dto.IngressoPublicoDto;
@@ -36,7 +38,8 @@ class IngressoSecurityTest {
 
     @Test
     void minhasReturns200ForClienteToken() throws Exception {
-        given(ingressoService.listarMinhas(anyString())).willReturn(List.of());
+        given(ingressoService.listarMinhas(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 12, 0, 0));
         String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
 
         mockMvc.perform(get("/api/ingressos/minhas").header("Authorization", "Bearer " + token))
