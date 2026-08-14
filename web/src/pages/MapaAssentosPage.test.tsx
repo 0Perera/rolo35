@@ -64,9 +64,15 @@ const mapaComSeisLivres: MapaAssentos = {
   ],
 };
 
+function entrarComo(papel: string) {
+  localStorage.setItem('rolo35.token', 'token-abc');
+  localStorage.setItem('rolo35.papel', papel);
+}
+
 describe('MapaAssentosPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it('shows a loading state while the map is being fetched', () => {
@@ -256,11 +262,11 @@ describe('MapaAssentosPage', () => {
     expect(buscarSpy).toHaveBeenCalledTimes(1);
   });
 
-  it.each([401, 403])('sends the visitor to the login screen with the pending purchase on a %i', async (status) => {
+  it('sends the visitor to the login screen with the pending purchase on a 401', async () => {
     vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapaComSeisLivres);
     const reservarSpy = vi
       .spyOn(reservasApi, 'reservarAssentos')
-      .mockRejectedValue(new ApiRequestError('não autenticado', status));
+      .mockRejectedValue(new ApiRequestError('não autenticado', 401));
     const user = userEvent.setup();
 
     renderPage();
@@ -270,6 +276,45 @@ describe('MapaAssentosPage', () => {
 
     expect(await screen.findByText('login pra retomar /sessoes/5/assentos com assentos 1,2')).toBeInTheDocument();
     expect(reservarSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // Quem já está logado com o papel errado não tem o que fazer no login: a credencial é a mesma e a
+  // compra continuaria barrada. O aviso fica na tela, com a seleção intacta.
+  it.each(['ORGANIZADOR', 'PORTARIA'])(
+    'tells a logged-in %s to use a client account instead of bouncing to the login',
+    async (papel) => {
+      entrarComo(papel);
+      vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
+      const reservarSpy = vi.spyOn(reservasApi, 'reservarAssentos');
+      const user = userEvent.setup();
+
+      renderPage();
+      const assento = await screen.findByLabelText('Assento A1 — livre');
+      await user.click(assento);
+      await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/conta de cliente/i);
+      expect(screen.queryByText(/login pra retomar/i)).not.toBeInTheDocument();
+      // Nem chega a sair requisição: o 403 é certo, e a resposta não acrescenta nada ao aviso.
+      expect(reservarSpy).not.toHaveBeenCalled();
+      expect(assento).toHaveAttribute('aria-pressed', 'true');
+    },
+  );
+
+  // Rede de segurança pro papel que o front acha que é CLIENTE mas a API recusa (token de outro
+  // papel, storage adulterado): mesmo aviso, não um desvio calado pro login.
+  it('shows the client-account warning, not the login screen, on a 403 from the API', async () => {
+    entrarComo('CLIENTE');
+    vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
+    vi.spyOn(reservasApi, 'reservarAssentos').mockRejectedValue(new ApiRequestError('acesso negado', 403));
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByLabelText('Assento A1 — livre'));
+    await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/conta de cliente/i);
+    expect(screen.queryByText(/login pra retomar/i)).not.toBeInTheDocument();
   });
 
   it('restores the seats chosen before the login, dropping the ones taken meanwhile', async () => {

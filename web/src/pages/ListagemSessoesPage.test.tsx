@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -116,6 +116,72 @@ describe('ListagemSessoesPage', () => {
     expect(await screen.findByText(/nenhuma sessão disponível/i)).toBeInTheDocument();
   });
 
+  // O aparelho é o cenário da página, não um resultado de busca: desmontá-lo derrubava a altura do
+  // documento de uns 2000px pra uns 400px e devolvia o pulo de rolagem que o resto da tela já
+  // evitava. Uma TV de tubo sem sinal mostra chuvisco — ela não some da sala.
+  it('keeps the TV on the air showing SEM SINAL when the sala has no sessions', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValueOnce(pagina([sessaoComVaga]))
+      .mockResolvedValueOnce(pagina([]));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('hero-vitrine');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+
+    const tv = within(await screen.findByTestId('hero-vitrine'));
+    expect(await tv.findByText(/sem sinal/i)).toBeInTheDocument();
+    // Dizer qual sala ficou vazia, não só que deu vazio: sem o nome, o visitante não sabe qual
+    // filtro desfazer quando busca e sala estão ligadas ao mesmo tempo.
+    expect(tv.getByText(/drive-in/i)).toBeInTheDocument();
+    expect(tv.getByRole('button', { name: /limpar filtros/i })).toBeInTheDocument();
+  });
+
+  // Sair do vazio recarrega com a lista ainda vazia: sem resultado e sem `estado === 'vazio'`, o
+  // aparelho caía no vão entre os dois e a tela inteira piscava no clique de LIMPAR FILTROS. Uma
+  // vez no ar, o tubo não desliga mais — só troca o que mostra.
+  it('keeps the TV mounted while clearing the filters reloads the catalogue', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValueOnce(pagina([sessaoComVaga]))
+      .mockResolvedValueOnce(pagina([]))
+      .mockReturnValueOnce(new Promise(() => {}));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('hero-vitrine');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+    await screen.findByText(/sem sinal/i);
+
+    await user.click(screen.getByRole('button', { name: /limpar filtros/i }));
+
+    expect(screen.getByTestId('hero-vitrine')).toBeInTheDocument();
+  });
+
+  // Mesmo vão, outra saída: a falha também desmontava o aparelho e derrubava a altura da página.
+  it('reports a failed load inside the tube instead of switching the TV off', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockRejectedValue(new Error('falha de rede'));
+
+    renderPagina();
+
+    const tv = within(await screen.findByTestId('hero-vitrine'));
+    expect(tv.getByRole('alert')).toHaveTextContent(/não foi possível carregar as sessões/i);
+  });
+
+  // Com o vazio dentro do tubo, a caixa tracejada abaixo repetia a mesma frase e o mesmo botão.
+  it('does not repeat the empty state below the TV', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([]));
+
+    renderPagina();
+    await screen.findByText(/sem sinal/i);
+
+    expect(screen.getAllByRole('button', { name: /tentar novamente/i })).toHaveLength(1);
+    expect(screen.queryByTestId('grade-filmes')).not.toBeInTheDocument();
+  });
+
   it('shows an error message when sessions fail to load', async () => {
     vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockRejectedValue(new Error('falha de rede'));
 
@@ -223,6 +289,37 @@ describe('ListagemSessoesPage', () => {
     await user.click(await screen.findByRole('option', { name: /drive-in/i }));
 
     expect(screen.getByTestId('grade-filmes')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  // Escurecer o hero junto com a grade fazia a maior superfície escura da página piscar a cada
+  // tecla digitada e a cada troca de sala. O aparelho é moldura: ele não é o resultado que mudou.
+  it('dims only the grid while refreshing, never the TV', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValueOnce(pagina([sessaoComVaga]))
+      .mockReturnValueOnce(new Promise(() => {}));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+
+    expect(screen.getByTestId('grade-filmes').className).toMatch(/opacity-/);
+    expect(screen.getByTestId('hero-vitrine').className).not.toMatch(/opacity-/);
+  });
+
+  // Trocar o `src` seco deixava o tubo preto enquanto o pôster novo baixava — o "flash" no meio da
+  // troca de canal. Ele entra em fade só depois de carregado.
+  it('only reveals the hero poster once it has loaded', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga]));
+
+    renderPagina();
+    const poster = await screen.findByTestId('hero-poster');
+
+    expect(poster.className).toMatch(/opacity-0/);
+    fireEvent.load(poster);
+    expect(poster.className).not.toMatch(/opacity-0/);
   });
 
   // A falha das salas era engolida por um `catch` vazio pra não derrubar a vitrine — certo em não
