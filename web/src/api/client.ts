@@ -2,8 +2,11 @@ import { lerSessao, limparSessao } from '../lib/sessao';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
-// Cold start do plano free do Render leva ~1min; timeout com folga evita
-// confundir isso com erro de rede (AD-2).
+// Folga deliberada, não estimativa de latência: a API sobe no plano `starter` do Render, que não
+// dorme, então em operação normal nenhuma chamada chega perto disto. O teto existe pro que sobra —
+// rede ruim e a janela de um redeploy — e é generoso porque cortar cedo demais transforma espera em
+// erro falso, que é o pior dos dois (AD-2). No plano free ele era pequeno demais: 90s contra 179s
+// de boot medidos a 0.1 vCPU, ou seja, a primeira chamada depois de cada soneca falhava sozinha.
 const REQUEST_TIMEOUT_MS = 90_000;
 
 export class ApiRequestError extends Error {
