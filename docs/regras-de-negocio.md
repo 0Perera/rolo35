@@ -34,8 +34,10 @@ implementadas estão marcadas explicitamente como pendentes.
   não herda permissão por esquecimento (`SecurityConfig.java:40-42`,
   comentário no código).
 - **Superfície pública é allowlist explícita, não por prefixo amplo**:
-  `POST /api/auth/login`, `GET /actuator/health`, `GET /api/sessoes` e
-  `GET /api/sessoes/{id}/mapa-assentos` são as únicas rotas sem autenticação;
+  `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`,
+  `GET /api/sessoes` e `GET /api/sessoes/{id}/mapa-assentos` são as rotas sem
+  autenticação (`POST /api/auth/cadastro` é público porque quem cria conta ainda
+  não tem token, e a Story 1.3 decidiu não gatear a escolha de papel);
   o matcher do mapa de assentos é por path exato (`/api/sessoes/*/mapa-assentos`)
   para não vazar `GET /api/sessoes/{id}` (gestão, só ORGANIZADOR) nem
   `GET /api/sessoes/minhas` (`SecurityConfig.java:48-57`).

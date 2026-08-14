@@ -292,6 +292,7 @@ local: `http://localhost:8080`. Autenticação via `Authorization: Bearer <token
 | Método | Rota | Papel | O que faz |
 |---|---|---|---|
 | `POST` | `/api/auth/login` | público | Autentica e devolve token + papel |
+| `POST` | `/api/auth/cadastro` | público | Cria conta com o papel escolhido e devolve token + papel |
 | `GET` | `/api/filmes/buscar?query=` | autenticado | Busca filmes no TMDb via proxy |
 | `GET` | `/api/salas` | autenticado | Salas disponíveis para criar sessão |
 | `POST` | `/api/sessoes` | `ORGANIZADOR` | Cria sessão (valida data futura e conflito de sala) |
@@ -447,7 +448,7 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | Três papéis fixos por conta (`ORGANIZADOR`, `CLIENTE`, `PORTARIA`), garantidos por `CHECK` no banco | Papel é dado de domínio, não string livre; o `CHECK` impede papel inventado mesmo por escrita direta no banco |
 | JWT assinado (HMAC) carregando `sub` e `papel`, com expiração de 8h | Stateless: a API não guarda sessão, o que casa com o deploy em serviço free que reinicia sozinho |
 | **Papel checado por `@PreAuthorize` no método do controller**, não por matcher de path | Uma rota nova sem anotação simplesmente não passa. Com autorização por prefixo de path, esquecer um matcher significa herdar permissão por acidente — o modo de falha é invertido, e isso importa mais que a economia de anotações |
-| Superfície pública é **allow-list explícita**: `POST /api/auth/login`, `GET /actuator/health`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos`, `GET /api/ingressos/{codigo}` | Liberar `/api/sessoes/**` de uma vez vazaria `GET /api/sessoes/{id}` (gestão) e `/api/sessoes/minhas`. O matcher do mapa é por path exato justamente por isso |
+| Superfície pública é **allow-list explícita**: `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos`, `GET /api/ingressos/{codigo}` | Liberar `/api/sessoes/**` de uma vez vazaria `GET /api/sessoes/{id}` (gestão) e `/api/sessoes/minhas`. O matcher do mapa é por path exato justamente por isso |
 | Login com e-mail inexistente roda BCrypt contra um hash dummy antes de recusar | Sem isso, o tempo de resposta diferencia "e-mail não existe" de "senha errada" — enumeração de contas por *timing* |
 | E-mail é normalizado no service (`trim` + `toLowerCase(Locale.ROOT)`) antes do lookup | `=` no Postgres é case-sensitive: sem isso, o teclado do celular que capitaliza a primeira letra derruba o login com "credencial inválida". `Locale.ROOT` porque em turco `"I".toLowerCase()` vira `ı` e quebraria e-mail com I maiúsculo. No service, não no front, porque a rota atende qualquer cliente HTTP |
 | Todas as demais rotas exigem autenticação (`anyRequest().authenticated()`) | Default seguro: o que não foi liberado explicitamente está fechado |
