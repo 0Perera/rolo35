@@ -184,6 +184,7 @@ local.
 | `V8__backstops_ingressos.sql` | FK composta de `ingressos` contra `assento_sessao` e `UNIQUE (reserva_id, assento_id)` |
 | `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3` |
 | `V10__seed_mais_sessoes.sql` | Mais 5 sessões publicadas, com dois filmes em mais de um horário |
+| `V11__codigo_curto_ingresso.sql` | Coluna `codigo_curto` do ingresso, única e indexada |
 
 - `spring.jpa.hibernate.ddl-auto=validate`: o Hibernate **nunca** cria nem altera tabela. O schema
   é do Flyway; a aplicação só valida se o mapeamento casa.
@@ -621,6 +622,10 @@ Dois detalhes que só aparecem lendo o código:
   controle de acesso: o front só decide o que desenhar.
 - **Mapa de assentos não revela identidade**: mostra `LIVRE`/`RESERVADO`/`VENDIDO`, nunca quem
   reservou.
+- **Código curto do ingresso é credencial de balcão, não de internet**: 8 caracteres Base32
+  Crockford (40 bits, sem assinatura) valem exclusivamente em `POST /api/portaria/validacoes`, que
+  exige papel `PORTARIA` — força bruta ali pressupõe uma conta de operador. O QR, o link público e
+  a leitura por câmera continuam usando só o código assinado por HMAC.
 - **Respostas que não viram oráculo**: reserva de outro cliente ≡ reserva inexistente; ingresso
   inexistente ≡ assinatura inválida; login de e-mail inexistente equalizado em tempo com senha
   errada.

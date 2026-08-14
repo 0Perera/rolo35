@@ -40,6 +40,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class IngressoServiceTest {
 
+    /**
+     * Código curto de fixture. A emissão real usa SecureRandom; aqui o valor só precisa ser
+     * único (a coluna é UNIQUE) e caber no alfabeto Base32 Crockford de 8 caracteres.
+     */
+    private static String codigoCurtoDeTeste() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
     private static final String CLIENTE_EMAIL = "cliente1@rolo35.com.br";
     private static final Long CLIENTE_ID = 7L;
 
@@ -76,6 +84,10 @@ class IngressoServiceTest {
         return new IngressoResumoProjection() {
             public UUID getId() {
                 return id;
+            }
+
+            public String getCodigoCurto() {
+                return "7ZK3QW9M";
             }
 
             public StatusIngresso getStatus() {
@@ -122,6 +134,8 @@ class IngressoServiceTest {
         assertThat(resultado.conteudo()).hasSize(1);
         assertThat(resultado.conteudo().get(0).id()).isEqualTo(ingressoId);
         assertThat(resultado.conteudo().get(0).codigo()).isEqualTo("codigo-gerado");
+        // O curto vem da coluna, não é derivado do id nem regerado a cada leitura.
+        assertThat(resultado.conteudo().get(0).codigoCurto()).isEqualTo("7ZK3QW9M");
         assertThat(resultado.conteudo().get(0).status()).isEqualTo(StatusIngresso.VALIDO);
     }
 
@@ -186,7 +200,7 @@ class IngressoServiceTest {
         String codigo = id + ".assinatura-valida";
         given(codigoIngressoService.extrairId(codigo)).willReturn(Optional.of(id));
         given(codigoIngressoService.validar(id, codigo)).willReturn(true);
-        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, StatusIngresso.VALIDO, null, Instant.now());
+        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findById(id)).willReturn(Optional.of(ingresso));
         Sessao sessao = Sessao.builder()
                 .id(1L)
@@ -221,7 +235,7 @@ class IngressoServiceTest {
         String codigo = id + ".assinatura-valida";
         given(codigoIngressoService.extrairId(codigo)).willReturn(Optional.of(id));
         given(codigoIngressoService.validar(id, codigo)).willReturn(true);
-        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, StatusIngresso.VALIDO, null, Instant.now());
+        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findById(id)).willReturn(Optional.of(ingresso));
         Sessao sessao = Sessao.builder()
                 .id(1L)

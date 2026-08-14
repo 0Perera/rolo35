@@ -256,9 +256,9 @@ class PortariaServiceTest {
         given(sessaoRepository.findById(SESSAO_ID)).willReturn(Optional.of(sessao(SESSAO_ID, 1L)));
     }
 
-    private LeituraTurnoProjection leitura(UUID ingressoId, String fileira, int numero) {
+    private LeituraTurnoProjection leitura(String codigoCurto, String fileira, int numero) {
         LeituraTurnoProjection projecao = mock(LeituraTurnoProjection.class);
-        given(projecao.getIngressoId()).willReturn(ingressoId);
+        given(projecao.getCodigoCurto()).willReturn(codigoCurto);
         given(projecao.getAssentoFileira()).willReturn(fileira);
         given(projecao.getAssentoNumero()).willReturn(numero);
         given(projecao.getValidadoEm()).willReturn(LocalDateTime.now());
@@ -284,23 +284,23 @@ class PortariaServiceTest {
     }
 
     // O código completo é credencial assinada (AD-8). Se o painel listasse ele inteiro, a tela de
-    // conferência viraria uma fonte de ingressos válidos pra quem olhasse por cima do ombro.
+    // conferência viraria uma fonte de ingressos válidos pra quem olhasse por cima do ombro. O
+    // curto que aparece aqui é sempre de ingresso já UTILIZADO — reler ele devolve JA_UTILIZADO.
     @Test
-    void painelExpoeApenasPrefixoDoCodigoNuncaOCodigoAssinadoInteiro() {
+    void painelExpoeOCodigoCurtoDoIngressoNuncaOCodigoAssinado() {
         setUp();
         stubTurnoAtivo();
-        UUID ingressoId = UUID.fromString("a3f91c7e-0000-4000-8000-000000000001");
         // Montado fora do given(): construir um mock dentro de uma cadeia de stubbing faz o
         // Mockito enxergar as duas stubagens como uma só e falhar com UnfinishedStubbing.
-        LeituraTurnoProjection leitura = leitura(ingressoId, "D", 7);
+        LeituraTurnoProjection leitura = leitura("7ZK3QW9M", "D", 7);
         given(ingressoRepository.buscarLeiturasDoTurno(eq(SESSAO_ID), any(Pageable.class)))
                 .willReturn(List.of(leitura));
 
         PainelTurnoDto painel = portariaService.painelDoTurno(PORTARIA_EMAIL);
 
         assertThat(painel.leituras()).hasSize(1);
-        assertThat(painel.leituras().get(0).codigoCurto()).isEqualTo("A3F91C");
-        assertThat(painel.leituras().get(0).codigoCurto()).doesNotContain(ingressoId.toString());
+        assertThat(painel.leituras().get(0).codigoCurto()).isEqualTo("7ZK3QW9M");
+        assertThat(painel.leituras().get(0).codigoCurto()).doesNotContain(".");
         assertThat(painel.leituras().get(0).assentoFileira()).isEqualTo("D");
         assertThat(painel.leituras().get(0).assentoNumero()).isEqualTo(7);
     }

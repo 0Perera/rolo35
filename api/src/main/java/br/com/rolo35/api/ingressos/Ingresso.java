@@ -33,6 +33,14 @@ public class Ingresso {
     @Column(name = "sessao_id", nullable = false)
     private Long sessaoId;
 
+    /**
+     * Código curto pra digitação manual na portaria. Não substitui o código assinado do QR — é um
+     * segundo caminho pro mesmo ingresso, e por ser curto vale só onde já existe autenticação de
+     * operador (ver {@code CodigoIngressoService}).
+     */
+    @Column(name = "codigo_curto", nullable = false)
+    private String codigoCurto;
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private StatusIngresso status;
@@ -48,6 +56,7 @@ public class Ingresso {
             Long reservaId,
             Long assentoId,
             Long sessaoId,
+            String codigoCurto,
             StatusIngresso status,
             LocalDateTime validatedAt,
             Instant createdAt) {
@@ -55,6 +64,7 @@ public class Ingresso {
         this.reservaId = reservaId;
         this.assentoId = assentoId;
         this.sessaoId = sessaoId;
+        this.codigoCurto = codigoCurto;
         this.status = status;
         this.validatedAt = validatedAt;
         this.createdAt = createdAt;

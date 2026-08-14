@@ -33,8 +33,8 @@ const reservaAtiva: ReservaCheckout = {
 const pagamentoAprovado: Pagamento = {
   status: 'CONFIRMADA',
   ingressos: [
-    { id: 'u-1', assentoId: 1, codigo: 'aaaa-1111.assinatura1' },
-    { id: 'u-2', assentoId: 2, codigo: 'bbbb-2222.assinatura2' },
+    { id: 'u-1', assentoId: 1, codigo: 'aaaa-1111.assinatura1', codigoCurto: '7ZK3QW9M' },
+    { id: 'u-2', assentoId: 2, codigo: 'bbbb-2222.assinatura2', codigoCurto: 'H4TN2XPB' },
   ],
 };
 
@@ -108,6 +108,23 @@ describe('PagamentoPage', () => {
     // URL pública — e aí o teste passaria sem o canhoto mostrar código nenhum.
     expect(screen.getByText(/CÓDIGO aaaa-1111\.assinatura1/)).toBeInTheDocument();
     expect(screen.getByText(/CÓDIGO bbbb-2222\.assinatura2/)).toBeInTheDocument();
+  });
+
+  // O plano B da câmera só serve se estiver no canhoto: sem ele impresso ali, ninguém tem o que
+  // ditar quando a leitura falha na porta.
+  it('prints the short code on each ticket, next to the QR', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);
+    const user = userEvent.setup();
+
+    renderPage();
+    await preencherCartao(user);
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    await screen.findByText(/ticket na mão/i);
+    expect(screen.getByText('7ZK3QW9M')).toBeInTheDocument();
+    expect(screen.getByText('H4TN2XPB')).toBeInTheDocument();
+    expect(screen.getAllByText(/ou dite o código/i)).toHaveLength(2);
   });
 
   // Aprovar e recusar trocam a tela sem trocar de rota, então RolarAoTrocarDeRota não age: sem

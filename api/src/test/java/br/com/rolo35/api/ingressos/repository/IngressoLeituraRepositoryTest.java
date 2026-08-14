@@ -38,6 +38,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 @SpringBootTest
 class IngressoLeituraRepositoryTest {
 
+    /**
+     * Código curto de fixture. A emissão real usa SecureRandom; aqui o valor só precisa ser
+     * único (a coluna é UNIQUE) e caber no alfabeto Base32 Crockford de 8 caracteres.
+     */
+    private static String codigoCurtoDeTeste() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
     private static final String CLIENTE_1 = "cliente1@rolo35.com.br";
     private static final String CLIENTE_2 = "cliente2@rolo35.com.br";
     private static final String ORGANIZADOR = "organizador@rolo35.com.br";
@@ -134,10 +142,8 @@ class IngressoLeituraRepositoryTest {
                 null, cliente2Id, sessao.getId(), StatusReserva.CONFIRMADA, Instant.now().truncatedTo(ChronoUnit.MICROS), null));
         reserva2Id = reserva2.getId();
 
-        ingressoRepository.save(new Ingresso(
-                null, reserva1.getId(), a1.getId(), sessao.getId(), StatusIngresso.VALIDO, null, Instant.now().truncatedTo(ChronoUnit.MICROS)));
-        ingressoRepository.save(new Ingresso(
-                null, reserva2.getId(), a2.getId(), sessao.getId(), StatusIngresso.VALIDO, null, Instant.now().truncatedTo(ChronoUnit.MICROS)));
+        ingressoRepository.save(new Ingresso(null, reserva1.getId(), a1.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now().truncatedTo(ChronoUnit.MICROS)));
+        ingressoRepository.save(new Ingresso(null, reserva2.getId(), a2.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now().truncatedTo(ChronoUnit.MICROS)));
 
         List<IngressoResumoProjection> resultado =
                 ingressoRepository.buscarPorCliente(cliente1Id, Pageable.unpaged()).getContent();
@@ -193,12 +199,9 @@ class IngressoLeituraRepositoryTest {
         // produz quando dois `save()` caem no mesmo microssegundo. Sem desempate estável, a mesma
         // linha pode voltar em duas páginas e outra sumir.
         Instant mesmoInstante = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        Ingresso primeiro = ingressoRepository.save(new Ingresso(
-                null, reserva1.getId(), a1.getId(), sessao.getId(), StatusIngresso.VALIDO, null, mesmoInstante));
-        Ingresso segundo = ingressoRepository.save(new Ingresso(
-                null, reserva1.getId(), a2.getId(), sessao.getId(), StatusIngresso.VALIDO, null, mesmoInstante));
-        ingressoRepository.save(new Ingresso(
-                null, reserva2.getId(), a3.getId(), sessao.getId(), StatusIngresso.VALIDO, null, mesmoInstante));
+        Ingresso primeiro = ingressoRepository.save(new Ingresso(null, reserva1.getId(), a1.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, mesmoInstante));
+        Ingresso segundo = ingressoRepository.save(new Ingresso(null, reserva1.getId(), a2.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, mesmoInstante));
+        ingressoRepository.save(new Ingresso(null, reserva2.getId(), a3.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, mesmoInstante));
 
         Page<IngressoResumoProjection> paginaUm = ingressoRepository.buscarPorCliente(cliente1Id, PageRequest.of(0, 1));
         Page<IngressoResumoProjection> paginaDois = ingressoRepository.buscarPorCliente(cliente1Id, PageRequest.of(1, 1));
@@ -282,10 +285,8 @@ class IngressoLeituraRepositoryTest {
         // teria que quebrar o teste sem o ORDER BY explícito por createdAt.
         Instant primeiro = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Instant segundo = primeiro.plusSeconds(1);
-        Ingresso ingressoMaisAntigo = ingressoRepository.save(new Ingresso(
-                null, reserva1.getId(), a1.getId(), sessao.getId(), StatusIngresso.VALIDO, null, primeiro));
-        Ingresso ingressoMaisNovo = ingressoRepository.save(new Ingresso(
-                null, reserva1.getId(), a2.getId(), sessao.getId(), StatusIngresso.VALIDO, null, segundo));
+        Ingresso ingressoMaisAntigo = ingressoRepository.save(new Ingresso(null, reserva1.getId(), a1.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, primeiro));
+        Ingresso ingressoMaisNovo = ingressoRepository.save(new Ingresso(null, reserva1.getId(), a2.getId(), sessao.getId(), codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, segundo));
 
         List<IngressoResumoProjection> resultado =
                 ingressoRepository.buscarPorCliente(cliente1Id, Pageable.unpaged()).getContent();

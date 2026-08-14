@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { SessaoExpiradaError } from '../api/client';
 import { listarMeusIngressos, type IngressoResumo } from '../api/ingressos';
@@ -57,6 +57,39 @@ function LinhaIngresso({ ingresso, onAbrir }: { ingresso: IngressoResumo; onAbri
   );
 }
 
+/**
+ * Moldura dos três estados sem lista (sem login, sessão vencida, carteira vazia). Uma frase solta
+ * no alto de uma página vazia lê como carregamento que falhou: a moldura diz que a tela está
+ * inteira e só falta conteúdo, e dá ao convite o peso de destino, não de rodapé.
+ *
+ * `alerta` separa o que deu errado (sessão vencida) do que é só o estado normal da tela: leitor de
+ * tela interrompe a leitura num `alert` e espera a vez num `status`.
+ */
+function PainelSemLista({
+  titulo,
+  texto,
+  acao,
+  alerta = false,
+}: {
+  titulo: string;
+  texto: string;
+  acao?: ReactNode;
+  alerta?: boolean;
+}) {
+  return (
+    <div
+      role={alerta ? 'alert' : 'status'}
+      className="mt-9 border-[3px] border-dashed border-[#C7B694] px-6 py-12 text-center"
+    >
+      <h2 className="font-display text-[clamp(20px,3cqw,28px)] leading-[1.15]">{titulo}</h2>
+      {/* max-w em ch: linha de leitura curta, centralizada, em vez de uma faixa de texto de ponta
+          a ponta da carteira. */}
+      <p className="mx-auto mt-3.5 max-w-[46ch] font-mono text-xl leading-relaxed text-[#6D655B]">{texto}</p>
+      {acao && <div className="mt-7 flex justify-center">{acao}</div>}
+    </div>
+  );
+}
+
 function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onVoltar: () => void }) {
   return (
     <>
@@ -69,7 +102,7 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
       </button>
 
       <div className="mt-5">
-        <CanhotoIngresso codigo={ingresso.codigo}>
+        <CanhotoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
               ROLO 35 · {ingresso.salaNome.toUpperCase()}
@@ -175,42 +208,44 @@ export function MeusIngressosPage() {
         )}
 
         {estado === 'sem-sessao' && (
-          <>
-            <p role="alert" className="mt-8 font-mono text-lg text-ink-950/70">
-              Entre na sua conta pra ver seus ingressos.
-            </p>
-            {/* Mesmo `retomarEm` da sessão expirada: o link do menu é aberto a visitante de
-                propósito, então quem chega por ele precisa cair de volta na carteira depois. */}
-            <Link to="/login" state={{ retomarEm: '/meus-ingressos' }} className={buttonClass('primary', 'mt-4')}>
-              ENTRAR
-            </Link>
-          </>
+          <PainelSemLista
+            titulo="ENTRE PRA VER SEUS INGRESSOS"
+            texto="Seus ingressos ficam guardados na sua conta, com QR code, assento e sala — prontos pra apresentar na portaria."
+            acao={
+              // Mesmo `retomarEm` da sessão expirada: o link do menu é aberto a visitante de
+              // propósito, então quem chega por ele precisa cair de volta na carteira depois.
+              <Link to="/login" state={{ retomarEm: '/meus-ingressos' }} className={buttonClass('primary')}>
+                ENTRAR NA MINHA CONTA
+              </Link>
+            }
+          />
         )}
 
         {estado === 'expirada' && (
-          <>
-            <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
-              Sua sessão expirou. Entre de novo pra ver seus ingressos.
-            </p>
-            {/* `retomarEm` traz de volta pra carteira depois do login, em vez de largar na vitrine
-                quem só queria ver o ingresso. */}
-            <Link
-              to="/login"
-              state={{ retomarEm: '/meus-ingressos' }}
-              className={buttonClass('primary', 'mt-4')}
-            >
-              ENTRAR DE NOVO
-            </Link>
-          </>
+          <PainelSemLista
+            alerta
+            titulo="SUA SESSÃO EXPIROU"
+            texto="Faz um tempo que você entrou, e a gente encerra a sessão por segurança. Entre de novo pra abrir sua carteira."
+            acao={
+              // `retomarEm` traz de volta pra carteira depois do login, em vez de largar na vitrine
+              // quem só queria ver o ingresso.
+              <Link to="/login" state={{ retomarEm: '/meus-ingressos' }} className={buttonClass('primary')}>
+                ENTRAR DE NOVO
+              </Link>
+            }
+          />
         )}
 
         {estado === 'vazio' && (
-          <div className="mt-10 border-[3px] border-dashed border-[#C7B694] p-10 text-center">
-            <p className="font-mono text-xl text-[#6D655B]">Você ainda não tem ingressos.</p>
-            <Link to="/" className={buttonClass('primary', 'mt-[18px]')}>
-              VER SESSÕES
-            </Link>
-          </div>
+          <PainelSemLista
+            titulo="VOCÊ AINDA NÃO TEM INGRESSOS"
+            texto="Escolha uma sessão, marque seus assentos e o ingresso aparece aqui na hora."
+            acao={
+              <Link to="/" className={buttonClass('primary')}>
+                VER SESSÕES
+              </Link>
+            }
+          />
         )}
 
         {estado === 'pronto' && aberto && (

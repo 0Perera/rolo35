@@ -105,8 +105,8 @@ public class PagamentoService {
             Instant emitidoEm = Instant.now();
             List<Ingresso> ingressos = ingressoRepository.saveAll(assentoIds.stream()
                     .map(assentoId -> new Ingresso(
-                            null, reserva.getId(), assentoId, reserva.getSessaoId(), StatusIngresso.VALIDO, null,
-                            emitidoEm))
+                            null, reserva.getId(), assentoId, reserva.getSessaoId(),
+                            codigoIngressoService.gerarCodigoCurto(), StatusIngresso.VALIDO, null, emitidoEm))
                     .toList());
             int linhasAfetadas =
                     assentoSessaoRepository.reivindicarVendido(reserva.getSessaoId(), assentoIds, reserva.getId());
@@ -135,7 +135,8 @@ public class PagamentoService {
     private List<IngressoDto> paraDto(List<Ingresso> ingressos) {
         return ingressos.stream()
                 .map(ingresso -> new IngressoDto(
-                        ingresso.getId(), ingresso.getAssentoId(), codigoIngressoService.gerar(ingresso.getId())))
+                        ingresso.getId(), ingresso.getAssentoId(), codigoIngressoService.gerar(ingresso.getId()),
+                        ingresso.getCodigoCurto()))
                 .toList();
     }
 }

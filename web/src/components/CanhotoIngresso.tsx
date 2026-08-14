@@ -8,6 +8,11 @@ interface CanhotoIngressoProps {
    * pra validar, não pra abrir a página. Compartilhar é outro caminho, pelo botão de copiar link.
    */
   codigo: string;
+  /**
+   * Código curto de digitação manual. Opcional porque a página pública do ingresso não recebe
+   * código nenhum do back — ela existe pra conferir o ingresso, não pra validá-lo.
+   */
+  codigoCurto?: string;
   children: ReactNode;
 }
 
@@ -17,7 +22,7 @@ interface CanhotoIngressoProps {
  * painel do QR desça pra baixo do corpo quando o cartão não cabe numa linha, em vez de espremer
  * o QR até ele parar de ser escaneável.
  */
-export function CanhotoIngresso({ codigo, children }: CanhotoIngressoProps) {
+export function CanhotoIngresso({ codigo, codigoCurto, children }: CanhotoIngressoProps) {
   return (
     <div className="flex flex-wrap border-[3px] border-ink-950 bg-paper-50 shadow-[10px_10px_0_var(--color-ink-950)]">
       <div aria-hidden="true" className="w-[14px] bg-gradient-to-b from-flame-600 via-flame-500 to-flame-400" />
@@ -44,6 +49,14 @@ export function CanhotoIngresso({ codigo, children }: CanhotoIngressoProps) {
           />
         </div>
         <p className="text-center font-mono text-[17px] tracking-[2px] text-cyan-400">ESCANEIE NA PORTARIA</p>
+        {/* O plano B da câmera, e por isso vem em corpo grande: quem está na fila precisa ler ele
+            em voz alta pro operador digitar. Sem I, L, O e U, por construção. */}
+        {codigoCurto && (
+          <p className="text-center font-mono text-[15px] tracking-[2px] text-[#9C9488]">
+            OU DITE O CÓDIGO
+            <span className="mt-1 block text-[26px] tracking-[6px] text-paper-50">{codigoCurto}</span>
+          </p>
+        )}
       </div>
     </div>
   );

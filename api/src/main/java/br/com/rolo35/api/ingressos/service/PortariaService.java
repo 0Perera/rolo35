@@ -109,18 +109,7 @@ public class PortariaService {
     public ValidacaoIngressoDto validar(String portariaEmail, String codigo) {
         Sessao sessaoAtiva = obterSessaoAtivaOuLancar(portariaEmail);
 
-        Optional<UUID> idOptional = codigoIngressoService.extrairId(codigo);
-        if (idOptional.isEmpty() || !codigoIngressoService.validar(idOptional.get(), codigo)) {
-            return new ValidacaoIngressoDto(ResultadoValidacao.INVALIDO, null, null, null);
-        }
-
-        entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
-        Ingresso ingresso;
-        try {
-            ingresso = ingressoRepository.findByIdForUpdate(idOptional.get()).orElse(null);
-        } catch (PessimisticLockingFailureException e) {
-            throw new IngressoEmDisputaException();
-        }
+        Ingresso ingresso = localizar(codigo);
         if (ingresso == null) {
             return new ValidacaoIngressoDto(ResultadoValidacao.INVALIDO, null, null, null);
         }
@@ -143,6 +132,40 @@ public class PortariaService {
     }
 
     /**
+     * Resolve o texto lido — QR ou digitado — no ingresso correspondente, ou {@code null}.
+     *
+     * <p>Dois formatos, um caminho: o código assinado é reconhecido pela forma
+     * {@code uuid.assinatura} e só passa depois de conferida a HMAC; qualquer outra coisa é tentada
+     * como código curto de digitação manual. A ordem importa — um código assinado nunca tem 8
+     * caracteres, então não há ambiguidade, e checar a assinatura primeiro mantém o caminho da
+     * câmera exatamente como era.
+     *
+     * <p>Todos os motivos de falha (formato, assinatura adulterada, código inexistente) devolvem
+     * {@code null} e viram o mesmo {@code INVALIDO}, pelo mesmo raciocínio já registrado na Story
+     * 5.2: a resposta não pode virar oráculo de quais códigos existem.
+     */
+    private Ingresso localizar(String codigo) {
+        Optional<UUID> idAssinado = codigoIngressoService.extrairId(codigo)
+                .filter(id -> codigoIngressoService.validar(id, codigo));
+        Optional<String> codigoCurto = idAssinado.isPresent()
+                ? Optional.empty()
+                : codigoIngressoService.normalizarCodigoCurto(codigo);
+        if (idAssinado.isEmpty() && codigoCurto.isEmpty()) {
+            return null;
+        }
+
+        entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
+        try {
+            return idAssinado
+                    .flatMap(ingressoRepository::findByIdForUpdate)
+                    .or(() -> codigoCurto.flatMap(ingressoRepository::findByCodigoCurtoForUpdate))
+                    .orElse(null);
+        } catch (PessimisticLockingFailureException e) {
+            throw new IngressoEmDisputaException();
+        }
+    }
+
+    /**
      * Painel do turno (FR-21): leitura pura sobre o que a validação já persistiu. Não adquire lock
      * e não transiciona nada — {@code POST /portaria/validacoes} continua sendo o único caminho de
      * {@code VALIDO → UTILIZADO} (AD-9).
@@ -159,7 +182,7 @@ public class PortariaService {
                 ingressoRepository.buscarLeiturasDoTurno(sessaoAtiva.getId(), PageRequest.of(0, LIMITE_HISTORICO))
                         .stream()
                         .map(leitura -> new LeituraTurnoDto(
-                                codigoCurto(leitura.getIngressoId()),
+                                leitura.getCodigoCurto(),
                                 leitura.getAssentoFileira(),
                                 leitura.getAssentoNumero(),
                                 leitura.getValidadoEm()))
@@ -168,15 +191,6 @@ public class PortariaService {
                 ingressoRepository.countBySessaoIdAndStatus(sessaoAtiva.getId(), StatusIngresso.UTILIZADO),
                 ingressoRepository.countBySessaoId(sessaoAtiva.getId()),
                 leituras);
-    }
-
-    /**
-     * Prefixo pra conferência visual contra o ingresso na mão do cliente. Curto de propósito: o
-     * código completo é assinado por HMAC e vale como credencial (AD-8) — listá-lo inteiro numa
-     * tela transformaria o painel numa fonte de ingressos válidos.
-     */
-    private static String codigoCurto(UUID ingressoId) {
-        return ingressoId.toString().substring(0, 6).toUpperCase();
     }
 
     private SessaoAtivaDto montarDto(Sessao sessao) {

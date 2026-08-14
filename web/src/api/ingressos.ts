@@ -11,6 +11,8 @@ export interface IngressoResumo {
   salaNome: string;
   dataHora: string;
   codigo: string;
+  /** Código curto pra ditar na portaria quando a câmera não lê. */
+  codigoCurto: string;
 }
 
 export interface IngressoPublico {

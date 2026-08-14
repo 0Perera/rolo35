@@ -75,9 +75,14 @@ class SessaoGestaoRepositoryTest {
         Long reservaId = jdbcTemplate.queryForObject(
                 "INSERT INTO reservas (cliente_id, sessao_id, status) VALUES (?, ?, 'CONFIRMADA') RETURNING id",
                 Long.class, clienteId, sessaoId);
+        UUID ingressoId = UUID.randomUUID();
         jdbcTemplate.update(
-                "INSERT INTO ingressos (id, reserva_id, assento_id, sessao_id, status) VALUES (?, ?, ?, ?, 'VALIDO')",
-                UUID.randomUUID(), reservaId, assentoId, sessaoId);
+                """
+                INSERT INTO ingressos (id, reserva_id, assento_id, sessao_id, codigo_curto, status)
+                VALUES (?, ?, ?, ?, ?, 'VALIDO')
+                """,
+                ingressoId, reservaId, assentoId, sessaoId,
+                ingressoId.toString().replace("-", "").substring(0, 8).toUpperCase());
     }
 
     // findByIdForUpdate emite SELECT ... FOR UPDATE (LockModeType.PESSIMISTIC_WRITE), que exige

@@ -18,6 +18,7 @@ const ingresso: IngressoResumo = {
   salaNome: 'Sala 1',
   dataHora: '2030-01-01T20:00:00',
   codigo: 'abc-123.assinatura',
+  codigoCurto: '7ZK3QW9M',
 };
 
 function paginaDe(
@@ -102,8 +103,8 @@ describe('MeusIngressosPage', () => {
 
     renderDeslogado();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/entre na sua conta/i);
-    expect(screen.getByRole('link', { name: /entrar/i })).toHaveAttribute('href', '/login');
+    expect(await screen.findByRole('status')).toHaveTextContent(/entre pra ver seus ingressos/i);
+    expect(screen.getByRole('link', { name: /entrar na minha conta/i })).toHaveAttribute('href', '/login');
     expect(screen.queryByText(/não foi possível carregar/i)).not.toBeInTheDocument();
     expect(listar).not.toHaveBeenCalled();
   });

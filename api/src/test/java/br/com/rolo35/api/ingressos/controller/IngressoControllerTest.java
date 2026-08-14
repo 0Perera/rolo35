@@ -42,7 +42,7 @@ class IngressoControllerTest {
     void minhasReturns200WithPaginaEnvelopeForClienteToken() throws Exception {
         IngressoResumoDto dto = new IngressoResumoDto(
                 UUID.randomUUID(), StatusIngresso.VALIDO, "A", 1, "Sessão fixture", null, "Sala 1",
-                LocalDateTime.now().plusDays(1), "codigo-x");
+                LocalDateTime.now().plusDays(1), "codigo-x", "7ZK3QW9M");
         given(ingressoService.listarMinhas(anyString(), anyInt(), anyInt()))
                 .willReturn(new PaginaDto<>(List.of(dto), 0, 12, 1, 1));
 

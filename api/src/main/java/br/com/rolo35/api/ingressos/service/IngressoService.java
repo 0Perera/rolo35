@@ -53,7 +53,8 @@ public class IngressoService {
                 p -> new IngressoResumoDto(
                         p.getId(), p.getStatus(), p.getAssentoFileira(), p.getAssentoNumero(),
                         p.getSessaoTitulo(), p.getSessaoPosterUrl(), p.getSalaNome(), p.getDataHora(),
-                        codigoIngressoService.gerar(p.getId())));
+                        codigoIngressoService.gerar(p.getId()),
+                        p.getCodigoCurto()));
     }
 
     // Assinatura checada antes de qualquer consulta ao banco (AC5, AD-8): um código com HMAC

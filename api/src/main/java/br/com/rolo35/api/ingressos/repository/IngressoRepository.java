@@ -21,6 +21,15 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
     @Query("select i from Ingresso i where i.id = :id")
     Optional<Ingresso> findByIdForUpdate(@Param("id") UUID id);
 
+    /**
+     * Mesmo lock do caminho por QR: a validação por código curto transiciona
+     * {@code VALIDO → UTILIZADO} igual, e duas leituras simultâneas do mesmo ingresso (uma por
+     * câmera, outra digitada) precisam serializar do mesmo jeito.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from Ingresso i where i.codigoCurto = :codigoCurto")
+    Optional<Ingresso> findByCodigoCurtoForUpdate(@Param("codigoCurto") String codigoCurto);
+
     // JOIN ... ON explícito, mesmo padrão de AssentoSessaoRepository.buscarMapaPorSessao()
     // (Story 3.1): Ingresso guarda só IDs soltos (reservaId/assentoId/sessaoId), sem
     // associação @ManyToOne mapeada entre as entidades. Evita N+1 na tela "Meus Ingressos" —
@@ -36,7 +45,7 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
     @Query(
             value =
                     """
-            SELECT i.id AS id, i.status AS status,
+            SELECT i.id AS id, i.status AS status, i.codigoCurto AS codigoCurto,
                    a.fileira AS assentoFileira, a.numero AS assentoNumero,
                    s.titulo AS sessaoTitulo, s.posterUrl AS sessaoPosterUrl, sa.nome AS salaNome, s.dataHora AS dataHora
             FROM Ingresso i
@@ -65,13 +74,14 @@ public interface IngressoRepository extends JpaRepository<Ingresso, UUID> {
     /**
      * Histórico de entradas liberadas do turno, mais recente primeiro.
      *
-     * <p>Devolve o id do ingresso, não o código assinado: o código é credencial (AD-8), e quem
-     * monta o prefixo curto de conferência é o service. Também não traz nada do cliente — a
-     * portaria decide entrada por assento e estado (FR-19).
+     * <p>Devolve o código curto, nunca o assinado: o assinado é credencial reutilizável (AD-8) e
+     * não pode aparecer numa tela. O curto listado aqui é sempre de ingresso já UTILIZADO — uma
+     * segunda leitura dele devolveria JA_UTILIZADO. Também não traz nada do cliente: a portaria
+     * decide entrada por assento e estado (FR-19).
      */
     @Query(
             """
-            SELECT i.id AS ingressoId, a.fileira AS assentoFileira, a.numero AS assentoNumero,
+            SELECT i.codigoCurto AS codigoCurto, a.fileira AS assentoFileira, a.numero AS assentoNumero,
                    i.validatedAt AS validadoEm
             FROM Ingresso i
             JOIN Assento a ON a.id = i.assentoId

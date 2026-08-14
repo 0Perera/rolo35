@@ -49,6 +49,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class PagamentoServiceTest {
 
+    /**
+     * Código curto de fixture. A emissão real usa SecureRandom; aqui o valor só precisa ser
+     * único (a coluna é UNIQUE) e caber no alfabeto Base32 Crockford de 8 caracteres.
+     */
+    private static String codigoCurtoDeTeste() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
     private static final String CLIENTE_EMAIL = "cliente1@rolo35.com.br";
     private static final Long CLIENTE_ID = 7L;
     private static final Long SESSAO_ID = 1L;
@@ -337,7 +345,7 @@ class PagamentoServiceTest {
                 new Reserva(RESERVA_ID, CLIENTE_ID, SESSAO_ID, StatusReserva.CONFIRMADA, Instant.now(), LocalDateTime.now().plusMinutes(5));
         given(reservaRepository.findByIdForUpdate(RESERVA_ID)).willReturn(Optional.of(reservaConfirmada));
         Ingresso ingressoExistente =
-                new Ingresso(UUID.randomUUID(), RESERVA_ID, 10L, SESSAO_ID, StatusIngresso.VALIDO, null, Instant.now());
+                new Ingresso(UUID.randomUUID(), RESERVA_ID, 10L, SESSAO_ID, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findByReservaId(RESERVA_ID)).willReturn(List.of(ingressoExistente));
         given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
 

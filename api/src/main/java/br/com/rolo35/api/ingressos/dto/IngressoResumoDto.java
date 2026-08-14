@@ -13,4 +13,5 @@ public record IngressoResumoDto(
         String sessaoPosterUrl,
         String salaNome,
         LocalDateTime dataHora,
-        String codigo) {}
+        String codigo,
+        String codigoCurto) {}

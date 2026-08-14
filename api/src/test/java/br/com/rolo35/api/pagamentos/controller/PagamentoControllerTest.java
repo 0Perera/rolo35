@@ -50,7 +50,7 @@ class PagamentoControllerTest {
     @Test
     void returns200WithPagamentoDtoForValidBody() throws Exception {
         PagamentoDto dto = new PagamentoDto(
-                StatusReserva.CONFIRMADA, List.of(new IngressoDto(UUID.randomUUID(), 10L, "codigo-x")));
+                StatusReserva.CONFIRMADA, List.of(new IngressoDto(UUID.randomUUID(), 10L, "codigo-x", "7ZK3QW9M")));
         given(pagamentoService.confirmar(any(ConfirmarPagamentoRequest.class), anyString())).willReturn(dto);
 
         mockMvc.perform(post("/api/pagamentos/confirmar")

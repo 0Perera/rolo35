@@ -50,9 +50,18 @@ class IngressoInvariantesRepositoryTest {
     }
 
     private void insereIngresso(Long assentoId) {
+        UUID id = UUID.randomUUID();
         jdbcTemplate.update(
-                "INSERT INTO ingressos (id, reserva_id, assento_id, sessao_id, status) VALUES (?, ?, ?, ?, 'VALIDO')",
-                UUID.randomUUID(), reservaId, assentoId, sessaoId);
+                """
+                INSERT INTO ingressos (id, reserva_id, assento_id, sessao_id, codigo_curto, status)
+                VALUES (?, ?, ?, ?, ?, 'VALIDO')
+                """,
+                id, reservaId, assentoId, sessaoId, codigoCurtoDe(id));
+    }
+
+    /** Único por ingresso, que é o que a coluna exige — a aleatoriedade real fica na emissão. */
+    private static String codigoCurtoDe(UUID id) {
+        return id.toString().replace("-", "").substring(0, 8).toUpperCase();
     }
 
     /**

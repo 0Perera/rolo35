@@ -308,7 +308,7 @@ export function PagamentoPage() {
               const assento = assentos.find((candidato) => candidato.id === ingresso.assentoId);
               const rotuloAssento = assento ? `${assento.fileira}${assento.numero}` : '—';
               return (
-                <CanhotoIngresso key={ingresso.id} codigo={ingresso.codigo}>
+                <CanhotoIngresso key={ingresso.id} codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
