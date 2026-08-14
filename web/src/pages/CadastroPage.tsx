@@ -8,7 +8,7 @@ import { Card } from '../components/Card';
 import { PageShell } from '../components/PageShell';
 import { TextField } from '../components/TextField';
 import { salvarSessao } from '../lib/sessao';
-import { rotaPorPapel } from './LoginPage';
+import { rotaPorPapel } from '../lib/sessao';
 
 type EstadoCadastro = 'idle' | 'loading' | 'error';
 

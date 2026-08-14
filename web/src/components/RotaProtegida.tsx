@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import type { Papel } from '../api/auth';
-import { rotaPorPapel } from '../pages/LoginPage';
-import { useSessao } from '../lib/sessao';
+import { rotaPorPapel, useSessao } from '../lib/sessao';
 
 interface RotaProtegidaProps {
   /** Papéis que podem ver a rota. Quem não estiver na lista é desviado, não recusado na tela. */

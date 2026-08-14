@@ -53,6 +53,14 @@ services:
     # execução, e CORS_ALLOWED_ORIGINS continua valendo sem ajuste.
     ports:
       - "5173:80"
+    # O único serviço sem healthcheck era este, então `docker compose ps` mostrava o front como
+    # "running" antes de o nginx aceitar conexão.
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       - api
 

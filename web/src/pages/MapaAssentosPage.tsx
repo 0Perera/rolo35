@@ -3,12 +3,13 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { ApiRequestError } from '../api/client';
 import { reservarAssentos } from '../api/reservas';
 import { buscarMapaAssentos, type AssentoMapa, type MapaAssentos } from '../api/sessoes';
+import { buttonClass } from '../components/Button';
 import { GradeDeAssentos } from '../components/GradeDeAssentos';
 import { PageShell } from '../components/PageShell';
 import { ResumoDoPedido } from '../components/ResumoDoPedido';
 import { useSessao } from '../lib/sessao';
 
-type Estado = 'loading' | 'erro' | 'nao-encontrado' | 'pronto';
+type Estado = 'loading' | 'erro' | 'nao-encontrado' | 'pronto' | 'encerrada';
 
 const MAX_ASSENTOS = 6;
 
@@ -117,9 +118,11 @@ export function MapaAssentosPage() {
       navigate(`/pagamento/${reserva.id}`);
     } catch (error) {
       if (error instanceof ApiRequestError && error.codigo === 'SESSAO_JA_COMECOU') {
-        // Recarregar o mapa não muda nada aqui: a sessão não volta. Manter a seleção também não
-        // custa nada — nenhum botão desta tela ainda leva a lugar nenhum.
-        setMensagemErro('Essa sessão já começou e não aceita mais reservas. Escolha outra sessão.');
+        // Estado terminal, como em PagamentoPage: recarregar o mapa não muda nada (a sessão não
+        // volta) e manter a grade na tela deixaria o botão de reservar ativo pra uma chamada que
+        // nunca pode dar certo. Trocar de estado tira a grade e o botão junto, e a mensagem passa
+        // a vir acompanhada do caminho de saída que ela manda tomar.
+        setEstado('encerrada');
       } else if (error instanceof ApiRequestError && error.status === 409) {
         setMensagemErro('Um ou mais assentos selecionados não estão mais disponíveis. O mapa foi atualizado.');
         setSelecionados(new Set());
@@ -171,6 +174,17 @@ export function MapaAssentosPage() {
           <p role="alert" className="mt-6 font-mono text-lg text-flame-600">
             Sessão não encontrada.
           </p>
+        )}
+
+        {estado === 'encerrada' && (
+          <div className="mt-6 border-[3px] border-ink-950 bg-paper-50 p-6 shadow-[9px_9px_0_var(--color-ink-950)]">
+            <p role="alert" className="font-mono text-lg text-flame-600">
+              Essa sessão já começou e não aceita mais reservas.
+            </p>
+            <Link to={mapa ? `/filmes/${mapa.tmdbId}` : '/'} className={buttonClass('secondary', 'mt-4 inline-block')}>
+              ESCOLHER OUTRA SESSÃO
+            </Link>
+          </div>
         )}
 
         {estado === 'pronto' && mapa && (

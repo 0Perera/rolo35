@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -97,6 +98,25 @@ class PagamentoControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("RESERVA_EXPIRADA"));
+    }
+
+    /**
+     * Os backstops de banco da V8 não tinham handler: violação de constraint saía como 500
+     * ERRO_INTERNO, quebrando a promessa de envelope que o resto da API cumpre. Enquanto o service
+     * for o único caminho de emissão isto não dispara — o teste existe pro dia em que não for.
+     */
+    @Test
+    void returns409WithConflitoDeDadosWhenDatabaseConstraintRejects() throws Exception {
+        given(pagamentoService.confirmar(any(ConfirmarPagamentoRequest.class), anyString()))
+                .willThrow(new DataIntegrityViolationException("uq_ingressos_reserva_assento"));
+
+        mockMvc.perform(post("/api/pagamentos/confirmar")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("CONFLITO_DE_DADOS"))
+                .andExpect(jsonPath("$.mensagem").exists());
     }
 
     /**

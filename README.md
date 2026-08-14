@@ -130,7 +130,7 @@ Verificação:
 ```bash
 curl -s localhost:8080/actuator/health     # {"status":"UP"}
 curl -s localhost:8080/api/sessoes         # lista a sessão semeada, sem token
-open http://localhost:5173                 # a aplicação
+# e abra http://localhost:5173 no navegador
 ```
 
 O primeiro `up` compila a API e o bundle do front dentro do Docker (multi-stage nos dois) e pode
@@ -164,7 +164,7 @@ local.
 | `TMDB_API_TOKEN` | raiz | Token v4 do TMDb, usado só pelo back-end |
 | `CORS_ALLOWED_ORIGINS` | raiz | Allow-list de origens da API (default: `http://localhost:5173`) |
 | `TZ` | raiz | Fuso da JVM e do Postgres — **obrigatória**, veja o aviso abaixo |
-| `VITE_API_URL` | `web/` | URL da API consumida pela SPA |
+| `VITE_API_URL` | raiz | URL da API consumida pela SPA. Lida em tempo de **build** (o Vite inlina no bundle), então mudá-la exige `docker compose up -d --build web` — restart não basta. Fica na raiz porque é de lá que o `docker-compose.yml` a lê como build arg; `web/.env` só vale pro `vite dev` |
 
 > ⚠️ **`TZ` é obrigatória, inclusive no deploy.** `sessoes.data_hora` é wall-clock sem fuso: o
 > organizador escolhe "20:00" e é isso que vai pro banco. API, banco e navegador precisam concordar

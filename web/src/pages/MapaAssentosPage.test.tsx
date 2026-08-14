@@ -246,8 +246,10 @@ describe('MapaAssentosPage', () => {
   });
 
   // "O mapa foi atualizado" é a mensagem certa pra assento tomado e errada pra sessão encerrada:
-  // ali recarregar resolve, aqui não resolve nunca.
-  it('says the session is over, without reloading the map, on a 409 SESSAO_JA_COMECOU', async () => {
+  // ali recarregar resolve, aqui não resolve nunca. E como não resolve, a tela precisa virar
+  // terminal de verdade — deixar a grade e o botão no ar é convidar a pessoa a repetir uma chamada
+  // que nunca pode dar certo, dizendo "escolha outra sessão" sem oferecer por onde.
+  it('turns the seat map into a terminal screen with a way out on a 409 SESSAO_JA_COMECOU', async () => {
     const buscarSpy = vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
     vi.spyOn(reservasApi, 'reservarAssentos').mockRejectedValue(
       new ApiRequestError('Sessão já começou', 409, 'SESSAO_JA_COMECOU'),
@@ -260,6 +262,9 @@ describe('MapaAssentosPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sessão já começou/i);
     expect(buscarSpy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /ir para o pagamento/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Assento A1 — livre')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /escolher outra sessão/i })).toBeInTheDocument();
   });
 
   it('sends the visitor to the login screen with the pending purchase on a 401', async () => {

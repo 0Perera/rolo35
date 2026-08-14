@@ -27,6 +27,7 @@ import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import br.com.rolo35.api.sessoes.catalogo.ParametroInvalidoException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -278,6 +279,30 @@ public class GlobalExceptionHandler {
         log.warn("Lock de ingresso não obtido dentro do timeout da transação", exception);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("INGRESSO_EM_DISPUTA", "Ingresso em disputa no momento — tente novamente"));
+    }
+
+    /**
+     * Rede de proteção pros backstops de banco da V8 (FK composta de {@code ingressos} contra
+     * {@code assento_sessao}, {@code UNIQUE (reserva_id, assento_id)}) e pras constraints que já
+     * existiam antes dela.
+     *
+     * <p>Enquanto {@code PagamentoService.confirmar()} for o único caminho de emissão, nada aqui
+     * dispara — o service já recusa antes. O comentário da própria migration diz que o backstop
+     * existe "pro dia em que não for": script de correção, endpoint novo, corrida de concorrência
+     * que passe entre a checagem e o INSERT. Esse dia é exatamente quando o cliente receberia um
+     * 500 {@code ERRO_INTERNO} em vez do envelope {@code {codigo, mensagem}} que o resto da API
+     * promete, e o front cairia no ramo genérico de erro.
+     *
+     * <p>409 e não 500 porque o pedido está correto: o que falhou foi o estado do mundo entre a
+     * leitura e a escrita — mesmo racional de {@code ASSENTO_INDISPONIVEL}. Fica logado como erro
+     * mesmo assim: chegar aqui significa que uma checagem de aplicação foi contornada, e isso é
+     * coisa pra investigar, não ruído normal de concorrência.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiError> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+        log.error("Constraint de banco recusou a escrita — invariante que o service devia ter barrado", exception);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "CONFLITO_DE_DADOS", "A operação conflita com o estado atual dos dados — recarregue e tente de novo"));
     }
 
     @ExceptionHandler(Exception.class)

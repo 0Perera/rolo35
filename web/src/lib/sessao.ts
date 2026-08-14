@@ -64,3 +64,26 @@ function assinar(ouvinte: () => void): () => void {
 export function useSessao(): Sessao {
   return useSyncExternalStore(assinar, snapshotAtual);
 }
+
+/**
+ * Casa de cada papel. Mora aqui, junto de quem lê a sessão, e não em `pages/LoginPage`: é política
+ * de roteamento, usada por `RotaProtegida` e pelo cadastro tanto quanto pelo login, e um componente
+ * compartilhado importar de um módulo de página inverte a camada.
+ *
+ * O `default` não é ramo morto. O tipo `Papel` só vale em tempo de compilação, e o valor vem de
+ * `localStorage.getItem` com um cast — storage parcialmente limpo, adulterado ou de uma versão
+ * antiga do app entrega qualquer string. Sem ele o `switch` devolvia `undefined`, e
+ * `<Navigate to={undefined}>` quebra a página em branco em vez de mandar pra vitrine.
+ */
+export function rotaPorPapel(papel: Papel): string {
+  switch (papel) {
+    case 'ORGANIZADOR':
+      return '/organizador';
+    case 'CLIENTE':
+      return '/';
+    case 'PORTARIA':
+      return '/portaria';
+    default:
+      return '/';
+  }
+}

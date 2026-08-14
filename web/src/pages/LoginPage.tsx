@@ -7,20 +7,10 @@ import { Button, buttonClass } from '../components/Button';
 import { Card } from '../components/Card';
 import { PageShell } from '../components/PageShell';
 import { TextField } from '../components/TextField';
-import { salvarSessao } from '../lib/sessao';
+import { rotaPorPapel, salvarSessao } from '../lib/sessao';
 
 type EstadoLogin = 'idle' | 'loading' | 'error';
 
-export function rotaPorPapel(papel: Papel): string {
-  switch (papel) {
-    case 'ORGANIZADOR':
-      return '/organizador';
-    case 'CLIENTE':
-      return '/';
-    case 'PORTARIA':
-      return '/portaria';
-  }
-}
 
 /** Compra que ficou pendente no mapa de assentos por falta de login. */
 interface RetomadaDeCompra {
@@ -84,12 +74,25 @@ export function LoginPage() {
         navigate(destinoDemo);
         return;
       }
-      // Compra interrompida por falta de login volta pro ponto onde parou. Só pra CLIENTE: entrar
-      // com outro papel não continua uma compra, e mandar um organizador pro mapa de assentos só
-      // adiaria a mesma negação pro clique seguinte.
-      if (retomada && resposta.papel === 'CLIENTE') {
-        navigate(retomada.retomarEm, { state: { assentoIds: retomada.assentoIds } });
-        return;
+      // Quem chegou aqui desviado volta pro ponto onde parou. Dois remetentes usam este canal e
+      // pedem coisas diferentes: o mapa de assentos manda `assentoIds` junto (compra parada), e a
+      // `RotaProtegida` manda só o caminho (rota de staff aberta direto, sem sessão).
+      //
+      // A compra é a única que precisa do recorte por papel: entrar como organizador não continua
+      // a compra de ninguém, e mandá-lo pro mapa de assentos só adiaria a mesma negação pro clique
+      // seguinte. O caminho seco vale pra qualquer papel — era estado morto pra staff, que perdia
+      // o destino (e a query) e caía na casa do papel. Se o papel não puder ver a rota, a própria
+      // `RotaProtegida` desvia na chegada, que é o mesmo destino de antes, um salto depois.
+      if (retomada) {
+        const ehCompra = retomada.assentoIds.length > 0;
+        if (!ehCompra) {
+          navigate(retomada.retomarEm);
+          return;
+        }
+        if (resposta.papel === 'CLIENTE') {
+          navigate(retomada.retomarEm, { state: { assentoIds: retomada.assentoIds } });
+          return;
+        }
       }
       navigate(rotaPorPapel(resposta.papel));
     } catch (error) {
