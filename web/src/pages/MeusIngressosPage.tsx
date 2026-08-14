@@ -8,9 +8,16 @@ import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
 import { SectionTitle } from '../components/SectionTitle';
 import { SeloStatusIngresso } from '../components/SeloStatusIngresso';
+import { useSessao } from '../lib/sessao';
 import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
-type Estado = 'loading' | 'vazio' | 'erro' | 'expirada' | 'pronto';
+/**
+ * `sem-sessao` é distinto de `expirada`: um é quem nunca entrou, o outro é quem foi desconectado.
+ * O `apiFetch` só levanta `SessaoExpiradaError` quando havia token pra recusar, então sem essa
+ * separação o visitante caía em `erro` e lia "não foi possível carregar" — falha de servidor —
+ * quando o que faltava era login.
+ */
+type Estado = 'loading' | 'sem-sessao' | 'vazio' | 'erro' | 'expirada' | 'pronto';
 
 function assentoDe(ingresso: IngressoResumo): string {
   return `${ingresso.assentoFileira}${ingresso.assentoNumero}`;
@@ -93,8 +100,15 @@ export function MeusIngressosPage() {
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
   const [abertoId, setAbertoId] = useState<string | null>(null);
+  const { token } = useSessao();
 
   useEffect(() => {
+    // Sem token não há requisição a fazer: a API responderia 401 e o convite seria o mesmo. Cortar
+    // aqui também evita anunciar erro de servidor durante o tempo do 401 voltar.
+    if (!token) {
+      setEstado('sem-sessao');
+      return;
+    }
     let ativo = true;
     setEstado('loading');
     listarMeusIngressos()
@@ -114,7 +128,10 @@ export function MeusIngressosPage() {
     return () => {
       ativo = false;
     };
-  }, [tentativa]);
+    // `token` entra nas dependências pra carteira se recarregar sozinha quando o `apiFetch`
+    // derruba a sessão numa outra aba — sem isso a tela ficaria mostrando ingressos de uma sessão
+    // que já não vale.
+  }, [tentativa, token]);
 
   const aberto = ingressos.find((ingresso) => ingresso.id === abertoId) ?? null;
 
@@ -139,6 +156,19 @@ export function MeusIngressosPage() {
           >
             TENTAR NOVAMENTE
           </button>
+        )}
+
+        {estado === 'sem-sessao' && (
+          <>
+            <p role="alert" className="mt-8 font-mono text-lg text-ink-950/70">
+              Entre na sua conta pra ver seus ingressos.
+            </p>
+            {/* Mesmo `retomarEm` da sessão expirada: o link do menu é aberto a visitante de
+                propósito, então quem chega por ele precisa cair de volta na carteira depois. */}
+            <Link to="/login" state={{ retomarEm: '/meus-ingressos' }} className={buttonClass('primary', 'mt-4')}>
+              ENTRAR
+            </Link>
+          </>
         )}
 
         {estado === 'expirada' && (

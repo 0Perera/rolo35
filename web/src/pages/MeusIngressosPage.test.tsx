@@ -19,7 +19,7 @@ const ingresso: IngressoResumo = {
   codigo: 'abc-123.assinatura',
 };
 
-function renderPage() {
+function renderDeslogado() {
   return render(
     <MemoryRouter initialEntries={['/meus-ingressos']}>
       <MeusIngressosPage />
@@ -27,9 +27,17 @@ function renderPage() {
   );
 }
 
+/** A carteira é do cliente logado: sem token a página nem chega a chamar a API. */
+function renderPage() {
+  localStorage.setItem('rolo35.token', 'token-abc');
+  localStorage.setItem('rolo35.papel', 'CLIENTE');
+  return renderDeslogado();
+}
+
 describe('MeusIngressosPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it('shows a loading state while ingressos are being fetched', () => {
@@ -69,6 +77,20 @@ describe('MeusIngressosPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/sessão expirou/i);
     expect(screen.getByRole('link', { name: /entrar de novo/i })).toHaveAttribute('href', '/login');
     expect(screen.queryByRole('button', { name: /tentar novamente/i })).not.toBeInTheDocument();
+  });
+
+  // Quem nunca entrou não tem sessão "expirada" pra recuperar: o 401 chega como erro comum, e a
+  // carteira anunciava falha de servidor pra quem só precisava fazer login. Sem token não há o que
+  // buscar — o convite não espera resposta de API nenhuma.
+  it('invites a visitor with no session to log in instead of reporting a failure', async () => {
+    const listar = vi.spyOn(ingressosApi, 'listarMeusIngressos');
+
+    renderDeslogado();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/entre na sua conta/i);
+    expect(screen.getByRole('link', { name: /entrar/i })).toHaveAttribute('href', '/login');
+    expect(screen.queryByText(/não foi possível carregar/i)).not.toBeInTheDocument();
+    expect(listar).not.toHaveBeenCalled();
   });
 
   it('renders each ingresso with session title, sala and assento', async () => {
