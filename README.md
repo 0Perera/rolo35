@@ -860,7 +860,6 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 | Conflito de horário garantido por lock de aplicação, sem `EXCLUDE USING gist` | Escrita que não passe por `SessaoService` não é protegida pelo schema |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
 | Organizador não vê ocupação da sala ao criar sessão | `salas` é pool compartilhado, `sessoes` é isolada por dono: o organizador só descobre conflito ao submeter. Não é falha de segurança (o back valida sempre), é fricção de UX |
-| Emissão de ingresso faz `INSERT` por assento | Irrelevante com o limite de 6 assentos, mas inconsistente com o padrão de escrita em lote do resto da classe |
 | Cadastro de salas pela interface | Salas vêm do seed; criar sala pela UI foi adiado por falta de design, e o organizador tem 3 salas prontas pra usar |
 
 ### Fora de escopo por decisão (o enunciado dispensa)
