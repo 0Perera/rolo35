@@ -225,6 +225,31 @@ describe('ListagemSessoesPage', () => {
     expect(screen.getByTestId('grade-filmes')).toHaveAttribute('aria-busy', 'true');
   });
 
+  // A falha das salas era engolida por um `catch` vazio pra não derrubar a vitrine — certo em não
+  // derrubar, errado em não contar. O seletor abria com "TODAS AS SALAS" e nada mais, e parecia
+  // que o filtro exigia login. Não derrubar não é o mesmo que fingir que deu certo.
+  it('says the sala filter is unavailable instead of offering an empty one', async () => {
+    vi.spyOn(sessoesApi, 'listarSalas').mockRejectedValue(new Error('falha de rede'));
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga]));
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+
+    expect(await screen.findByText(/filtro de sala indisponível/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /filtrar por sala/i })).not.toBeInTheDocument();
+  });
+
+  // A vitrine é o conteúdo principal: sala que não carrega não pode levar o catálogo junto.
+  it('still lists the movies when the salas fail to load', async () => {
+    vi.spyOn(sessoesApi, 'listarSalas').mockRejectedValue(new Error('falha de rede'));
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoComVaga]));
+
+    renderPagina();
+
+    await screen.findByTestId('grade-filmes');
+    expect(grade().getByText('Clube da Luta')).toBeInTheDocument();
+  });
+
   it('retries loading the sessions when the retry button is clicked', async () => {
     const listarSpy = vi
       .spyOn(sessoesApi, 'listarSessoesPublicadas')

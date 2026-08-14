@@ -89,13 +89,16 @@ export function ListagemSessoesPage() {
 
   const [sessoes, setSessoes] = useState<SessaoPublicada[]>([]);
   const [salas, setSalas] = useState<Sala[]>([]);
+  const [salasIndisponiveis, setSalasIndisponiveis] = useState(false);
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
   const [heroIdx, setHeroIdx] = useState(0);
 
   // As salas não dependem da busca nem da página, então são buscadas uma vez só. Uma falha aqui
-  // deixa o filtro vazio, mas não pode derrubar a vitrine — o catálogo é o conteúdo principal.
+  // não pode derrubar a vitrine — o catálogo é o conteúdo principal — mas também não pode ser
+  // engolida: sem lista, o seletor abria com "TODAS AS SALAS" e nada mais, e o filtro parecia
+  // exigir login. Não derrubar não é o mesmo que fingir que deu certo.
   useEffect(() => {
     let ativo = true;
     listarSalas()
@@ -104,7 +107,11 @@ export function ListagemSessoesPage() {
           setSalas(resultado);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (ativo) {
+          setSalasIndisponiveis(true);
+        }
+      });
     return () => {
       ativo = false;
     };
@@ -378,18 +385,27 @@ export function ListagemSessoesPage() {
               label="Buscar sessão"
               placeholder="Buscar filme…"
             />
-            <SeletorDeOpcao
-              // 220px iguala gatilho e painel. Sem piso, "SALA 2 — DRIVE-IN" era cortado no botão
-              // enquanto aparecia inteiro na lista aberta logo abaixo.
-              className="w-[220px] max-w-full"
-              variante="filtro"
-              labelOculto
-              label="Filtrar por sala"
-              opcoes={opcoesDeSala}
-              valor={salaId}
-              placeholder="TODAS AS SALAS"
-              onEscolher={filtrarPorSala}
-            />
+            {/* Sem a lista, o seletor não teria o que oferecer além da opção de desfazer a si
+                mesmo. Dizer que está fora do ar é mais honesto que deixar um controle que abre
+                vazio — e a busca por texto ao lado continua servindo. */}
+            {salasIndisponiveis ? (
+              <p className="w-[220px] max-w-full font-mono text-sm text-[#6D655B]">
+                Filtro de sala indisponível.
+              </p>
+            ) : (
+              <SeletorDeOpcao
+                // 220px iguala gatilho e painel. Sem piso, "SALA 2 — DRIVE-IN" era cortado no botão
+                // enquanto aparecia inteiro na lista aberta logo abaixo.
+                className="w-[220px] max-w-full"
+                variante="filtro"
+                labelOculto
+                label="Filtrar por sala"
+                opcoes={opcoesDeSala}
+                valor={salaId}
+                placeholder="TODAS AS SALAS"
+                onEscolher={filtrarPorSala}
+              />
+            )}
           </div>
         </div>
 
