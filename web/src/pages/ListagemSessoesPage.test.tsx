@@ -171,6 +171,60 @@ describe('ListagemSessoesPage', () => {
     expect(screen.queryByRole('navigation', { name: /paginação/i })).not.toBeInTheDocument();
   });
 
+  // Hero e grade eram condicionados a `estado === 'pronto'`, então cada busca ou troca de filtro
+  // desmontava os dois e deixava uma linha de texto no lugar. O documento encolhia de uns 2000px
+  // pra uns 400px, o navegador cortava `scrollY` pro novo máximo e o visitante era jogado pro topo
+  // — sem ninguém ter chamado `scrollTo`. Manter montado é o que segura a altura, e a rolagem
+  // junto com ela.
+  it('keeps the grid mounted while the filtered page is still loading', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValueOnce(pagina([sessaoComVaga]))
+      .mockReturnValueOnce(new Promise(() => {}));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+
+    expect(screen.getByTestId('grade-filmes')).toBeInTheDocument();
+    expect(grade().getByText('Clube da Luta')).toBeInTheDocument();
+  });
+
+  it('keeps the hero mounted while the filtered page is still loading', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValueOnce(pagina([sessaoComVaga]))
+      .mockReturnValueOnce(new Promise(() => {}));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('hero-vitrine');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+
+    expect(screen.getByTestId('hero-vitrine')).toBeInTheDocument();
+  });
+
+  // Segurar o conteúdo antigo na tela sem dizer nada faz a troca de filtro parecer que não
+  // funcionou. `aria-busy` é o que conta a quem não vê a opacidade mudar.
+  it('announces that the shown results are being refreshed', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValueOnce(pagina([sessaoComVaga]))
+      .mockReturnValueOnce(new Promise(() => {}));
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByTestId('grade-filmes');
+    expect(screen.getByTestId('grade-filmes')).toHaveAttribute('aria-busy', 'false');
+
+    await user.click(screen.getByRole('button', { name: /filtrar por sala/i }));
+    await user.click(await screen.findByRole('option', { name: /drive-in/i }));
+
+    expect(screen.getByTestId('grade-filmes')).toHaveAttribute('aria-busy', 'true');
+  });
+
   it('retries loading the sessions when the retry button is clicked', async () => {
     const listarSpy = vi
       .spyOn(sessoesApi, 'listarSessoesPublicadas')

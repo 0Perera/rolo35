@@ -202,11 +202,22 @@ export function ListagemSessoesPage() {
   const destaque = canais.length > 0 ? canais[heroIdx % canais.length] : null;
   const proximaSessaoDestaque = destaque?.sessoes[0];
 
+  // Hero e grade seguem na tela enquanto o próximo resultado não chega. Condicioná-los ao estado
+  // de carregamento fazia a página encolher de uns 2000px pra uns 400px a cada tecla digitada ou
+  // troca de sala; o navegador então cortava `scrollY` pro novo máximo e o visitante ia parar no
+  // topo, longe da grade que estava lendo — sem ninguém ter chamado `scrollTo`.
+  const temResultados = filmes.length > 0;
+  const recarregando = estado === 'loading' && temResultados;
+  // Só o suficiente pra troca de filtro não parecer que não funcionou; sumir com o conteúdo
+  // devolveria o pulo de rolagem que este bloco existe pra evitar.
+  const classeRecarregando = recarregando ? 'opacity-60 transition-opacity' : 'transition-opacity';
+
   return (
     <PageShell>
-      {estado === 'pronto' && destaque && (
+      {destaque && (
         <section
-          className="flex justify-center border-b-[3px] border-ink-950 px-4 py-8 sm:px-6 sm:py-11"
+          data-testid="hero-vitrine"
+          className={`flex justify-center border-b-[3px] border-ink-950 px-4 py-8 sm:px-6 sm:py-11 ${classeRecarregando}`}
           style={{
             backgroundImage: 'radial-gradient(120% 90% at 50% 0%, #2A2130 0%, #171219 60%, #100C13 100%)',
           }}
@@ -382,7 +393,11 @@ export function ListagemSessoesPage() {
           </div>
         </div>
 
-        {estado === 'loading' && <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
+        {/* Só na primeira carga: com resultado já na tela, quem avisa que há coisa nova a caminho é
+            o `aria-busy` da grade, sem tirar nada do lugar. */}
+        {estado === 'loading' && !temResultados && (
+          <p className="mt-8 font-mono text-lg text-ink-950/60">Carregando sessões…</p>
+        )}
         {/* Caixa tracejada no lugar da grade, não uma frase solta: o vazio ocupa o mesmo espaço que
             o conteúdo ocuparia, então a tela não parece meio carregada. */}
         {estado === 'vazio' && (
@@ -418,10 +433,11 @@ export function ListagemSessoesPage() {
 
         {/* 150px de piso no mobile: com os 220px do desktop, a grade cai pra uma coluna só num
             aparelho estreito e o pôster 2/3 ocupa a tela inteira, um filme por rolagem. */}
-        {estado === 'pronto' && (
+        {temResultados && (
           <div
             data-testid="grade-filmes"
-            className="mt-8 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] sm:gap-8"
+            aria-busy={recarregando}
+            className={`mt-8 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))] sm:gap-8 ${classeRecarregando}`}
           >
             {filmes.map((filme) => {
               const esgotado = filme.sessoes.every((sessao) => sessao.esgotada);
