@@ -821,7 +821,6 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 |---|---|
 | `ingressos` sem `UNIQUE (reserva_id, assento_id)` e sem FK composta contra `assento_sessao` | Hoje inalcançável pela aplicação (o service sempre deriva sessão e assento da mesma linha, sob lock), mas é o único dos invariantes de duplicação sem *backstop* no banco. Inconsistente com o critério que eu mesmo apliquei nos outros dois |
 | Conflito de horário garantido por lock de aplicação, sem `EXCLUDE USING gist` | Escrita que não passe por `SessaoService` não é protegida pelo schema |
-| Reserva e pagamento não checam se a sessão já passou de horário | É possível criar hold — e pagar — para sessão que já ocorreu, se a listagem for contornada por chamada direta à API |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
 | Organizador não vê ocupação da sala ao criar sessão | `salas` é pool compartilhado, `sessoes` é isolada por dono: o organizador só descobre conflito ao submeter. Não é falha de segurança (o back valida sempre), é fricção de UX |
 | Emissão de ingresso faz `INSERT` por assento | Irrelevante com o limite de 6 assentos, mas inconsistente com o padrão de escrita em lote do resto da classe |
