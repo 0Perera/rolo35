@@ -53,6 +53,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 "/api/auth/login", "/api/auth/cadastro", "/actuator/health")
                         .permitAll()
+                        // A documentação da API é pública porque é documentação: ela descreve o
+                        // contrato, não expõe dado. Gatear atrás de login obrigaria quem avalia a
+                        // conseguir um token antes de saber quais rotas existem — o inverso da
+                        // função dela. Nenhum dos paths abaixo lê nada do banco.
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessoes")
                         .permitAll()
                         // Matcher próprio (não amplia o path exato acima): libera só o mapa de

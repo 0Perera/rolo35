@@ -619,3 +619,12 @@ seções de Uso de IA e Decisões técnicas do README final.
 - **Decisão**: o projeto não usa pull requests. Cada capability vira um commit próprio direto na branch de trabalho, com mensagem no formato Conventional Commits explicando o porquê, e a integração é merge direto.
 - **Por quê**: PR existe pra pedir revisão de outra pessoa e pra gatear merge por CI. Aqui não há outra pessoa — é trabalho solo, com prazo de 7 dias — e o gate de qualidade que um PR daria já roda antes de cada commit: teste primeiro (RED → GREEN), suíte inteira verde antes de commitar. Abrir PR pra si mesmo adicionaria cerimônia sem adicionar nenhuma checagem que já não aconteça.
 - **O que substitui a revisão**: os ciclos de code review registrados em `_bmad-output/implementation-artifacts/` — feitos por agente, com achados aplicados ou explicitamente recusados — e este próprio arquivo, que é onde as decisões ficam auditáveis depois do fato.
+
+---
+
+## Swagger UI entra; o envelope de erro fica documentado num lugar só (CAP-15)
+
+- **Decisão**: `springdoc-openapi-starter-webmvc-ui` 2.8.6 adicionado, com `/swagger-ui.html` e `/v3/api-docs` públicos e um `OpenApiConfig` mínimo (título, descrição e esquema `bearer-jwt`, pro botão *Authorize* funcionar). O envelope de erro `{codigo, mensagem}` **não** é anotado endpoint a endpoint com `@ApiResponse`.
+- **Por quê o springdoc, mesmo sendo Grupo C**: o custo real foi uma dependência e um `@Configuration` de 40 linhas, e o ganho é quem avalia conseguir exercitar a API sem montar `curl` na mão. A documentação é pública de propósito — ela descreve o contrato, não expõe dado, e gatear atrás de login obrigaria a conseguir um token antes de saber quais rotas existem.
+- **Por quê não anotar o envelope**: seriam mais de vinte `@ApiResponse` repetindo a mesma estrutura em cima de controllers que hoje se leem em dez segundos, e a informação útil — quais códigos existem, com que status, e quando cada um acontece — já está numa tabela única no README §6. Vinte cópias parciais de uma tabela completa é pior do que a tabela.
+- **Risco assumido, com alarme**: springdoc 2.8.6 é publicado pro Spring Boot 3.x e este projeto roda no 4.1 com Jackson 3. A combinação funciona hoje (verificado, não presumido), mas é o tipo de coisa que quebra em silêncio numa atualização. `OpenApiDocsTest` sobe o contexto inteiro e exige `200` nos dois endpoints, com rotas conhecidas presentes no JSON — se a compatibilidade cair, a suíte cai junto.

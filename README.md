@@ -351,8 +351,14 @@ local: `http://localhost:8080`. Autenticação via `Authorization: Bearer <token
 | `GET` | `/api/ingressos/minhas` | `CLIENTE` | Ingressos do cliente autenticado |
 | `GET` | `/api/ingressos/{codigo}` | **público** | Leitura pública do ingresso (não consome) |
 | `GET` | `/actuator/health` | **público** | Health check |
+| `GET` | `/swagger-ui.html`, `/v3/api-docs` | **público** | Documentação da API (springdoc) |
 
-Envelope de erro: `{ "codigo": "SESSAO_CONFLITANTE", "mensagem": "..." }`.
+Documentação interativa em **`/swagger-ui.html`** (JSON em `/v3/api-docs`), pública como a
+documentação que é. Use *Authorize* com o `token` de `POST /api/auth/login` pra exercitar as rotas
+autenticadas direto de lá.
+
+Envelope de erro: `{ "codigo": "SESSAO_CONFLITANTE", "mensagem": "..." }` — a tabela abaixo é a
+fonte única desses códigos; eles não são repetidos endpoint a endpoint no OpenAPI.
 
 | Código | HTTP | Quando |
 |---|---|---|
