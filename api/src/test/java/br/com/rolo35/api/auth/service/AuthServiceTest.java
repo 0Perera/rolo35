@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -146,7 +147,7 @@ class AuthServiceTest {
                 authService.cadastrar(new CadastroRequest("Fulano de Tal", "novo@rolo35.com.br", "senha123", papel));
 
         ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
-        verify(usuarioRepository).save(salvo.capture());
+        verify(usuarioRepository).saveAndFlush(salvo.capture());
         assertThat(salvo.getValue().getPapel()).isEqualTo(papel.name());
         assertThat(salvo.getValue().getNome()).isEqualTo("Fulano de Tal");
         assertThat(salvo.getValue().getEmail()).isEqualTo("novo@rolo35.com.br");
@@ -164,7 +165,7 @@ class AuthServiceTest {
         authService.cadastrar(new CadastroRequest("Fulano de Tal", "novo@rolo35.com.br", "senha123", Papel.CLIENTE));
 
         ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
-        verify(usuarioRepository).save(salvo.capture());
+        verify(usuarioRepository).saveAndFlush(salvo.capture());
         assertThat(salvo.getValue().getSenhaHash()).isEqualTo("hash-bcrypt").isNotEqualTo("senha123");
     }
 
@@ -177,8 +178,40 @@ class AuthServiceTest {
                         new CadastroRequest("Fulano de Tal", "ocupado@rolo35.com.br", "senha123", Papel.CLIENTE)))
                 .isInstanceOf(EmailJaCadastradoException.class);
 
-        verify(usuarioRepository, never()).save(any());
+        verify(usuarioRepository, never()).saveAndFlush(any());
         verify(jwtService, never()).generateToken(any(), any());
+    }
+
+    // A checagem prévia de duplicidade não é atômica com o INSERT: entre consultar e gravar cabe
+    // outro cadastro do mesmo e-mail. Quando isso acontece, quem perde a corrida esbarra na
+    // constraint `uk_usuarios_email` — e precisa receber o mesmo 409 de sempre, não um 500.
+    @Test
+    void cadastrarTraduzViolacaoDeUnicidadeEmEmailJaCadastrado() {
+        given(usuarioRepository.findByEmail("novo@rolo35.com.br")).willReturn(Optional.empty());
+        given(passwordEncoder.encode("senha123")).willReturn("hash-bcrypt");
+        given(usuarioRepository.saveAndFlush(any(Usuario.class)))
+                .willThrow(new DataIntegrityViolationException("uk_usuarios_email"));
+
+        assertThatThrownBy(() -> authService.cadastrar(
+                        new CadastroRequest("Fulano de Tal", "novo@rolo35.com.br", "senha123", Papel.CLIENTE)))
+                .isInstanceOf(EmailJaCadastradoException.class);
+
+        verify(jwtService, never()).generateToken(any(), any());
+    }
+
+    // Nome é rótulo, não chave: apara o padding que o autofill cola, mas sem mexer na caixa — quem
+    // se chama "de Tal" não vira "De Tal" porque o servidor achou melhor.
+    @Test
+    void cadastrarAparaEspacosDoNomeSemMudarACaixa() {
+        given(usuarioRepository.findByEmail("novo@rolo35.com.br")).willReturn(Optional.empty());
+        given(passwordEncoder.encode("senha123")).willReturn("hash-bcrypt");
+
+        authService.cadastrar(
+                new CadastroRequest("  Fulano de Tal  ", "novo@rolo35.com.br", "senha123", Papel.CLIENTE));
+
+        ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).saveAndFlush(salvo.capture());
+        assertThat(salvo.getValue().getNome()).isEqualTo("Fulano de Tal");
     }
 
     // Mesma razão do login: e-mail é identidade. Se o cadastro gravasse "Novo@Rolo35.com.BR" cru, o
@@ -193,7 +226,7 @@ class AuthServiceTest {
                 new CadastroRequest("Fulano de Tal", "  Novo@Rolo35.com.BR  ", "senha123", Papel.CLIENTE));
 
         ArgumentCaptor<Usuario> salvo = ArgumentCaptor.forClass(Usuario.class);
-        verify(usuarioRepository).save(salvo.capture());
+        verify(usuarioRepository).saveAndFlush(salvo.capture());
         assertThat(salvo.getValue().getEmail()).isEqualTo("novo@rolo35.com.br");
         verify(usuarioRepository).findByEmail("novo@rolo35.com.br");
     }

@@ -9,6 +9,7 @@ import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.dto.LoginResponse;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import java.util.Locale;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -73,6 +74,12 @@ public class AuthService {
      */
     public LoginResponse cadastrar(CadastroRequest request) {
         String email = normalizarEmail(request.email());
+
+        // Duas checagens do mesmo e-mail, de propósito, e nenhuma das duas é redundante. Esta é o
+        // caminho comum: responde 409 sem gastar um INSERT e sem depender de traduzir erro de
+        // banco. Mas ela não é atômica com o save — entre consultar e gravar cabe outro cadastro
+        // do mesmo e-mail —, então quem de fato garante a unicidade é a constraint
+        // `uk_usuarios_email` e o catch abaixo. Sem ele, o perdedor da corrida levaria 500.
         if (usuarioRepository.findByEmail(email).isPresent()) {
             throw new EmailJaCadastradoException();
         }
@@ -82,7 +89,16 @@ public class AuthService {
         // String, e propagar o tipo seria refactor sem pedido de nenhuma AC.
         String papel = request.papel().name();
         String senhaHash = passwordEncoder.encode(request.senha());
-        usuarioRepository.save(new Usuario(request.nome(), email, senhaHash, papel));
+        try {
+            // `saveAndFlush`, e não `save`: com `save` o INSERT só vai ao banco no commit da
+            // transação, depois deste bloco — a violação escaparia do catch e viraria 500.
+            usuarioRepository.saveAndFlush(new Usuario(request.nome().trim(), email, senhaHash, papel));
+        } catch (DataIntegrityViolationException excecao) {
+            // A única constraint da tabela que este INSERT ainda pode violar é a de e-mail único: o
+            // CHECK de `papel` é garantido pelo enum e os limites de tamanho pelo @Size do DTO, que
+            // reprovam antes de chegar aqui.
+            throw new EmailJaCadastradoException();
+        }
 
         String token = jwtService.generateToken(email, papel);
         return new LoginResponse(token, papel);
