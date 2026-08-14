@@ -30,7 +30,7 @@ Continuação da branch `epic-2-gestao-de-sessoes-organizador` (já existe, já 
 
 ## TDD — regra obrigatória desta story
 
-Regra única do projeto (CLAUDE.md § Metodologia XP + TDD): todo teste nasce antes do código. Front-end de interação puramente visual é a única exceção documentada (teste de contrato nasce depois do componente).
+Regra única do projeto (§ Metodologia XP + TDD das instruções do projeto): todo teste nasce antes do código. Front-end de interação puramente visual é a única exceção documentada (teste de contrato nasce depois do componente).
 
 ## Tasks / Subtasks
 

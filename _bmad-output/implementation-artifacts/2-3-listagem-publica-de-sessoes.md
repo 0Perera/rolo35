@@ -32,7 +32,7 @@ Continuar na branch `epic-2-gestao-de-sessoes-organizador` (já existe, criada n
 
 ## TDD — regra obrigatória desta story
 
-> Regra única do projeto (CLAUDE.md § Metodologia XP + TDD): **todo teste nasce antes do código**, sempre. Cada subtask de código abaixo é precedida da sua subtask de teste, marcada **[RED]**. Ciclo: escrever o teste → rodar e ver falhar por ausência do código (RED) → escrever o código mínimo que faz passar (**[GREEN]**) → refactor se necessário, mantendo os testes verdes. Não pule o RED. A única exceção documentada no projeto é a UI de interação visual (Task 4 abaixo), cujo teste de contrato nasce **depois** do componente pronto (cobertura leve, focada em contrato de comportamento, não em renderização) — todo o resto segue RED→GREEN sem exceção.
+> Regra única do projeto (§ Metodologia XP + TDD das instruções do projeto): **todo teste nasce antes do código**, sempre. Cada subtask de código abaixo é precedida da sua subtask de teste, marcada **[RED]**. Ciclo: escrever o teste → rodar e ver falhar por ausência do código (RED) → escrever o código mínimo que faz passar (**[GREEN]**) → refactor se necessário, mantendo os testes verdes. Não pule o RED. A única exceção documentada no projeto é a UI de interação visual (Task 4 abaixo), cujo teste de contrato nasce **depois** do componente pronto (cobertura leve, focada em contrato de comportamento, não em renderização) — todo o resto segue RED→GREEN sem exceção.
 
 ## Tasks / Subtasks
 
@@ -124,8 +124,8 @@ Continuar na branch `epic-2-gestao-de-sessoes-organizador` (já existe, criada n
 
 - [Source: _bmad-output/planning-artifacts/epics.md#Story 2.3: Listagem Pública de Sessões]
 - [Source: _bmad-output/planning-artifacts/prds/prd-rolo35-2026-08-09/prd.md#FR-8, §4.4 Busca e Reserva de Assento]
-- [Source: _bmad-output/planning-artifacts/architecture/architecture-rolo35-2026-08-10/ARCHITECTURE-SPINE.md#AD-1, AD-11, AD-12, AD-13, Capability → Architecture Map §4.4, non-negotiable de N+1 do CLAUDE.md]
-- [Source: CLAUDE.md — Metodologia XP + TDD, Non-negotiables de Modelagem/Qualidade/Funcionalidades (estados de carregamento/vazio/erro), Convenções de nomenclatura]
+- [Source: _bmad-output/planning-artifacts/architecture/architecture-rolo35-2026-08-10/ARCHITECTURE-SPINE.md#AD-1, AD-11, AD-12, AD-13, Capability → Architecture Map §4.4, non-negotiable de N+1 das instruções do projeto]
+- [Source: instruções do projeto — Metodologia XP + TDD, evitar N+1 nas listagens, índices nas colunas de filtro/join, estados de carregando/lista vazia/erro, Convenções de nomenclatura]
 - [Source: _bmad-output/implementation-artifacts/2-1-criacao-de-sessao-com-bloqueio-de-conflito-de-horario.md — padrões de query nativa (`existeConflitante`), estrutura de commit por task, `SecurityConfig`/`@PreAuthorize`, Dev Notes sobre capacidade derivada do mapa real, item deferido "sem guarda de rota no front"]
 - [Source: api/src/main/resources/db/migration/V1__schema.sql — schema de `sessoes`, `salas`, `assentos`, `assento_sessao`, sem coluna de status de publicação]
 - [Source: código existente lido por completo nesta criação de story: `br.com.rolo35.api.sessoes.{Sessao,Sala,AssentoSessao}`, `sessoes.repository.SessaoRepository`, `sessoes.service.SessaoService`, `sessoes.controller.SessaoController`, `sessoes.dto.SessaoResponse`, `config.SecurityConfig`, `common.GlobalExceptionHandler`, `web/src/api/{client.ts,sessoes.ts}`, `web/src/pages/{BuscaFilmesPage.tsx,CriarSessaoPage.tsx,PapelPlaceholderPage.tsx,LoginPage.tsx}`, `web/src/App.tsx`]

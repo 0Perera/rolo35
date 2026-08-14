@@ -341,7 +341,7 @@ nome vem do rolo de película 35mm.
 | Tinta | `#171219` / `#0C0910` | Fundo escuro roxo-preto, header, rodapé |
 | Papel | `#F4E9D4` / `#FFFDF6` | Fundo das telas de conteúdo e dos cartões |
 | Chama | `#E32B21` → `#F26522` → `#FFC414` | Gradiente de destaque (marca, CTA, estados quentes) |
-| Ciano | `#7ED9F2` | Contraste e **foco visível** de teclado |
+| Ciano | `#7ED9F2` | Contraste e **foco de teclado** |
 | Marinho | `#123A5C` | Texto de status sobre fundo claro |
 
 Tipografia: **Bungee** (display), **Archivo** (corpo/UI) e **VT323** (monospace retrô — códigos,
@@ -715,6 +715,15 @@ implementation-artifacts/
 ├── deferred-work.md       Dívida consciente, por code review
 └── sprint-status.yaml     Estado real de cada story
 ```
+
+Esses artefatos citam, em vários pontos, as **instruções do projeto**: o arquivo de contexto que eu
+mantenho para o agente, com stack, convenções de nomenclatura, metodologia de teste e a lista de
+requisitos que eu tratei como inegociáveis. Ele fica **fora do controle de versão** — é a
+configuração da minha ferramenta, não entregável do projeto, e muda a cada sessão. Tudo o que ele
+fixa e que importa para quem lê o código está reproduzido aqui: as regras de negócio na [seção
+10](#10-regras-de-negócio-aplicadas-e-por-quê), os invariantes de concorrência na
+[11](#11-concorrência-os-invariantes-que-não-podem-quebrar), as garantias de segurança na
+[12](#12-segurança) e a estratégia de testes na [14](#14-estratégia-de-testes).
 
 ### Como a supervisão funcionava na prática
 

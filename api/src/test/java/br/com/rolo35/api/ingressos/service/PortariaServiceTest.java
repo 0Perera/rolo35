@@ -13,6 +13,7 @@ import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
 import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
+import br.com.rolo35.api.ingressos.SessaoForaDaJanelaDoTurnoException;
 import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.TurnoPortaria;
 import br.com.rolo35.api.ingressos.dto.PainelTurnoDto;
@@ -87,13 +88,17 @@ class PortariaServiceTest {
     }
 
     private Sessao sessao(Long id, Long salaId) {
+        return sessaoComDataHora(id, salaId, LocalDateTime.now().plusDays(1));
+    }
+
+    private Sessao sessaoComDataHora(Long id, Long salaId, LocalDateTime dataHora) {
         return Sessao.builder()
                 .id(id)
                 .organizadorId(1L)
                 .salaId(salaId)
                 .tmdbId(550L)
                 .titulo("Clube da Luta")
-                .dataHora(LocalDateTime.now().plusDays(1))
+                .dataHora(dataHora)
                 .preco(java.math.BigDecimal.TEN)
                 .createdAt(Instant.now())
                 .build();
@@ -110,7 +115,8 @@ class PortariaServiceTest {
     void selecionarSessaoSemTurnoPrevioCriaNovaLinha() {
         setUp();
         stubPortaria();
-        given(sessaoRepository.findById(SESSAO_ID)).willReturn(Optional.of(sessao(SESSAO_ID, 1L)));
+        given(sessaoRepository.findById(SESSAO_ID))
+                .willReturn(Optional.of(sessaoComDataHora(SESSAO_ID, 1L, LocalDateTime.now().plusMinutes(10))));
         given(salaRepository.findById(1L)).willReturn(Optional.of(sala(1L, "Sala 1")));
 
         SessaoAtivaDto dto = portariaService.selecionarSessao(PORTARIA_EMAIL, SESSAO_ID);
@@ -129,7 +135,8 @@ class PortariaServiceTest {
         setUp();
         stubPortaria();
         Long outraSessaoId = 2L;
-        given(sessaoRepository.findById(outraSessaoId)).willReturn(Optional.of(sessao(outraSessaoId, 1L)));
+        given(sessaoRepository.findById(outraSessaoId))
+                .willReturn(Optional.of(sessaoComDataHora(outraSessaoId, 1L, LocalDateTime.now().plusMinutes(10))));
         given(salaRepository.findById(1L)).willReturn(Optional.of(sala(1L, "Sala 1")));
 
         portariaService.selecionarSessao(PORTARIA_EMAIL, outraSessaoId);
@@ -150,6 +157,46 @@ class PortariaServiceTest {
                 .isInstanceOf(SessaoNaoEncontradaException.class);
 
         verify(turnoPortariaRepository, never()).save(any());
+    }
+
+    @Test
+    void selecionarSessaoMuitoNoFuturoLancaSemSalvar() {
+        setUp();
+        stubPortaria();
+        given(sessaoRepository.findById(SESSAO_ID))
+                .willReturn(Optional.of(sessaoComDataHora(SESSAO_ID, 1L, LocalDateTime.now().plusHours(3))));
+
+        assertThatThrownBy(() -> portariaService.selecionarSessao(PORTARIA_EMAIL, SESSAO_ID))
+                .isInstanceOf(SessaoForaDaJanelaDoTurnoException.class);
+
+        verify(turnoPortariaRepository, never()).save(any());
+    }
+
+    @Test
+    void selecionarSessaoMuitoNoPassadoLancaSemSalvar() {
+        setUp();
+        stubPortaria();
+        given(sessaoRepository.findById(SESSAO_ID))
+                .willReturn(Optional.of(sessaoComDataHora(SESSAO_ID, 1L, LocalDateTime.now().minusHours(3))));
+
+        assertThatThrownBy(() -> portariaService.selecionarSessao(PORTARIA_EMAIL, SESSAO_ID))
+                .isInstanceOf(SessaoForaDaJanelaDoTurnoException.class);
+
+        verify(turnoPortariaRepository, never()).save(any());
+    }
+
+    @Test
+    void selecionarSessaoDentroDaJanelaAceita() {
+        setUp();
+        stubPortaria();
+        given(sessaoRepository.findById(SESSAO_ID))
+                .willReturn(Optional.of(sessaoComDataHora(SESSAO_ID, 1L, LocalDateTime.now().minusHours(1))));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(sala(1L, "Sala 1")));
+
+        SessaoAtivaDto dto = portariaService.selecionarSessao(PORTARIA_EMAIL, SESSAO_ID);
+
+        assertThat(dto.sessaoId()).isEqualTo(SESSAO_ID);
+        verify(turnoPortariaRepository).save(any());
     }
 
     @Test

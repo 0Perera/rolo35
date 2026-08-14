@@ -13,7 +13,7 @@ sources:
   - '_bmad-output/planning-artifacts/prds/prd-rolo35-2026-08-09/prd.md'
   - '_bmad-output/planning-artifacts/briefs/brief-rolo35-2026-08-09/brief.md'
   - 'docs/decisions.md'
-  - 'CLAUDE.md'
+  - 'instruções do projeto (não versionadas)'
 companions: []
 ---
 
@@ -21,7 +21,7 @@ companions: []
 
 ## Design Paradigm
 
-**Layered architecture, empacotada por domínio primeiro, camada depois.** Cada domínio (`auth`, `sessoes`, `reservas`, `pagamentos`, `ingressos`) é um pacote Java auto-contido com suas próprias sub-camadas `controller → service → repository` — não existe um pacote `controller`/`service`/`repository` único guardando classes de todos os domínios. Regra de negócio nunca vive no controller (non-negotiable herdado do CLAUDE.md, `[ADOPTED]`).
+**Layered architecture, empacotada por domínio primeiro, camada depois.** Cada domínio (`auth`, `sessoes`, `reservas`, `pagamentos`, `ingressos`) é um pacote Java auto-contido com suas próprias sub-camadas `controller → service → repository` — não existe um pacote `controller`/`service`/`repository` único guardando classes de todos os domínios. Regra de negócio nunca vive no controller (non-negotiable herdado das instruções do projeto, `[ADOPTED]`).
 
 A direção de dependência entre pacotes de domínio é parte do paradigma, não um detalhe. **Convenção da seta: `A --> B` significa "A depende de B" (aponta pra dependência).**
 
@@ -92,7 +92,7 @@ No front, o paradigma espelha o back: a SPA nunca fala com a API fora de uma cam
 ### AD-9 — Separação de rota entre leitura pública e validação de portaria
 
 - **Binds:** FR-16, FR-19, FR-20
-- **Prevents:** link de compartilhamento público sendo usado como bypass da validação de portaria (non-negotiable explícito do CLAUDE.md)
+- **Prevents:** link de compartilhamento público sendo usado como bypass da validação de portaria (non-negotiable explícito das instruções do projeto)
 - **Rule:** `GET /ingressos/{codigo}` é pública, somente leitura, nunca muda estado, sem lock. `POST /portaria/validacoes` exige papel `PORTARIA` + sessão selecionada, muta estado (`VALIDO → UTILIZADO`) com o mesmo lock pessimista de linha de AD-3/AD-5/AD-6 aplicado à tabela `ingressos`. Nenhuma outra rota transiciona esse estado.
 
 ### AD-10 — Boundary de autenticação: Bearer JWT, localStorage, CORS allow-list
@@ -111,13 +111,13 @@ No front, o paradigma espelha o back: a SPA nunca fala com a API fora de uma cam
 
 - **Binds:** toda resposta da API
 - **Prevents:** campo sensível de banco (hash de senha, dado de outro usuário) vazando por serialização direta de entidade JPA
-- **Rule:** toda resposta é serializada a partir de um DTO explícito por endpoint, nunca da entidade JPA/registro de banco diretamente. Non-negotiable do CLAUDE.md/PRD §5.
+- **Rule:** toda resposta é serializada a partir de um DTO explícito por endpoint, nunca da entidade JPA/registro de banco diretamente. Non-negotiable das instruções do projeto/PRD §5.
 
 ### AD-13 — Nomenclatura: entidades em português, código em inglês `[ADOPTED]`
 
 - **Binds:** todo o schema de banco e todo o código
 - **Prevents:** mistura de idioma dentro do mesmo domínio (ex. tabela `sessions` ao lado de `assentos`)
-- **Rule:** entidades/tabelas em português (`sessoes`, `salas`, `assentos`, `ingressos`, `reservas`, `assento_sessao`, `usuarios`); classes de serviço, métodos e variáveis em inglês. Non-negotiable do CLAUDE.md.
+- **Rule:** entidades/tabelas em português (`sessoes`, `salas`, `assentos`, `ingressos`, `reservas`, `assento_sessao`, `usuarios`); classes de serviço, métodos e variáveis em inglês. Non-negotiable das instruções do projeto.
 
 ### AD-14 — Sem tabela `filmes` própria
 

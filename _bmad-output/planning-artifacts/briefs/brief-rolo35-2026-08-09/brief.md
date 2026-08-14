@@ -35,7 +35,7 @@ Autenticação JWT com três papéis (`ORGANIZADOR`, `CLIENTE`, `PORTARIA`), aut
 
 ## Regras de Negócio Decididas
 
-Os requisitos originais não definem estas regras — ficariam implícitas ou decididas ad-hoc durante a implementação se não fossem fechadas aqui. Cada uma parte de precedente de mercado (ingresso.com, eventim, sympla — referências do próprio projeto), da prioridade de simplicidade do projeto, ou da mesma classe de proteção de concorrência já exigida pelos non-negotiables do `CLAUDE.md`.
+Os requisitos originais não definem estas regras — ficariam implícitas ou decididas ad-hoc durante a implementação se não fossem fechadas aqui. Cada uma parte de precedente de mercado (ingresso.com, eventim, sympla — referências do próprio projeto), da prioridade de simplicidade do projeto, ou da mesma classe de proteção de concorrência já exigida pelos non-negotiables das instruções do projeto.
 
 | Regra | Decisão | Justificativa |
 |---|---|---|
@@ -60,9 +60,9 @@ Os requisitos originais não definem estas regras — ficariam implícitas ou de
 
 **V1 — fluxo vertical completo, ponta a ponta**: login/papéis → busca de filme (TMDb) → escolha de sessão → reserva de assento em mapa de cinema → pagamento simulado (aprovação e recusa) → ingresso com QR assinado → "Meus ingressos" → validação na portaria (câmera + digitação manual) → link de compartilhamento público. As seis regras de negócio acima valem desde a primeira fatia vertical, não como polimento posterior.
 
-**Já decidido como fora de escopo** (do `CLAUDE.md`, não deste brief): nota fiscal, revenda de ingresso entre usuários, aplicativo nativo, recuperação de senha, envio de ingresso por e-mail. Cancelamento de ingresso (ver tabela acima).
+**Já decidido como fora de escopo** (das instruções do projeto, não deste brief): nota fiscal, revenda de ingresso entre usuários, aplicativo nativo, recuperação de senha, envio de ingresso por e-mail. Cancelamento de ingresso (ver tabela acima).
 
-**Candidatos a stretch — prioridade fica para o PRD decidir**: busca e filtro avançado de eventos, painel do organizador além do CRUD básico de sessão, mapa de assentos em tempo real (WebSocket). Testes automatizados e deploy (Render + Vercel) já são compromissos assumidos no `CLAUDE.md`, não itens opcionais deste brief.
+**Candidatos a stretch — prioridade fica para o PRD decidir**: busca e filtro avançado de eventos, painel do organizador além do CRUD básico de sessão, mapa de assentos em tempo real (WebSocket). Testes automatizados e deploy (Render + Vercel) já são compromissos assumidos nas instruções do projeto, não itens opcionais deste brief.
 
 ## Critérios de Sucesso
 
@@ -76,4 +76,4 @@ Os requisitos originais não definem estas regras — ficariam implícitas ou de
 O risco real deste projeto não é técnico, é estético e decisório: qualquer um cola os requisitos numa ferramenta de IA e recebe uma aplicação funcional com cara de SaaS genérico. Duas coisas defendem contra isso:
 
 1. **Decisão explícita onde os requisitos são ambíguos** — as seis regras de negócio acima, a escolha de mapa de assentos sobre pista, TMDb sobre Ticketmaster, cada uma registrada com o porquê em `docs/decisions.md`, não deduzível só lendo o código.
-2. **Identidade visual não-genérica** — tema cinema clássico anos 80/90 (rolo de película 35mm), contagem regressiva de abertura como transição, perfuração de película como moldura, paleta sépia/âmbar + vermelho veludo + dourado, tipografia robusta estilo marquise. Já fixado no `CLAUDE.md`; este brief só reforça que é non-negotiable, não polimento de fim de sprint.
+2. **Identidade visual não-genérica** — tema cinema clássico anos 80/90 (rolo de película 35mm), contagem regressiva de abertura como transição, perfuração de película como moldura, paleta sépia/âmbar + vermelho veludo + dourado, tipografia robusta estilo marquise. Já fixado nas instruções do projeto; este brief só reforça que é non-negotiable, não polimento de fim de sprint.

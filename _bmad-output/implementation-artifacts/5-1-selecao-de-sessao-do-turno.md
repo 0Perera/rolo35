@@ -1,6 +1,6 @@
 # Story 5.1: Seleção de Sessão do Turno
 
-Status: in-progress
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -29,7 +29,7 @@ so that toda validação seguinte já sabe contra qual sessão comparar o códig
         selecionado_em TIMESTAMP NOT NULL DEFAULT now()
     );
     ```
-    PK é `usuario_id`: no máximo uma linha por portaria — ausência de linha é o estado "nenhuma sessão selecionada ainda" (AC1), sem precisar de coluna nullable. Reselecionar (AC5) é update na mesma linha, não insert de uma segunda. Sem índice extra: a única consulta desta story é lookup por PK, já coberta; não é uma tela de listagem/filtro que o non-negotiable de índices do CLAUDE.md exija cobrir.
+    PK é `usuario_id`: no máximo uma linha por portaria — ausência de linha é o estado "nenhuma sessão selecionada ainda" (AC1), sem precisar de coluna nullable. Reselecionar (AC5) é update na mesma linha, não insert de uma segunda. Sem índice extra: a única consulta desta story é lookup por PK, já coberta; não é uma tela de listagem/filtro que o non-negotiable de índices das instruções do projeto exija cobrir.
     **Decisão consciente de não colocar isso em `usuarios`**: a Architecture Spine já registra que `usuarios` é "uma tabela pros três papéis... nenhum papel tem campo próprio que justifique split" — uma coluna `sessao_ativa_id` preenchida só por linhas com `papel = PORTARIA` violaria essa decisão. Tabela própria, sem entidade de domínio própria (mesmo espírito de `pagamentos`, que "opera sobre Reserva" sem tabela própria — aqui é o oposto, tabela própria sem conceito de domínio rico, só o ponteiro).
   - [ ] Commit: `feat(portaria): migration turno_portaria (AC2, AC5)`
 
@@ -150,7 +150,7 @@ so that toda validação seguinte já sabe contra qual sessão comparar o códig
 - [Source: _bmad-output/planning-artifacts/epics.md#Story 5.1: Seleção de Sessão do Turno]
 - [Source: _bmad-output/planning-artifacts/prds/prd-rolo35-2026-08-09/prd.md — FR-17]
 - [Source: _bmad-output/planning-artifacts/architecture/architecture-rolo35-2026-08-10/ARCHITECTURE-SPINE.md#AD-9 (separação leitura pública/validação portaria), Structural Seed (`ingressos/controller/PortariaController`), Entidades (ERD — `usuarios` sem campo papel-específico)]
-- [Source: CLAUDE.md — Non-negotiable "autorização checada em toda requisição, inclusive rotas de portaria", Metodologia XP + TDD, convenção de nomenclatura (entidades em português, código em inglês)]
+- [Source: instruções do projeto — Non-negotiable "autorização checada em toda requisição, inclusive rotas de portaria", Metodologia XP + TDD, convenção de nomenclatura (entidades em português, código em inglês)]
 - [Source: _bmad-output/implementation-artifacts/4-2-meus-ingressos-e-link-publico.md — precedente direto de sequência de lookups sessão/sala sem N+1, DTO explícito sem vazamento de campo interno, padrão de `SecurityTest`]
 - [Source: código existente lido por completo nesta criação de story: `auth.Usuario`/`UsuarioRepository`, `sessoes.service.SessaoService`, `sessoes.repository.SessaoRepository`, `sessoes.controller.SessaoController`, `config.SecurityConfig`, `common.GlobalExceptionHandler`, `web/src/api/client.ts`/`sessoes.ts`, `web/src/pages/ListagemSessoesPage.tsx`, `web/src/pages/PapelPlaceholderPage.tsx`, `web/src/components/SeletorDeOpcao.tsx`, `web/src/App.tsx`, `web/src/pages/LoginPage.tsx`]
 
@@ -212,12 +212,12 @@ marcados; o restante fica como action item — escopo reduzido a pedido, só blo
 
 - [x] [Review][Patch] `selecionar()` tem `finally` sem `catch` — troca de sessão falha em silêncio e o painel segue mostrando a sessão antiga, levando a portaria a validar contra o turno errado [web/src/pages/SelecaoTurnoPortariaPage.tsx:41] — corrigido, coberto por teste de rejeição
 - [x] [Review][Decision] Sessão ativa some do seletor quando a sessão começa (`listarPublicadas()` filtra `data_hora >= now()`), voltando ao placeholder com turno ativo — decidido: reinjetar a sessão ativa nas opções, mantendo o reuso da listagem pública [web/src/pages/SelecaoTurnoPortariaPage.tsx:88]
-- [ ] [Review][Patch] `buscarSessaoAtiva()` mapeia *qualquer* 409 pra "sem sessão", ignorando `erro.codigo` — contraria o racional documentado em `client.ts:11-14` [web/src/api/portaria.ts:28]
-- [ ] [Review][Patch] `Promise.all` acopla endpoint público e autenticado: 401/403 de `buscarSessaoAtiva()` é reportado como "não foi possível carregar as sessões" [web/src/pages/SelecaoTurnoPortariaPage.tsx:22]
-- [ ] [Review][Patch] `selecionarSessao()` aceita qualquer `sessaoId` (passada, não publicada) — o filtro vive só no front, contrariando o non-negotiable de não confiar no cliente como controle de acesso [api/.../service/PortariaService.java:60]
-- [ ] [Review][Patch] `turno_portaria.sessao_id`: FK sem índice e sem `ON DELETE` [api/src/main/resources/db/migration/V6__turno_portaria.sql:2]
-- [ ] [Review][Patch] Tabela `turno_portaria` no singular — a convenção do projeto é plural (`sessoes`, `salas`, `ingressos`) [api/src/main/resources/db/migration/V6__turno_portaria.sql:1]
-- [ ] [Review][Patch] `@Transactional(readOnly = true)` em `obterSessaoAtivaOuLancar()` é inerte (self-invocation não passa pelo proxy) e o método devolve a entidade `Sessao`, não um DTO [api/.../service/PortariaService.java:73]
+- [x] [Review][Patch] `selecionarSessao()` aceita qualquer `sessaoId` (passada, não publicada) — o filtro vivia só no front, contrariando o non-negotiable de não confiar no cliente como controle de acesso [api/.../service/PortariaService.java:60] — **corrigido**: guard server-side restringindo a janela `-30min/+2h` a partir de `dataHora` (`SessaoForaDaJanelaDoTurnoException`, constante própria, não reaproveita o buffer de conflito de sala), decisão registrada em `spec-backlog-hardening` (CAP-8). Coberto por 3 testes novos em `PortariaServiceTest`.
+- [x] [Review][Defer] `buscarSessaoAtiva()` mapeia *qualquer* 409 pra "sem sessão", ignorando `erro.codigo` — contraria o racional documentado em `client.ts:11-14` [web/src/api/portaria.ts:28] — deferido: risco de UX (mensagem genérica em cenário raro), sem non-negotiable em jogo; ver `deferred-work.md`.
+- [x] [Review][Defer] `Promise.all` acopla endpoint público e autenticado: 401/403 de `buscarSessaoAtiva()` é reportado como "não foi possível carregar as sessões" [web/src/pages/SelecaoTurnoPortariaPage.tsx:22] — deferido, mesma categoria do item acima.
+- [x] [Review][Defer] `turno_portaria.sessao_id`: FK sem índice e sem `ON DELETE` [api/src/main/resources/db/migration/V6__turno_portaria.sql:2] — deferido: sem feature de exclusão de sessão hoje, `NO ACTION` é seguro; revisitar se isso mudar.
+- [x] [Review][Defer] Tabela `turno_portaria` no singular — a convenção do projeto é plural (`sessoes`, `salas`, `ingressos`) [api/src/main/resources/db/migration/V6__turno_portaria.sql:1] — deferido: renomear tabela em produção exige migration de rename, cosmético, sem urgência.
+- [x] [Review][Defer] `@Transactional(readOnly = true)` em `obterSessaoAtivaOuLancar()` é inerte (self-invocation não passa pelo proxy) e o método devolve a entidade `Sessao`, não um DTO [api/.../service/PortariaService.java:73] — deferido: sem vazamento de dado (uso é interno, nunca serializado direto), custo de correção não compensa contra o prazo.
 - [x] [Review][Patch] Completion Notes declaravam 14 testes de front falhando por "ambiente"; era o comando errado (`npx vitest run` em vez de `npm test`, que carrega `NODE_OPTIONS=--no-experimental-webstorage`). Suíte sempre esteve verde — corrigido abaixo
 
 **Verificação empírica desta rodada:** `./mvnw test` verde; `npx tsc --noEmit` limpo; `npm run lint`

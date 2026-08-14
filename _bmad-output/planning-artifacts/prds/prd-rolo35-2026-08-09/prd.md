@@ -9,7 +9,7 @@ updated: 2026-08-13
 
 ## 0. Documento
 
-Este PRD parte do [Product Brief](../../briefs/brief-rolo35-2026-08-09/brief.md) (regras de negócio já decididas), do [addendum](../../briefs/brief-rolo35-2026-08-09/addendum.md) (constraints de processo pra épicos/stories), de `docs/decisions.md` (decisões técnicas já tomadas) e de `CLAUDE.md` (stack e non-negotiables) — não duplica o conteúdo desses documentos, referencia e traduz em requisito. Serve de base direta pra arquitetura e pra quebra em épicos/stories. Vocabulário do Glossário (§3) é usado literalmente em todo o documento — sem sinônimo solto. Tags `[ASSUMPTION]` marcaram, durante o rascunho, onde inferi sem confirmação explícita — todas resolvidas e indexadas em §12.
+Este PRD parte do [Product Brief](../../briefs/brief-rolo35-2026-08-09/brief.md) (regras de negócio já decididas), do [addendum](../../briefs/brief-rolo35-2026-08-09/addendum.md) (constraints de processo pra épicos/stories), de `docs/decisions.md` (decisões técnicas já tomadas) e das instruções do projeto (stack e non-negotiables) — não duplica o conteúdo desses documentos, referencia e traduz em requisito. Serve de base direta pra arquitetura e pra quebra em épicos/stories. Vocabulário do Glossário (§3) é usado literalmente em todo o documento — sem sinônimo solto. Tags `[ASSUMPTION]` marcaram, durante o rascunho, onde inferi sem confirmação explícita — todas resolvidas e indexadas em §12.
 
 Projeto com prazo de 7 dias corridos (hoje é o dia 2). O documento é enxuto de propósito: prioriza decisão sobre exploração.
 
@@ -313,7 +313,7 @@ Portaria acompanha, durante o turno, quantas pessoas já entraram na sessão sel
 - Índices nas colunas usadas em filtro/join das telas — busca de sessão por data/local, lookup de ingresso por hash do código.
 - Sem N+1 nas listagens que juntam dado relacionado (ex.: sessões com filme e sala).
 
-**Testes** *(replicado do CLAUDE.md — vale também como critério de aceite por story, ver §7)*
+**Testes** *(replicado das instruções do projeto — vale também como critério de aceite por story, ver §7)*
 | O que é | Tipo de teste |
 |---|---|
 | Regra de negócio pura | Unitário (JUnit + Mockito, sem contexto Spring) |
@@ -328,7 +328,7 @@ Portaria acompanha, durante o turno, quantas pessoas já entraram na sessão sel
 
 ## 6. Identidade Visual
 
-Tema cinema clássico anos 80/90, referência ao rolo de película 35mm — non-negotiable, não polimento de fim de sprint (já fixado no `CLAUDE.md`):
+Tema cinema clássico anos 80/90, referência ao rolo de película 35mm — non-negotiable, não polimento de fim de sprint (já fixado nas instruções do projeto):
 
 - Contagem regressiva de abertura como transição/loading.
 - Perfuração de película como moldura/divisor.
@@ -340,7 +340,7 @@ Tema cinema clássico anos 80/90, referência ao rolo de película 35mm — non-
 *Levantadas no brief como regras de execução que a criação de épicos/stories deve herdar — explícitas aqui pra não ficarem implícitas na próxima fase.*
 
 - **Primeira story = fatia vertical fina do fluxo completo.** Login → busca de filme → reserva → pagamento simulado → ingresso com QR → validação na portaria, cada etapa no mínimo viável. Fatiar por funcionalidade/tela só depois dessa primeira fatia rodar ponta a ponta.
-- **Non-negotiables de segurança como critério de aceite explícito por story**, não implícito. Toda story que toca algum dos non-negotiables de segurança do `CLAUDE.md` declara no seu AC — por exemplo: assinatura do QR não forjável (FR-14), constraint de banco contra dupla-venda de assento (FR-11), constraint contra validação dupla de ingresso (FR-20), link de compartilhamento sem bypass de validação (FR-16), nenhuma resposta de API com campo sensível de banco, segredos só em variável de ambiente (§5). A lista completa é a do `CLAUDE.md`, não só os três exemplos mais citados neste PRD.
+- **Non-negotiables de segurança como critério de aceite explícito por story**, não implícito. Toda story que toca algum dos non-negotiables de segurança das instruções do projeto declara no seu AC — por exemplo: assinatura do QR não forjável (FR-14), constraint de banco contra dupla-venda de assento (FR-11), constraint contra validação dupla de ingresso (FR-20), link de compartilhamento sem bypass de validação (FR-16), nenhuma resposta de API com campo sensível de banco, segredos só em variável de ambiente (§5). A lista completa é a das instruções do projeto, não só os três exemplos mais citados neste PRD.
 - **Estratégia de teste por story** replica a tabela de §5 nos critérios de aceite de cada story — tipo de teste não é escolha livre do implementador.
 
 ## 8. Non-Goals (Explicit)
@@ -390,9 +390,9 @@ Os três itens acima seguem como candidatos registrados, sem compromisso de temp
 
 ## 12. Assumptions Index
 
-*Registro do que entrou no PRD como inferência minha, não como decisão já tomada no brief/addendum/CLAUDE.md. Todas as pendentes abaixo foram confirmadas com o usuário durante o Finalize e já viram fato do PRD nos pontos de origem — mantidas aqui só como rastro do que era suposição.*
+*Registro do que entrou no PRD como inferência minha, não como decisão já tomada no brief/addendum/instruções do projeto. Todas as pendentes abaixo foram confirmadas com o usuário durante o Finalize e já viram fato do PRD nos pontos de origem — mantidas aqui só como rastro do que era suposição.*
 
 - **§2.2, UJ-1/UJ-2/UJ-3 — nomes de persona.** "Marcos", "Priya" e "Denise" foram inventados (brief não nomeia ninguém) pra dar concretude a cada jornada. **Confirmado.**
-- **§4.8, FR-18 — câmera da portaria via navegador.** Único caminho coerente, já que app nativo está fora de escopo (`CLAUDE.md`, §8). **Confirmado**, sem hardware dedicado.
+- **§4.8, FR-18 — câmera da portaria via navegador.** Único caminho coerente, já que app nativo está fora de escopo (instruções do projeto, §8). **Confirmado**, sem hardware dedicado.
 - **§10 — métricas sem meta numérica.** Brief não pede número (latência, throughput etc.); SM-1–SM-4 ficam pass/fail. **Confirmado**, sem SM-5 quantitativo.
 - **Resolvidas em revisões anteriores:** comportamento de conflito de assento (UJ-2/FR-10) e alcance do FR-3 (mapa de assentos sem login).

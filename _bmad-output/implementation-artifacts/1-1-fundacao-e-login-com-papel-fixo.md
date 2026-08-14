@@ -168,7 +168,7 @@ so that eu acesse só as rotas permitidas pro meu papel, com o ambiente de dados
 - [Source: _bmad-output/planning-artifacts/epics.md#Story 1.1: Fundação e Login com Papel Fixo]
 - [Source: _bmad-output/planning-artifacts/architecture/architecture-rolo35-2026-08-10/ARCHITECTURE-SPINE.md#AD-1, AD-2, AD-3, AD-10, AD-11, AD-12, AD-13, AD-14, Structural Seed, Entidades (ERD)]
 - [Source: _bmad-output/planning-artifacts/implementation-readiness-report-2026-08-10.md — Major Issue "Criação de schema completo na Story 1.1" (exceção aceita, AD-3)]
-- [Source: CLAUDE.md — Non-negotiables de Segurança, Modelagem e banco de dados, Engenharia e processo (seed versionado, `.env.example`)]
+- [Source: instruções do projeto — segredos só em variável de ambiente com `.env.example` versionado, seed de dados de teste versionado, autorização validada no back-end, identificador de ingresso não sequencial]
 - [Source: docs/decisions.md — "JWT para autenticação", "Vite + React puro em vez de Next.js", "Empacotamento por domínio, não por camada técnica", "Autenticação SPA↔API: Bearer JWT em localStorage, sem cookie"]
 - Pesquisa web (2026-08-10): JJWT `0.13.0` (io.jsonwebtoken, ago/2025, artefatos `jjwt-api`/`jjwt-impl`/`jjwt-jackson`); `react-router` v8.x (pacote único, `react-router-dom` descontinuado).
 

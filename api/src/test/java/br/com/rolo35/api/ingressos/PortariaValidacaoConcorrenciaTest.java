@@ -139,7 +139,7 @@ class PortariaValidacaoConcorrenciaTest {
                 .salaId(sala.getId())
                 .tmdbId(550L)
                 .titulo("Sessão validação concorrência (fixture)")
-                .dataHora(LocalDateTime.now().plusDays(90).withNano(0))
+                .dataHora(LocalDateTime.now().plusMinutes(20).withNano(0))
                 .preco(new BigDecimal("25.00"))
                 .createdAt(Instant.now())
                 .build();

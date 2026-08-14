@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: 2026-08-13 (correct-course adicionou FR-21 e Story 5.3 ao Epic 5 e a Story 2.4 ao Epic 2 — paginação e busca server-side revisam o contrato de GET /api/sessoes fechado pela 2.3; 2.4 e 5.3 implementadas e em review)
+last_updated: 2026-08-14 (Epic 5 fechado: corrigido o único action item crítico restante — selecionarSessao() sem janela de tempo server-side, non-negotiable de autorização — e descartados os demais como [Review][Defer] em deferred-work.md. Story 5.3 marcada done sem story file/code review formal próprios; ver nota em deferred-work.md. correct-course adicionou FR-21 e Story 5.3 ao Epic 5 e a Story 2.4 ao Epic 2 — paginação e busca server-side revisam o contrato de GET /api/sessoes fechado pela 2.3. Story 1.3 → ready-for-dev, story file gerado após correct-course ampliar escopo pra cadastro de usuário multi-papel)
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,7 @@ development_status:
   epic-1: in-progress
   1-1-fundacao-e-login-com-papel-fixo: in-progress
   1-2-busca-de-filmes-via-proxy-tmdb: done
-  1-3-autocadastro-de-cliente: backlog
+  1-3-cadastro-de-usuario: ready-for-dev
   epic-1-retrospective: optional
 
   # Reaberto pela Story 2.4 — a paginação revisa o contrato de GET /api/sessoes fechado na 2.3.
@@ -73,8 +73,8 @@ development_status:
   4-3-checkout-de-pagamento-no-front: done
   epic-4-retrospective: optional
 
-  epic-5: in-progress
-  5-1-selecao-de-sessao-do-turno: in-progress
-  5-2-validacao-de-ingresso-na-portaria: in-progress
-  5-3-painel-de-turno-da-portaria: review
+  epic-5: done
+  5-1-selecao-de-sessao-do-turno: done
+  5-2-validacao-de-ingresso-na-portaria: done
+  5-3-painel-de-turno-da-portaria: done
   epic-5-retrospective: optional

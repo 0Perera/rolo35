@@ -1,6 +1,6 @@
 # Story 5.2: Validação de Ingresso na Portaria
 
-Status: in-progress
+Status: done
 
 <!-- Nota: validação é opcional. Rode validate-create-story pra checagem de qualidade antes do dev-story. -->
 
@@ -160,7 +160,7 @@ so that eu decido se libero a entrada com confiança, sem depender de julgamento
 - [Source: _bmad-output/planning-artifacts/epics.md#Story 5.2: Validação de Ingresso na Portaria]
 - [Source: _bmad-output/planning-artifacts/prds/prd-rolo35-2026-08-09/prd.md — FR-18, FR-19, FR-20]
 - [Source: _bmad-output/planning-artifacts/architecture/architecture-rolo35-2026-08-10/ARCHITECTURE-SPINE.md#AD-8 (assinatura HMAC recomputada antes do banco), AD-9 (POST /portaria/validacoes é o único lugar que transiciona VALIDO→UTILIZADO, mesmo lock pessimista de AD-3/AD-5/AD-6)]
-- [Source: CLAUDE.md — Non-negotiable "não validar o mesmo ingresso duas vezes, resolvido com constraint/lock de banco", Metodologia XP + TDD (Testcontainers reservado pros dois cenários de concorrência — este é o segundo, o primeiro é FR-11/reservas)]
+- [Source: instruções do projeto — Non-negotiable "não validar o mesmo ingresso duas vezes, resolvido com constraint/lock de banco", Metodologia XP + TDD (Testcontainers reservado pros dois cenários de concorrência — este é o segundo, o primeiro é FR-11/reservas)]
 - [Source: _bmad-output/implementation-artifacts/5-1-selecao-de-sessao-do-turno.md — PortariaService/PortariaController/exceções especificados, mesmo aviso de dependência viva]
 - [Source: _bmad-output/implementation-artifacts/4-2-meus-ingressos-e-link-publico.md — precedente direto de "mesma resposta pros dois motivos de não-encontrado" e assinatura checada antes do banco]
 - [Source: código existente lido por completo nesta criação de story: `pagamentos.service.PagamentoService` (lock + idempotência), `pagamentos.PagamentoConcorrenciaConflitanteTest`/`reservas.ReservaConcorrenciaConflitoTest` (template de teste de concorrência), `reservas.Reserva` (mutador estreito), `ingressos.Ingresso`/`StatusIngresso`/`IngressoRepository`/`CodigoIngressoService` (Stories 4.1/4.2), `web/package.json` (dependências atuais, confirma ausência de lib de QR)]
@@ -237,16 +237,16 @@ marcados; o restante fica como action item — escopo reduzido a pedido, só blo
 - [x] [Review][Patch] Veredito anterior nunca era limpo: o cartão verde "VÁLIDO — LIBERAR ENTRADA" sobrevivia embaixo do erro do ingresso seguinte (AC5) [web/src/pages/ValidacaoPortariaPage.tsx:49] — `setResultado(null)` no início de `validar()`
 - [x] [Review][Decision] `EVENTO_ERRADO` devolve o título da sessão *ativa*, e a UI renderizava cru — o operador lia "EVENTO ERRADO / Clube da Luta" segurando ingresso de outro filme. Decidido: rotular na UI ("Sessão do turno: X"), backend intocado [web/src/pages/ValidacaoPortariaPage.tsx:173]
 - [x] [Review][Patch] README e `docs/regras-de-negocio.md` declaravam o Epic 5 inexistente ("não existe código", "a rota `/portaria` é um placeholder") — corrigidos, incluindo a linha do README que documentava o QR carregando o link público
-- [ ] [Review][Patch] `AssentoNaoEncontradoException` é lançada sem `@ExceptionHandler` → `500 ERRO_INTERNO`; única exceção nova fora do envelope de erro [api/.../service/PortariaService.java:102]
-- [ ] [Review][Patch] Estouro de lock fora do `try` estreito (flush/commit do `save()`) cai no handler global `handleSalaOcupada` → `503 "Outra criação de sessão para essa sala está em andamento"` exibido a quem escaneia ingresso [api/.../service/PortariaService.java:93]
-- [ ] [Review][Patch] Teste de concorrência não afere que `validatedAt` não é sobrescrito pela segunda chamada, que a própria Task 4 exigia — é a única asserção que quebraria se o early-return de `JA_UTILIZADO` sumisse [api/.../PortariaValidacaoConcorrenciaTest.java:832]
-- [ ] [Review][Patch] `dtoNaoExpoeCampoDeCliente` é tautologia: reflete sobre nomes de campo de um record do mesmo commit e passaria com um campo `comprador`; o loop de métodos ainda perde a checagem de `nome` [api/.../service/PortariaServiceValidacaoTest.java:1585]
-- [ ] [Review][Patch] `assentoFileira && assentoNumero` esconde o assento quando `numero === 0` [web/src/pages/ValidacaoPortariaPage.tsx:178]
-- [ ] [Review][Patch] `#2E7D46` inventado fora da paleta fixa e aplicado por `style` inline [web/src/pages/ValidacaoPortariaPage.tsx:9]
-- [ ] [Review][Patch] Campo manual fora de `<form>`: Enter não submete, e leitor de código de barras keyboard-wedge (que emite Enter) não funciona. A tela também nunca mostra qual é a sessão ativa [web/src/pages/ValidacaoPortariaPage.tsx:121]
-- [ ] [Review][Patch] Tipo TS `ResultadoValidacao` nomeia o envelope enquanto o enum Java homônimo é só o resultado — obriga `ResultadoValidacao['resultado']` [web/src/api/portaria.ts:10]
-- [ ] [Review][Patch] Sem limite de tamanho em `codigo` [api/.../dto/ValidarIngressoRequest.java]
-- [ ] [Review][Patch] `setUp()` privado chamado à mão em todos os testes em vez de `@BeforeEach`; nome totalmente qualificado inline [api/.../PortariaSecurityTest.java:634]
+- [x] [Review][Defer] `AssentoNaoEncontradoException` é lançada sem `@ExceptionHandler` → `500 ERRO_INTERNO`; única exceção nova fora do envelope de erro [api/.../service/PortariaService.java:102] — deferido: inalcançável na prática (FK garante assento válido pra todo ingresso), sem non-negotiable violado.
+- [x] [Review][Defer] Estouro de lock fora do `try` estreito (flush/commit do `save()`) cai no handler global `handleSalaOcupada` → `503 "Outra criação de sessão para essa sala está em andamento"` exibido a quem escaneia ingresso [api/.../service/PortariaService.java:93] — deferido: mensagem confusa em janela de contenção rara, comportamento (503, retry funciona) está correto.
+- [x] [Review][Defer] Teste de concorrência não afere que `validatedAt` não é sobrescrito pela segunda chamada [api/.../PortariaValidacaoConcorrenciaTest.java:832] — deferido: gap de cobertura de teste, não bug de produção.
+- [x] [Review][Defer] `dtoNaoExpoeCampoDeCliente` é tautologia [api/.../service/PortariaServiceValidacaoTest.java:1585] — deferido: qualidade de teste, não bug de produção.
+- [x] [Review][Defer] `assentoFileira && assentoNumero` esconde o assento quando `numero === 0` [web/src/pages/ValidacaoPortariaPage.tsx:178] — deferido: inalcançável, `numero` de assento sempre começa em 1 (`generate_series(1, colunas)` no seed/geração de mapa).
+- [x] [Review][Defer] `#2E7D46` inventado fora da paleta fixa e aplicado por `style` inline [web/src/pages/ValidacaoPortariaPage.tsx:9] — deferido: cosmético.
+- [x] [Review][Defer] Campo manual fora de `<form>`: Enter não submete, leitor de código de barras keyboard-wedge não funciona; tela nunca mostra qual é a sessão ativa [web/src/pages/ValidacaoPortariaPage.tsx:121] — deferido: digitação manual continua funcional via botão, não é fluxo quebrado; UX a melhorar depois.
+- [x] [Review][Defer] Tipo TS `ResultadoValidacao` nomeia o envelope enquanto o enum Java homônimo é só o resultado [web/src/api/portaria.ts:10] — deferido: cosmético, sem bug funcional.
+- [x] [Review][Defer] Sem limite de tamanho em `codigo` [api/.../dto/ValidarIngressoRequest.java] — deferido: rota exige papel `PORTARIA` autenticado, risco de abuso baixo.
+- [x] [Review][Defer] `setUp()` privado chamado à mão em todos os testes em vez de `@BeforeEach` [api/.../PortariaSecurityTest.java:634] — deferido: higiene de teste, sem impacto funcional.
 - [x] [Review][Defer] Caminho `IngressoEmDisputaException` nunca é realmente disparado — o teste de controller lança a exceção já traduzida e o de concorrência não estoura o `lock_timeout` de 3s — deferido, exigiria fixture de lock artificial
 
 **Verificação empírica desta rodada:** `./mvnw test` verde (inclui os 2 cenários de concorrência);

@@ -5,6 +5,7 @@ import br.com.rolo35.api.ingressos.IngressoEmDisputaException;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
 import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
+import br.com.rolo35.api.ingressos.SessaoForaDaJanelaDoTurnoException;
 import br.com.rolo35.api.pagamentos.ReservaEmDisputaException;
 import br.com.rolo35.api.pagamentos.ReservaExpiradaException;
 import br.com.rolo35.api.reservas.AssentoEmDisputaException;
@@ -246,6 +247,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleSessaoAtivaNaoSelecionada() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
                 "SESSAO_ATIVA_NAO_SELECIONADA", "Selecione a sessão do turno antes de continuar"));
+    }
+
+    @ExceptionHandler(SessaoForaDaJanelaDoTurnoException.class)
+    public ResponseEntity<ApiError> handleSessaoForaDaJanelaDoTurno() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "SESSAO_FORA_DA_JANELA_DO_TURNO", "Sessão fora da janela permitida para o turno (-30min/+2h)"));
     }
 
     @ExceptionHandler(PortariaNaoEncontradaException.class)

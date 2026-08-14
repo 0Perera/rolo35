@@ -9,7 +9,7 @@ inputDocuments:
 
 ## Overview
 
-Este documento decompõe o PRD e a Architecture Spine de rolo35 em épicos e stories implementáveis. Não há documento de UX Design separado neste projeto — a identidade visual (tema cinema 35mm) é fixada como non-negotiable direto no PRD §6 e no `CLAUDE.md`.
+Este documento decompõe o PRD e a Architecture Spine de rolo35 em épicos e stories implementáveis. Não há documento de UX Design separado neste projeto — a identidade visual (tema cinema 35mm) é fixada como non-negotiable direto no PRD §6 e nas instruções do projeto.
 
 ## Requirements Inventory
 
@@ -75,7 +75,7 @@ NFR-11 (Deploy): API + Postgres no Render free (cold start ~1min documentado, Po
 
 ### UX Design Requirements
 
-N/A — nenhum documento de UX Design encontrado no projeto. A identidade visual (tema cinema clássico anos 80/90, contagem regressiva como transição/loading, perfuração de película como moldura/divisor, paleta sépia/âmbar + vermelho veludo + dourado, tipografia robusta estilo marquise) é fixada como non-negotiable direto no PRD §6 / `CLAUDE.md`, sem spec de design tokens ou componentes reutilizáveis detalhada — será tratada como requisito de estilo transversal nas stories de UI, não como stories de UX dedicadas.
+N/A — nenhum documento de UX Design encontrado no projeto. A identidade visual (tema cinema clássico anos 80/90, contagem regressiva como transição/loading, perfuração de película como moldura/divisor, paleta sépia/âmbar + vermelho veludo + dourado, tipografia robusta estilo marquise) é fixada como non-negotiable direto no PRD §6 / instruções do projeto, sem spec de design tokens ou componentes reutilizáveis detalhada — será tratada como requisito de estilo transversal nas stories de UI, não como stories de UX dedicadas.
 
 ### FR Coverage Map
 
@@ -209,27 +209,27 @@ So that eu escolho qual filme vincular a uma sessão sem nunca falar direto com 
 **When** o endpoint de busca é chamado
 **Then** retorna erro controlado via envelope `{codigo, mensagem}`, sem vazar detalhe da resposta bruta do TMDb
 
-### Story 1.3: Autocadastro de Cliente
+### Story 1.3: Cadastro de Usuário
 
-> Adicionada após o desenho de arquitetura, a partir do handoff de design (`Rolo 35.dc.html`, ver `docs/decisions.md` — "Escopo novo: autocadastro de cliente"). Sem FR própria no PRD original — mesma classe de adição que `GET /api/salas` na Story 2.1: infraestrutura mínima pra uma tela do design funcionar de ponta a ponta, não abertura de escopo maior (organizador/portaria continuam só por seed).
+> Adicionada após o desenho de arquitetura, a partir do handoff de design (`Rolo 35.dc.html`, ver `docs/decisions.md` — "Escopo novo: autocadastro de cliente"). Ampliada de "autocadastro de cliente" pra "cadastro de usuário com papel selecionável" (ver `docs/decisions.md` — "Story 1.3 vira 'Cadastro de Usuário' com papel selecionável, não só autocadastro de cliente") pra permitir criar conta de qualquer papel via API/UI, sem depender só de seed manual — facilita avaliação e testabilidade do sistema.
 
 As a visitante sem conta,
-I want criar minha própria conta com papel CLIENTE,
-So that eu reserve assentos sem depender de um cadastro feito manualmente por outra pessoa.
+I want criar minha própria conta escolhendo o papel (ORGANIZADOR, CLIENTE ou PORTARIA),
+So that eu consiga operar no sistema com o papel certo sem depender de um cadastro feito manualmente por outra pessoa — inclusive pra avaliação/teste do sistema.
 
 **Acceptance Criteria:**
 
-**Given** um visitante na tela de cadastro, preenchendo nome, e-mail, senha e aceite dos termos
-**When** submete com todos os campos válidos e e-mail ainda não usado
-**Then** uma conta com papel `CLIENTE` é criada, senha armazenada com hash (nunca em texto puro), e o fluxo segue pro login (ou já retorna token, a critério da implementação)
+**Given** um visitante na tela de cadastro, preenchendo nome, e-mail, senha, papel e aceite dos termos
+**When** submete com todos os campos válidos (papel dentre `ORGANIZADOR`, `CLIENTE`, `PORTARIA`) e e-mail ainda não usado
+**Then** uma conta com o papel informado é criada, senha armazenada com hash (nunca em texto puro), e o fluxo segue pro login (ou já retorna token, a critério da implementação)
 
 **Given** um cadastro com e-mail já existente
 **When** submetido
 **Then** retorna erro claro via envelope `{codigo, mensagem}`, sem confirmar/negar implicitamente se o e-mail pertence a outra conta de forma que vaze dado sensível
 
 **Given** o endpoint de cadastro
-**When** chamado com `papel` diferente de `CLIENTE` (manipulação direta da requisição, já que a UI não expõe essa opção)
-**Then** o back-end rejeita ou ignora o campo — nunca cria conta `ORGANIZADOR`/`PORTARIA` por essa via; esses papéis só existem via seed/gestão manual
+**When** chamado com `papel` ausente ou fora do conjunto `{ORGANIZADOR, CLIENTE, PORTARIA}`
+**Then** validação de campo (`@Valid` contra enum) rejeita antes de tocar o banco, sem criar conta
 
 **Given** senha ou e-mail em formato inválido
 **When** submetido

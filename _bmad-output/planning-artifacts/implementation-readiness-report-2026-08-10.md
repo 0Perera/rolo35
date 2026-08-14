@@ -23,7 +23,7 @@ inputDocuments:
 - Whole: `epics.md` (32.3 KB, modificado 2026-08-10)
 
 **UX Design:**
-- Não encontrado. Confirmado no próprio `epics.md`: sem documento de UX Design separado neste projeto — identidade visual fixada como non-negotiable direto no PRD §6 e no CLAUDE.md.
+- Não encontrado. Confirmado no próprio `epics.md`: sem documento de UX Design separado neste projeto — identidade visual fixada como non-negotiable direto no PRD §6 e nas instruções do projeto.
 
 ## Issues Found
 
@@ -105,7 +105,7 @@ NFR-11 (Deploy): API + Postgres no Render free (dorme após 15min sem tráfego, 
 ### Additional Requirements
 
 - **Constraint de processo (§7):** primeira story deve ser fatia vertical fina do fluxo completo (login → busca de filme → reserva → pagamento simulado → ingresso com QR → validação na portaria), cada etapa no mínimo viável — fatiar por funcionalidade/tela só depois dessa fatia rodar ponta a ponta.
-- **Constraint de processo (§7):** non-negotiables de segurança do CLAUDE.md como critério de aceite explícito por story que os toca, não implícito.
+- **Constraint de processo (§7):** non-negotiables de segurança das instruções do projeto como critério de aceite explícito por story que os toca, não implícito.
 - **Constraint de processo (§7):** estratégia de teste por camada (tabela §5) replicada nos critérios de aceite de cada story.
 - **Identidade visual (§6):** tema cinema clássico anos 80/90 (contagem regressiva como transição/loading, perfuração de película como moldura/divisor, paleta sépia/âmbar+vermelho veludo+dourado, tipografia estilo marquise) — non-negotiable, não polimento de fim de sprint.
 - **Open question §11.1** (resolvida na Architecture): mecanismo de expiração da reserva (lazy vs. job agendado) — decidido lazy (AD-4).
@@ -160,7 +160,7 @@ O texto do PRD (FR-12, consequence 4) exige um cenário de concorrência mais es
 
 A Story 4.1 hoje cobre: (a) reserva expirada isolada é rejeitada, e (b) duas confirmações concorrentes da *mesma* reserva são idempotentes (isso é FR-13). O que falta é o cenário cruzado: reserva A expirando *enquanto* uma reserva B nova é criada e confirmada pro *mesmo assento* — garantir que no máximo um ingresso válido sobra pro assento, mesmo com a confirmação atrasada de A chegando depois de B já ter sido confirmada.
 
-- **Impact:** este é exatamente o tipo de corrida que os non-negotiables de segurança do CLAUDE.md miram (não-venda-duplicada de assento) — é uma variação do FR-11 cruzada com o fluxo de pagamento, não coberta pelo teste de concorrência já desenhado em Story 3.2 (que testa reserva vs. reserva, não confirmação-atrasada vs. nova-reserva).
+- **Impact:** este é exatamente o tipo de corrida que os non-negotiables de segurança das instruções do projeto miram (não-venda-duplicada de assento) — é uma variação do FR-11 cruzada com o fluxo de pagamento, não coberta pelo teste de concorrência já desenhado em Story 3.2 (que testa reserva vs. reserva, não confirmação-atrasada vs. nova-reserva).
 - **Recommendation:** adicionar uma AC (e cenário Testcontainers) à Story 4.1 cobrindo especificamente: reserva A com TTL expirado + reserva B nova criada e confirmada pro mesmo assento, concorrentes → no máximo um ingresso válido existe ao final para aquele assento/sessão.
 
 ### Coverage Statistics
@@ -174,7 +174,7 @@ A Story 4.1 hoje cobre: (a) reserva expirada isolada é rejeitada, e (b) duas co
 
 ### UX Document Status
 
-Não encontrado — busca por `*ux*.md` e `*ux*/index.md` em `{planning_artifacts}` não retorna nada. Confirma o que `epics.md` já registrou na extração de requisitos: projeto optou deliberadamente por não ter UX Design Spec separado, com a identidade visual fixada direto no PRD §6 (tema cinema clássico anos 80/90, contagem regressiva, perfuração de película, paleta sépia/âmbar+vermelho veludo+dourado, tipografia marquise) e no `CLAUDE.md`.
+Não encontrado — busca por `*ux*.md` e `*ux*/index.md` em `{planning_artifacts}` não retorna nada. Confirma o que `epics.md` já registrou na extração de requisitos: projeto optou deliberadamente por não ter UX Design Spec separado, com a identidade visual fixada direto no PRD §6 (tema cinema clássico anos 80/90, contagem regressiva, perfuração de película, paleta sépia/âmbar+vermelho veludo+dourado, tipografia marquise) e nas instruções do projeto.
 
 ### Alignment Issues
 
@@ -185,7 +185,7 @@ Sem documento de UX, não há um par PRD↔UX pra checar por si só — mas a UI
 
 ### Warnings
 
-- ⚠️ Ausência de documento de UX é esperada e já justificada no projeto (prazo de 7 dias, identidade visual fixada direto no PRD/CLAUDE.md) — **não é recomendação de bloqueio**.
+- ⚠️ Ausência de documento de UX é esperada e já justificada no projeto (prazo de 7 dias, identidade visual fixada direto no PRD/instruções do projeto) — **não é recomendação de bloqueio**.
 - ⚠️ **Recomendação:** antes de iniciar a Story 5.2 (Epic 5), decidir e registrar em `docs/decisions.md` a abordagem técnica de leitura de QR via câmera no navegador (biblioteca + fallback de permissão negada) — não precisa virar um AD formal na Architecture Spine, mas precisa de uma decisão registrada antes de codar, não descoberta ad-hoc no meio da story.
 
 ## Epic Quality Review

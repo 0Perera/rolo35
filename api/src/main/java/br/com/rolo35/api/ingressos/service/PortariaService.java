@@ -7,6 +7,7 @@ import br.com.rolo35.api.ingressos.IngressoEmDisputaException;
 import br.com.rolo35.api.ingressos.PortariaNaoEncontradaException;
 import br.com.rolo35.api.ingressos.ResultadoValidacao;
 import br.com.rolo35.api.ingressos.SessaoAtivaNaoSelecionadaException;
+import br.com.rolo35.api.ingressos.SessaoForaDaJanelaDoTurnoException;
 import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.TurnoPortaria;
 import br.com.rolo35.api.ingressos.dto.PainelTurnoDto;
@@ -44,6 +45,12 @@ public class PortariaService {
      */
     private static final int LIMITE_HISTORICO = 30;
 
+    // Janela operacional pra ativar sessão como "sessão do turno" — não reaproveita o buffer de
+    // 4h de conflito de sala (SessaoService): são conceitos diferentes, mesmo que o valor pareça
+    // parecido. Decidido em spec-backlog-hardening (CAP-8).
+    private static final long JANELA_TURNO_ANTES_MINUTOS = 30;
+    private static final long JANELA_TURNO_DEPOIS_HORAS = 2;
+
     private final UsuarioRepository usuarioRepository;
     private final SessaoRepository sessaoRepository;
     private final SalaRepository salaRepository;
@@ -72,6 +79,14 @@ public class PortariaService {
     public SessaoAtivaDto selecionarSessao(String portariaEmail, Long sessaoId) {
         Usuario portaria = usuarioRepository.findByEmail(portariaEmail).orElseThrow(PortariaNaoEncontradaException::new);
         Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
+
+        LocalDateTime agora = LocalDateTime.now();
+        LocalDateTime inicioJanela = agora.minusHours(JANELA_TURNO_DEPOIS_HORAS);
+        LocalDateTime fimJanela = agora.plusMinutes(JANELA_TURNO_ANTES_MINUTOS);
+        if (sessao.getDataHora().isBefore(inicioJanela) || sessao.getDataHora().isAfter(fimJanela)) {
+            throw new SessaoForaDaJanelaDoTurnoException();
+        }
+
         turnoPortariaRepository.save(new TurnoPortaria(portaria.getId(), sessao.getId(), LocalDateTime.now()));
         return montarDto(sessao);
     }
