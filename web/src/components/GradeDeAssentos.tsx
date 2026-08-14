@@ -56,7 +56,12 @@ interface GradeDeAssentosProps {
 /** Auditório: caixa escura que isola o mapa do fundo claro da página, como no handoff. */
 export function GradeDeAssentos({ assentos, selecionados, onAlternar }: GradeDeAssentosProps) {
   return (
-    <section className="flex-[1_1_620px] overflow-x-auto border-[3px] border-ink-950 bg-ink-950 px-[30px] pt-[34px] pb-7 shadow-[9px_9px_0_rgba(23,18,25,0.85)]">
+    // `px-6` e não os 30px do handoff: com 30 o conteúdo do painel fecha em 767px no desktop
+    // (1376 do container, menos gap e as bases 620/290 do flex, com a sobra dividida meio a meio)
+    // e a fileira de 14 assentos pede 770 — 3px de estouro acendiam a barra de rolagem numa tela
+    // onde a sala cabe. 24px devolvem 12px e deixam 9 de folga. Mexer aqui pra cima traz a barra
+    // de volta.
+    <section className="flex-[1_1_620px] overflow-x-auto border-[3px] border-ink-950 bg-ink-950 px-6 pt-[34px] pb-7 shadow-[9px_9px_0_rgba(23,18,25,0.85)]">
       {/* Tela, rótulo e grade num bloco só: a curva é 70% da *grade*, não do painel, senão
           as duas larguras divergem e a tela aparece torta em cima dos assentos. w-max +
           mx-auto em vez de items-center porque, com a grade mais larga que o painel, o
