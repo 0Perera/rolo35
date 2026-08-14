@@ -114,7 +114,9 @@ class AuthControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("EMAIL_JA_CADASTRADO"))
                 .andExpect(jsonPath("$.mensagem").exists())
-                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("senhaHash"))));
+                // A AC2 pede que o erro não vaze dado sensível: o corpo não pode ecoar o e-mail
+                // submetido de volta, que é o único dado da requisição com dono identificável.
+                .andExpect(content().string(not(containsString("ocupado@rolo35.com.br"))));
     }
 
     // AC3, caminho do @NotNull: `papel` ausente é campo faltando, reprovado pelo Bean Validation.

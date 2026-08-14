@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.rolo35.api.auth.controller.AuthController;
 import br.com.rolo35.api.auth.dto.CadastroRequest;
+import br.com.rolo35.api.auth.dto.LoginRequest;
 import br.com.rolo35.api.auth.dto.LoginResponse;
 import br.com.rolo35.api.auth.service.AuthService;
 import br.com.rolo35.api.common.GlobalExceptionHandler;
@@ -33,6 +34,21 @@ class AuthSecurityTest {
 
     @MockitoBean
     private AuthService authService;
+
+    // O `permitAll()` que este teste protege é uma lista só, com login e cadastro dentro. Aferir só
+    // o cadastro deixaria uma edição futura derrubar `/api/auth/login` da lista e quebrar todo login
+    // do produto com a suíte verde.
+    @Test
+    void loginReturns200WithoutToken() throws Exception {
+        given(authService.login(any(LoginRequest.class))).willReturn(new LoginResponse("token-abc", "CLIENTE"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType("application/json")
+                        .content("""
+                                {"email": "cliente1@rolo35.com.br", "senha": "cliente123"}
+                                """))
+                .andExpect(status().isOk());
+    }
 
     @Test
     void cadastroReturns200WithoutToken() throws Exception {
