@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.Paginacao;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
@@ -366,7 +367,7 @@ class SessaoServiceTest {
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
-        assertThat(captor.getValue().getPageSize()).isEqualTo(SessaoService.TAMANHO_PAGINA_MAXIMO);
+        assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_MAXIMO);
     }
 
     @Test
@@ -377,7 +378,7 @@ class SessaoServiceTest {
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
-        assertThat(captor.getValue().getPageSize()).isEqualTo(SessaoService.TAMANHO_PAGINA_PADRAO);
+        assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_PADRAO);
         assertThat(captor.getValue().getPageNumber()).isZero();
     }
 
