@@ -71,7 +71,7 @@ NFR-11 (Deploy): API + Postgres no Render free (cold start ~1min documentado, Po
 - Migrations Flyway: `V1__schema.sql` (schema completo, 7 entidades) e `V2__seed.sql` (seed versionado: 1 organizador, 2 clientes, 1 portaria, 1 sessão publicada com assentos livres).
 - Stack fixada: Java 21, Spring Boot 4.1.0, PostgreSQL 16, Vite 8.x, React 19.2.8, TypeScript 6.x, Tailwind CSS 4.x, JUnit 5/Mockito/Testcontainers.
 - Deploy: front na Vercel; back-end + Postgres no Render free; Docker Compose local como fallback garantido.
-- Rate limiting em endpoints públicos deliberadamente fora do V1 (decisão explícita da Architecture, Deferred).
+- Rate limiting em endpoints públicos deliberadamente fora do V1 (decisão explícita da Architecture, Deferred). **Emenda parcial**: `POST /api/auth/cadastro` ganhou teto por endereço na Story 1.3 — é a única rota pública que escreve, e escreve conta com papel escolhido pelo corpo. As demais seguem sem teto (ver `docs/decisions.md` — "`POST /api/auth/cadastro` ganha teto por endereço").
 
 ### UX Design Requirements
 
