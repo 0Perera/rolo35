@@ -156,6 +156,26 @@ class SessaoGestaoRepositoryTest {
     }
 
     /**
+     * O relógio do guard é o do banco ({@code now()}), o mesmo de {@code listarPublicadas} — se
+     * fosse o da JVM, uma sessão podia sumir da vitrine e continuar reservável (ou o contrário)
+     * por causa de skew entre os dois. Por isso a checagem é exercitada contra o Postgres, não em
+     * teste de unidade.
+     */
+    @Test
+    void jaComecouSegueORelogioDoBancoEIgnoraSessaoInexistente() {
+        Long salaId = salaRepository.findAll().get(0).getId();
+        var futura = sessaoService.criar(
+                requestEm(salaId, TITULO, LocalDateTime.now().plusDays(155).withNano(0)), ORGANIZADOR);
+        var passada = sessaoService.criar(
+                requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(156).withNano(0)), ORGANIZADOR);
+        jdbcTemplate.update("UPDATE sessoes SET data_hora = now() - interval '1 minute' WHERE id = ?", passada.id());
+
+        assertThat(sessaoRepository.jaComecou(futura.id())).isFalse();
+        assertThat(sessaoRepository.jaComecou(passada.id())).isTrue();
+        assertThat(sessaoRepository.jaComecou(-1L)).isFalse();
+    }
+
+    /**
      * Segundo organizador criado sob demanda: o seed traz um só, e sem um segundo não dá pra
      * distinguir "traz todas" de "traz as minhas". Fica no banco depois do teste — é uma linha em
      * {@code usuarios} com e-mail único, sem efeito sobre os outros casos.

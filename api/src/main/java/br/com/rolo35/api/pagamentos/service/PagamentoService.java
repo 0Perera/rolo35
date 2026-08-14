@@ -18,7 +18,9 @@ import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
 import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -35,17 +37,19 @@ public class PagamentoService {
     private final IngressoRepository ingressoRepository;
     private final CodigoIngressoService codigoIngressoService;
     private final UsuarioRepository usuarioRepository;
+    private final SessaoRepository sessaoRepository;
     private final EntityManager entityManager;
 
     public PagamentoService(
             ReservaRepository reservaRepository, AssentoSessaoRepository assentoSessaoRepository,
             IngressoRepository ingressoRepository, CodigoIngressoService codigoIngressoService,
-            UsuarioRepository usuarioRepository, EntityManager entityManager) {
+            UsuarioRepository usuarioRepository, SessaoRepository sessaoRepository, EntityManager entityManager) {
         this.reservaRepository = reservaRepository;
         this.assentoSessaoRepository = assentoSessaoRepository;
         this.ingressoRepository = ingressoRepository;
         this.codigoIngressoService = codigoIngressoService;
         this.usuarioRepository = usuarioRepository;
+        this.sessaoRepository = sessaoRepository;
         this.entityManager = entityManager;
     }
 
@@ -78,6 +82,13 @@ public class PagamentoService {
         }
         if (reserva.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new ReservaExpiradaException();
+        }
+        // FR-12: hold ainda dentro dos 10 minutos não basta se a sessão já começou — o ingresso
+        // emitido aqui nasceria sem porta pra entrar, e a portaria não tem como recusá-lo por
+        // horário (a validação confere sessão ativa, não relógio). Vem depois da idempotência de
+        // propósito: quem já confirmou o pagamento continua recuperando os ingressos dele.
+        if (sessaoRepository.jaComecou(reserva.getSessaoId())) {
+            throw new SessaoJaComecouException();
         }
 
         List<Long> assentoIds = assentoSessaoRepository.findByIdSessaoId(reserva.getSessaoId()).stream()

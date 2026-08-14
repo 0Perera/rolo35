@@ -239,6 +239,23 @@ describe('MapaAssentosPage', () => {
     expect(screen.getByRole('button', { name: /ir para o pagamento/i })).toBeDisabled();
   });
 
+  // "O mapa foi atualizado" é a mensagem certa pra assento tomado e errada pra sessão encerrada:
+  // ali recarregar resolve, aqui não resolve nunca.
+  it('says the session is over, without reloading the map, on a 409 SESSAO_JA_COMECOU', async () => {
+    const buscarSpy = vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapa);
+    vi.spyOn(reservasApi, 'reservarAssentos').mockRejectedValue(
+      new ApiRequestError('Sessão já começou', 409, 'SESSAO_JA_COMECOU'),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByLabelText('Assento A1 — livre'));
+    await user.click(screen.getByRole('button', { name: /ir para o pagamento/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/sessão já começou/i);
+    expect(buscarSpy).toHaveBeenCalledTimes(1);
+  });
+
   it.each([401, 403])('sends the visitor to the login screen with the pending purchase on a %i', async (status) => {
     vi.spyOn(sessoesApi, 'buscarMapaAssentos').mockResolvedValue(mapaComSeisLivres);
     const reservarSpy = vi

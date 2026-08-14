@@ -26,6 +26,9 @@ type Estado =
   | 'erro'
   | 'pronto'
   | 'expirada'
+  // Sessão começou antes do pagamento sair: terminal como 'expirada', mas por outro motivo — o
+  // hold pode até estar de pé, o que acabou foi a sessão.
+  | 'sessao-comecou'
   | 'recusada'
   | 'aprovada'
   // Reserva já paga: os canhotos não são recuperáveis por GET (os códigos assinados só existem na
@@ -146,7 +149,7 @@ export function PagamentoPage() {
   // que existe pra mudança de rota não age aqui — e a tela nova abriria na altura em que o botão
   // de confirmar estava.
   useEffect(() => {
-    if (estado === 'aprovada' || estado === 'recusada' || estado === 'expirada') {
+    if (estado === 'aprovada' || estado === 'recusada' || estado === 'expirada' || estado === 'sessao-comecou') {
       window.scrollTo(0, 0);
     }
   }, [estado]);
@@ -179,6 +182,8 @@ export function PagamentoPage() {
     } catch (error) {
       if (error instanceof ApiRequestError && error.codigo === 'RESERVA_EXPIRADA') {
         setEstado('expirada');
+      } else if (error instanceof ApiRequestError && error.codigo === 'SESSAO_JA_COMECOU') {
+        setEstado('sessao-comecou');
       } else if (error instanceof ApiRequestError && error.codigo === 'RESERVA_EM_DISPUTA') {
         // Contenção momentânea, não perda do hold: a mesma ação tem chance de funcionar agora.
         setAviso('A reserva está em disputa neste instante. Tente novamente.');
@@ -235,6 +240,25 @@ export function PagamentoPage() {
         >
           O hold de 10 minutos venceu e os assentos voltaram pra quem quiser. Nada foi cobrado — refaça a
           seleção no mapa da sessão.
+        </CartaoDeAviso>
+      </PageShell>
+    );
+  }
+
+  if (estado === 'sessao-comecou') {
+    return (
+      <PageShell>
+        <CartaoDeAviso
+          kicker="🎬 SESSÃO EM ANDAMENTO"
+          titulo="A SESSÃO JÁ COMEÇOU"
+          acoes={
+            <Link to="/" className={buttonClass('primary')}>
+              VER OUTRAS SESSÕES
+            </Link>
+          }
+        >
+          O horário desta sessão passou enquanto o pagamento não era confirmado. Nada foi cobrado — escolha
+          outra sessão na programação.
         </CartaoDeAviso>
       </PageShell>
     );

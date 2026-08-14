@@ -21,6 +21,7 @@ import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
 import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import br.com.rolo35.api.sessoes.catalogo.ParametroInvalidoException;
@@ -160,6 +161,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleSessaoNaoEncontrada() {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiError("SESSAO_NAO_ENCONTRADA", "Sessão não encontrada"));
+    }
+
+    // 409, não 400: o corpo do pedido está correto — o que mudou foi o estado do mundo entre a
+    // tela ser carregada e o clique. Distinto de DATA_HORA_NO_PASSADO, que é o organizador pedindo
+    // uma data que não serve.
+    @ExceptionHandler(SessaoJaComecouException.class)
+    public ResponseEntity<ApiError> handleSessaoJaComecou() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "SESSAO_JA_COMECOU", "Sessão já começou — não é mais possível reservar nem pagar"));
     }
 
     @ExceptionHandler(SessaoComIngressoConfirmadoException.class)

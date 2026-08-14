@@ -45,6 +45,20 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
     boolean existeIngressoConfirmado(@Param("sessaoId") Long sessaoId);
 
     /**
+     * Sessão já começou (FR-10/FR-12): guard de reserva e de pagamento.
+     *
+     * <p>Usa {@code now()} do banco, e não o relógio da JVM, pra ser exatamente o complemento de
+     * {@code listarPublicadas} ({@code data_hora >= now()}): com dois relógios, uma sessão podia
+     * sumir da vitrine e continuar reservável. Sessão inexistente devolve {@code false} de
+     * propósito — quem chama já tem tratamento próprio pra id que não existe, e inventar aqui um
+     * segundo caminho de "não encontrada" só mudaria a resposta de erro de quem chuta ids.
+     */
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM sessoes WHERE id = :sessaoId AND data_hora < now())",
+            nativeQuery = true)
+    boolean jaComecou(@Param("sessaoId") Long sessaoId);
+
+    /**
      * Listagem de gestão: todas as sessões do cinema, sem filtro por organizador. A coluna
      * {@code organizador_id} continua registrando quem criou cada sessão, mas não restringe mais
      * quem a vê ou edita — a equipe de organizadores é compartilhada (CAP-1, ver

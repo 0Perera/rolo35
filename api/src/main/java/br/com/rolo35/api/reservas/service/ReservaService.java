@@ -15,9 +15,11 @@ import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.ReservaCheckoutProjection;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -37,14 +39,16 @@ public class ReservaService {
     private final AssentoSessaoRepository assentoSessaoRepository;
     private final ReservaRepository reservaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final SessaoRepository sessaoRepository;
     private final EntityManager entityManager;
 
     public ReservaService(
             AssentoSessaoRepository assentoSessaoRepository, ReservaRepository reservaRepository,
-            UsuarioRepository usuarioRepository, EntityManager entityManager) {
+            UsuarioRepository usuarioRepository, SessaoRepository sessaoRepository, EntityManager entityManager) {
         this.assentoSessaoRepository = assentoSessaoRepository;
         this.reservaRepository = reservaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.sessaoRepository = sessaoRepository;
         this.entityManager = entityManager;
     }
 
@@ -60,6 +64,13 @@ public class ReservaService {
 
         Usuario cliente =
                 usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
+
+        // FR-10: a vitrine só lista sessão futura, mas a aba aberta há uma hora não sabe disso —
+        // sem este guard, o mapa de assentos de uma sessão que já começou continuava vendendo.
+        // Também roda antes do lock: nada aqui depende das linhas de assento_sessao (AD-5).
+        if (sessaoRepository.jaComecou(request.sessaoId())) {
+            throw new SessaoJaComecouException();
+        }
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         List<AssentoSessao> travados;

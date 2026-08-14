@@ -27,7 +27,9 @@ import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.time.Instant;
@@ -66,6 +68,9 @@ class PagamentoServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
+    private SessaoRepository sessaoRepository;
+
+    @Mock
     private EntityManager entityManager;
 
     @Mock
@@ -76,7 +81,7 @@ class PagamentoServiceTest {
     private void setUp() {
         pagamentoService = new PagamentoService(
                 reservaRepository, assentoSessaoRepository, ingressoRepository, codigoIngressoService,
-                usuarioRepository, entityManager);
+                usuarioRepository, sessaoRepository, entityManager);
     }
 
     private void stubEntityManager() {
@@ -246,6 +251,44 @@ class PagamentoServiceTest {
                 .isInstanceOf(ReservaExpiradaException.class);
 
         verify(reservaRepository, never()).save(any());
+    }
+
+    // FR-12: hold ainda válido não basta se a sessão já começou — o ingresso emitido aqui nasceria
+    // sem porta pra entrar. Vem depois da checagem de expiração porque reserva vencida é o motivo
+    // mais local (e o que o cliente resolve refazendo a seleção).
+    @Test
+    void sessaoQueJaComecouLancaSessaoJaComecouMesmoComHoldValido() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID))
+                .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
+        given(sessaoRepository.jaComecou(SESSAO_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> pagamentoService.confirmar(
+                        new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL))
+                .isInstanceOf(SessaoJaComecouException.class);
+
+        verify(reservaRepository, never()).save(any());
+        verify(ingressoRepository, never()).save(any());
+    }
+
+    // Idempotência vem antes do guard de sessão: uma compra que já foi confirmada continua
+    // devolvendo os ingressos dela depois que a sessão começa — quem já pagou não perde o F5.
+    @Test
+    void reservaJaConfirmadaDevolveRespostaMesmoComSessaoJaComecada() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        Reserva jaConfirmada =
+                new Reserva(RESERVA_ID, CLIENTE_ID, SESSAO_ID, StatusReserva.CONFIRMADA, Instant.now(), LocalDateTime.now().minusMinutes(1));
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID)).willReturn(Optional.of(jaConfirmada));
+        given(ingressoRepository.findByReservaId(RESERVA_ID)).willReturn(List.of());
+
+        PagamentoDto dto = pagamentoService.confirmar(
+                new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL);
+
+        assertThat(dto.status()).isEqualTo(StatusReserva.CONFIRMADA);
     }
 
     @Test

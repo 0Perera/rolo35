@@ -151,7 +151,11 @@ export function MapaAssentosPage() {
       const reserva = await reservarAssentos({ sessaoId, assentoIds: Array.from(selecionados) });
       navigate(`/pagamento/${reserva.id}`);
     } catch (error) {
-      if (error instanceof ApiRequestError && error.status === 409) {
+      if (error instanceof ApiRequestError && error.codigo === 'SESSAO_JA_COMECOU') {
+        // Recarregar o mapa não muda nada aqui: a sessão não volta. Manter a seleção também não
+        // custa nada — nenhum botão desta tela ainda leva a lugar nenhum.
+        setMensagemErro('Essa sessão já começou e não aceita mais reservas. Escolha outra sessão.');
+      } else if (error instanceof ApiRequestError && error.status === 409) {
         setMensagemErro('Um ou mais assentos selecionados não estão mais disponíveis. O mapa foi atualizado.');
         setSelecionados(new Set());
         await carregarMapa();

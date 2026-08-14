@@ -319,6 +319,7 @@ Envelope de erro: `{ "codigo": "SESSAO_CONFLITANTE", "mensagem": "..." }`.
 | `DATA_HORA_NO_PASSADO` | 400 | Sessão no passado |
 | `SESSAO_NAO_ENCONTRADA` / `SALA_NAO_ENCONTRADA` / `INGRESSO_NAO_ENCONTRADO` | 404 | Recurso inexistente (ou assinatura inválida, no caso do ingresso) |
 | `SESSAO_CONFLITANTE` | 409 | Outra sessão na mesma sala dentro do buffer de 4h |
+| `SESSAO_JA_COMECOU` | 409 | Reserva ou pagamento de sessão cujo horário já passou |
 | `SESSAO_COM_INGRESSO_CONFIRMADO` | 409 | Edição após venda |
 | `SESSAO_COM_HOLD_ATIVO` | 409 | Troca de sala com hold ativo |
 | `SALA_SEM_ASSENTOS` | 409 | Sala sem mapa de assentos |

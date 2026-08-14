@@ -26,8 +26,10 @@ import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.ReservaCheckoutProjection;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.math.BigDecimal;
@@ -59,6 +61,9 @@ class ReservaServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
+    private SessaoRepository sessaoRepository;
+
+    @Mock
     private EntityManager entityManager;
 
     @Mock
@@ -68,7 +73,8 @@ class ReservaServiceTest {
 
     @BeforeEach
     void setUp() {
-        reservaService = new ReservaService(assentoSessaoRepository, reservaRepository, usuarioRepository, entityManager);
+        reservaService = new ReservaService(
+                assentoSessaoRepository, reservaRepository, usuarioRepository, sessaoRepository, entityManager);
     }
 
     private Usuario clienteCom(Long id, String email) {
@@ -150,6 +156,22 @@ class ReservaServiceTest {
         assertThatThrownBy(
                         () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, comDuplicado), CLIENTE_EMAIL))
                 .isInstanceOf(SelecaoAssentosInvalidaException.class);
+
+        verify(assentoSessaoRepository, never()).travarParaReserva(anyLong(), anyList());
+        verify(reservaRepository, never()).save(any());
+    }
+
+    // FR-10: sessão que já começou não vende mais assento. O guard mora antes do lock porque nada
+    // nele depende das linhas de assento_sessao (AD-5) — e porque negar depois de travar seis
+    // linhas seria contenção pura.
+    @Test
+    void sessaoQueJaComecouRejeitaAntesDeQualquerLock() {
+        stubCliente();
+        given(sessaoRepository.jaComecou(SESSAO_ID)).willReturn(true);
+
+        assertThatThrownBy(
+                        () -> reservaService.reservar(new ReservarAssentosRequest(SESSAO_ID, List.of(10L)), CLIENTE_EMAIL))
+                .isInstanceOf(SessaoJaComecouException.class);
 
         verify(assentoSessaoRepository, never()).travarParaReserva(anyLong(), anyList());
         verify(reservaRepository, never()).save(any());

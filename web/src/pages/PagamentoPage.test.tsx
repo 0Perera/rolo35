@@ -220,6 +220,21 @@ describe('PagamentoPage', () => {
     expect(await screen.findByText('página do mapa')).toBeInTheDocument();
   });
 
+  it('treats a 409 SESSAO_JA_COMECOU as terminal, without offering to retry the payment', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    vi.spyOn(pagamentosApi, 'confirmarPagamento').mockRejectedValue(
+      new ApiRequestError('Sessão já começou', 409, 'SESSAO_JA_COMECOU'),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await preencherCartao(user);
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    expect(await screen.findByText(/sessão já começou/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /confirmar pagamento/i })).not.toBeInTheDocument();
+  });
+
   it('treats a 409 RESERVA_EM_DISPUTA as retryable, keeping the confirm button usable', async () => {
     vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
     vi.spyOn(pagamentosApi, 'confirmarPagamento').mockRejectedValue(
