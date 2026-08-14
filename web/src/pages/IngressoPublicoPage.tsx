@@ -74,7 +74,7 @@ export function IngressoPublicoPage() {
           <div className="mt-8">
             {/* Página pública: só leitura. Nada de compartilhar aqui — quem abriu o link já está
                 nele, e o canhoto não pode oferecer ação de dono pra quem não é dono. */}
-            <CanhotoIngresso codigo={codigo}>
+            <CanhotoIngresso codigo={codigo} codigoCurto={ingresso.codigoCurto}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
                   ROLO 35 · {ingresso.salaNome.toUpperCase()}
@@ -90,13 +90,10 @@ export function IngressoPublicoPage() {
                 <Dado rotulo="HORA" valor={rotuloDeHora(ingresso.dataHora)} />
               </div>
 
-              {/* break-all porque o código é `uuid.assinatura` — uma palavra só, longa o bastante
-                  pra estourar o canhoto no mobile se ficar inquebrável. */}
-              <p className="mt-5 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">CÓDIGO {codigo}</p>
-              <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
-                ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
+              <p className="mt-5 font-mono text-base tracking-wide text-[#9C9488]">
+                APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
               </p>
-              <AcoesDoIngresso codigo={codigo} className="mt-5" />
+              <AcoesDoIngresso codigo={codigo} codigoCurto={ingresso.codigoCurto} className="mt-5" />
             </CanhotoIngresso>
           </div>
         )}

@@ -15,9 +15,11 @@ import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.ReservaCheckoutProjection;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -37,14 +39,16 @@ public class ReservaService {
     private final AssentoSessaoRepository assentoSessaoRepository;
     private final ReservaRepository reservaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final SessaoRepository sessaoRepository;
     private final EntityManager entityManager;
 
     public ReservaService(
             AssentoSessaoRepository assentoSessaoRepository, ReservaRepository reservaRepository,
-            UsuarioRepository usuarioRepository, EntityManager entityManager) {
+            UsuarioRepository usuarioRepository, SessaoRepository sessaoRepository, EntityManager entityManager) {
         this.assentoSessaoRepository = assentoSessaoRepository;
         this.reservaRepository = reservaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.sessaoRepository = sessaoRepository;
         this.entityManager = entityManager;
     }
 
@@ -60,6 +64,15 @@ public class ReservaService {
 
         Usuario cliente =
                 usuarioRepository.findByEmail(clienteEmail).orElseThrow(ClienteNaoEncontradoException::new);
+
+        // FR-10: a vitrine só lista sessão futura, mas a aba aberta há uma hora não sabe disso —
+        // sem este guard, o mapa de assentos de uma sessão que já começou continuava vendendo.
+        // Também roda antes do lock: nada aqui depende das linhas de assento_sessao (AD-5).
+        if (sessaoRepository.jaComecou(request.sessaoId())) {
+            throw new SessaoJaComecouException();
+        }
+
+        recolherHoldAnterior(cliente.getId(), request.sessaoId());
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         List<AssentoSessao> travados;
@@ -90,6 +103,30 @@ public class ReservaService {
         }
 
         return new ReservaDto(reserva.getId(), request.sessaoId(), reserva.getStatus(), expiraEm, assentoIds);
+    }
+
+    /**
+     * Devolve à sala o hold que este cliente já tinha nesta sessão, antes de montar o novo.
+     *
+     * <p>Existe por causa do caminho mais banal do fluxo: escolher assentos, ir pro checkout e
+     * voltar pra trocar. Sem isto, o hold antigo seguia de pé — o cliente saía segurando dois
+     * conjuntos, e o abandonado ficava bloqueado até o TTL de 10min vencer, pra todo mundo. Numa
+     * sessão cheia isso é venda perdida, não só incômodo.
+     *
+     * <p>Roda <b>antes</b> do lock dos assentos novos de propósito: é o que permite reescolher
+     * exatamente os mesmos lugares. Liberando depois, a checagem de disponibilidade ainda veria o
+     * próprio hold do cliente e recusaria com {@code AssentoIndisponivelException} — o sintoma
+     * original.
+     *
+     * <p>Depois da validação de forma (AD-5): um clique com seleção inválida não pode destruir o
+     * hold que o cliente já tinha.
+     */
+    private void recolherHoldAnterior(Long clienteId, Long sessaoId) {
+        for (Reserva anterior : reservaRepository.buscarAtivasDoClienteNaSessaoForUpdate(clienteId, sessaoId)) {
+            assentoSessaoRepository.liberarPorReserva(anterior.getId());
+            anterior.cancelar();
+            reservaRepository.save(anterior);
+        }
     }
 
     /**
@@ -135,9 +172,9 @@ public class ReservaService {
     // Duplica a regra de TTL lazy já usada em SessaoService.statusEfetivo (AD-4) em vez de
     // importar o método privado de lá — reservas depende de sessoes, nunca o inverso (AD-1).
     private boolean statusEfetivoLivre(AssentoSessao assento, LocalDateTime agora) {
-        boolean holdVencido = StatusAssento.RESERVADO.name().equals(assento.getStatus())
+        boolean holdVencido = assento.getStatus() == StatusAssento.RESERVADO
                 && assento.getExpiresAt() != null
                 && assento.getExpiresAt().isBefore(agora);
-        return holdVencido || StatusAssento.LIVRE.name().equals(assento.getStatus());
+        return holdVencido || assento.getStatus() == StatusAssento.LIVRE;
     }
 }

@@ -87,6 +87,11 @@ export function Header() {
         ) : (
           <Link
             to="/login"
+            // Mesmo `retomarEm` que as telas usam quando pedem login: sem ele, quem entra pelo
+            // header é jogado na home do papel e perde a página que estava lendo — que costuma ser
+            // justamente a página que pediu a conta. Só CLIENTE é levado de volta (ver LoginPage),
+            // então organizador e portaria continuam caindo no painel deles.
+            state={{ retomarEm: `${location.pathname}${location.search}` }}
             className="order-2 ml-auto shrink-0 border-[3px] border-ink-950 bg-gradient-to-r from-flame-600 via-flame-500 to-flame-400 px-3 py-1.5 font-display text-[11px] tracking-wide text-ink-950 shadow-[4px_4px_0_var(--color-ink-950)] sm:order-3 sm:px-4 sm:py-2 sm:text-xs"
           >
             ENTRAR

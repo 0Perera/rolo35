@@ -18,6 +18,14 @@ import org.springframework.context.annotation.Import;
 @SpringBootTest
 class IngressoRepositorySmokeTest {
 
+    /**
+     * Código curto de fixture. A emissão real usa SecureRandom; aqui o valor só precisa ser
+     * único (a coluna é UNIQUE) e caber no alfabeto Base32 Crockford de 8 caracteres.
+     */
+    private static String codigoCurtoDeTeste() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
+
     @Autowired
     private IngressoRepository ingressoRepository;
 
@@ -31,7 +39,7 @@ class IngressoRepositorySmokeTest {
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         Ingresso salvo = ingressoRepository.save(
-                new Ingresso(null, reserva.getId(), 1L, 1L, StatusIngresso.VALIDO, null, createdAt));
+                new Ingresso(null, reserva.getId(), 1L, 1L, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, createdAt));
 
         assertThat(salvo.getId()).isNotNull();
         Ingresso recarregado = ingressoRepository.findById(salvo.getId()).orElseThrow();

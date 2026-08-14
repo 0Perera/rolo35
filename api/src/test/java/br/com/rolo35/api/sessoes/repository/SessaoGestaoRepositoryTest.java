@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import br.com.rolo35.api.TestcontainersConfiguration;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
-import br.com.rolo35.api.sessoes.AssentoSessao;
+import br.com.rolo35.api.common.Paginacao;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.service.SessaoService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -17,13 +18,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Contra o banco de verdade: as três queries nativas novas da Story 2.2 (lock de sessão, checagem
  * de conflito excluindo a própria sessão, checagem de ingresso confirmado) e a listagem de gestão
- * por organizador, que precisa trazer o flag `editavel` já agregado (sem N+1).
+ * do cinema inteiro (CAP-1 — não mais por organizador), que precisa trazer o flag `editavel` já
+ * agregado (sem N+1).
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -52,6 +56,9 @@ class SessaoGestaoRepositoryTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /** Organizadores criados sob demanda por {@link #outroOrganizadorId()}, pra apagar no fim. */
+    private final List<Long> organizadoresCriados = new ArrayList<>();
+
     @AfterEach
     void limpaSessoesDoTeste() {
         List<Sessao> criadas = sessaoRepository.findAll().stream()
@@ -63,6 +70,10 @@ class SessaoGestaoRepositoryTest {
             assentoSessaoRepository.deleteAll(assentoSessaoRepository.findByIdSessaoId(sessao.getId()));
         });
         sessaoRepository.deleteAll(criadas);
+        // Depois das sessões, nunca antes: enquanto uma delas apontar pro organizador, a FK de
+        // sessoes.organizador_id recusa o DELETE.
+        organizadoresCriados.forEach(id -> jdbcTemplate.update("DELETE FROM usuarios WHERE id = ?", id));
+        organizadoresCriados.clear();
     }
 
     private CriarSessaoRequest requestEm(Long salaId, String titulo, LocalDateTime dataHora) {
@@ -75,9 +86,14 @@ class SessaoGestaoRepositoryTest {
         Long reservaId = jdbcTemplate.queryForObject(
                 "INSERT INTO reservas (cliente_id, sessao_id, status) VALUES (?, ?, 'CONFIRMADA') RETURNING id",
                 Long.class, clienteId, sessaoId);
+        UUID ingressoId = UUID.randomUUID();
         jdbcTemplate.update(
-                "INSERT INTO ingressos (id, reserva_id, assento_id, sessao_id, status) VALUES (?, ?, ?, ?, 'VALIDO')",
-                UUID.randomUUID(), reservaId, assentoId, sessaoId);
+                """
+                INSERT INTO ingressos (id, reserva_id, assento_id, sessao_id, codigo_curto, status)
+                VALUES (?, ?, ?, ?, ?, 'VALIDO')
+                """,
+                ingressoId, reservaId, assentoId, sessaoId,
+                ingressoId.toString().replace("-", "").substring(0, 8).toUpperCase());
     }
 
     // findByIdForUpdate emite SELECT ... FOR UPDATE (LockModeType.PESSIMISTIC_WRITE), que exige
@@ -121,38 +137,117 @@ class SessaoGestaoRepositoryTest {
         assertThat(sessaoRepository.existeIngressoConfirmado(sessao.id())).isTrue();
     }
 
+    // CAP-1: a listagem de gestão é do cinema, não de quem criou a sessão. A sessão criada aqui é
+    // reatribuída a um segundo organizador justamente pra provar que ela continua aparecendo — com
+    // o filtro antigo por organizador_id, este teste falharia.
     @Test
-    void findByOrganizadorIdTrazSoAsProprias() {
+    void findParaGestaoTrazSessaoDeQualquerOrganizador() {
         Long salaId = salaRepository.findAll().get(0).getId();
-        var propria = sessaoService.criar(
+        var sessao = sessaoService.criar(
                 requestEm(salaId, TITULO, LocalDateTime.now().plusDays(153).withNano(0)), ORGANIZADOR);
+        jdbcTemplate.update(
+                "UPDATE sessoes SET organizador_id = ? WHERE id = ?", outroOrganizadorId(), sessao.id());
 
-        List<SessaoGestaoProjection> minhas = sessaoRepository.findByOrganizadorId(usuarioRepository
-                .findByEmail(ORGANIZADOR)
-                .orElseThrow()
-                .getId());
+        List<SessaoGestaoProjection> gestao =
+                sessaoRepository.findParaGestao(PageRequest.of(0, Paginacao.TAMANHO_MAXIMO)).getContent();
 
-        assertThat(minhas).anySatisfy(p -> {
-            assertThat(p.getId()).isEqualTo(propria.id());
+        assertThat(gestao).anySatisfy(p -> {
+            assertThat(p.getId()).isEqualTo(sessao.id());
             assertThat(p.getTitulo()).isEqualTo(TITULO);
             assertThat(p.getEditavel()).isTrue();
         });
     }
 
+    /**
+     * O CAP-1 tirou o {@code WHERE organizador_id = ?} e, com ele, o único recorte que a listagem
+     * de gestão tinha: a query passou a devolver o histórico inteiro do cinema. O teto de página é
+     * o mesmo de {@code listarPublicadas} e existe pela mesma razão — sem ele a resposta cresce
+     * junto com a agenda, indefinidamente.
+     */
     @Test
-    void findByOrganizadorIdMarcaEditavelFalseQuandoHaIngressoConfirmado() {
+    void findParaGestaoRespeitaOTamanhoDaPaginaEContaOTotal() {
+        Long salaId = salaRepository.findAll().get(0).getId();
+        sessaoService.criar(requestEm(salaId, TITULO, LocalDateTime.now().plusDays(159).withNano(0)), ORGANIZADOR);
+        sessaoService.criar(
+                requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(160).withNano(0)), ORGANIZADOR);
+
+        Page<SessaoGestaoProjection> primeira = sessaoRepository.findParaGestao(PageRequest.of(0, 1));
+
+        assertThat(primeira.getContent()).hasSize(1);
+        assertThat(primeira.getTotalElements()).isGreaterThanOrEqualTo(2);
+        assertThat(primeira.getTotalPages()).isEqualTo((int) Math.ceil(primeira.getTotalElements() / 1.0));
+    }
+
+    @Test
+    void findParaGestaoMarcaEditavelFalseQuandoHaIngressoConfirmado() {
         Long salaId = salaRepository.findAll().get(0).getId();
         var sessao = sessaoService.criar(
                 requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(154).withNano(0)), ORGANIZADOR);
         confirmaIngressoPara(sessao.id());
 
-        List<SessaoGestaoProjection> minhas = sessaoRepository.findByOrganizadorId(usuarioRepository
-                .findByEmail(ORGANIZADOR)
-                .orElseThrow()
-                .getId());
+        List<SessaoGestaoProjection> gestao =
+                sessaoRepository.findParaGestao(PageRequest.of(0, Paginacao.TAMANHO_MAXIMO)).getContent();
 
-        assertThat(minhas)
+        assertThat(gestao)
                 .filteredOn(p -> TITULO_COM_INGRESSO.equals(p.getTitulo()))
                 .allSatisfy(p -> assertThat(p.getEditavel()).isFalse());
+    }
+
+    /**
+     * O recorte da ocupação é o fim da janela, não {@code data_hora}: uma sessão que começou há
+     * pouco continua bloqueando a sala enquanto o buffer não vence. Filtrar por sessão futura
+     * mostraria livre um horário que o {@code POST} recusaria — o 409-surpresa que a consulta
+     * existe pra evitar.
+     */
+    @Test
+    void ocupacaoIncluiSessaoRecemComecadaEIgnoraAQueJaVenceuOBuffer() {
+        Long salaId = salaRepository.findAll().get(0).getId();
+        var recem = sessaoService.criar(
+                requestEm(salaId, TITULO, LocalDateTime.now().plusDays(157).withNano(0)), ORGANIZADOR);
+        var antiga = sessaoService.criar(
+                requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(158).withNano(0)), ORGANIZADOR);
+        jdbcTemplate.update("UPDATE sessoes SET data_hora = now() - interval '1 hour' WHERE id = ?", recem.id());
+        jdbcTemplate.update("UPDATE sessoes SET data_hora = now() - interval '5 hours' WHERE id = ?", antiga.id());
+
+        List<Long> ocupada = sessaoRepository.listarOcupacaoDaSala(salaId, 240).stream()
+                .map(SessaoOcupacaoProjection::getId)
+                .toList();
+
+        assertThat(ocupada).contains(recem.id()).doesNotContain(antiga.id());
+    }
+
+    /**
+     * O relógio do guard é o do banco ({@code now()}), o mesmo de {@code listarPublicadas} — se
+     * fosse o da JVM, uma sessão podia sumir da vitrine e continuar reservável (ou o contrário)
+     * por causa de skew entre os dois. Por isso a checagem é exercitada contra o Postgres, não em
+     * teste de unidade.
+     */
+    @Test
+    void jaComecouSegueORelogioDoBancoEIgnoraSessaoInexistente() {
+        Long salaId = salaRepository.findAll().get(0).getId();
+        var futura = sessaoService.criar(
+                requestEm(salaId, TITULO, LocalDateTime.now().plusDays(155).withNano(0)), ORGANIZADOR);
+        var passada = sessaoService.criar(
+                requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(156).withNano(0)), ORGANIZADOR);
+        jdbcTemplate.update("UPDATE sessoes SET data_hora = now() - interval '1 minute' WHERE id = ?", passada.id());
+
+        assertThat(sessaoRepository.jaComecou(futura.id())).isFalse();
+        assertThat(sessaoRepository.jaComecou(passada.id())).isTrue();
+        assertThat(sessaoRepository.jaComecou(-1L)).isFalse();
+    }
+
+    /**
+     * Segundo organizador criado sob demanda: o seed traz um só, e sem um segundo não dá pra
+     * distinguir "traz todas" de "traz as minhas". É registrado em {@link #organizadoresCriados}
+     * pro {@code @AfterEach} apagar — depois do CAP-1 a listagem de gestão varre a tabela inteira,
+     * então resíduo de um caso passa a ser dado de entrada de todos os outros.
+     */
+    private Long outroOrganizadorId() {
+        String email = "organizador-" + UUID.randomUUID() + "@rolo35.com.br";
+        Long id = jdbcTemplate.queryForObject(
+                "INSERT INTO usuarios (nome, email, senha_hash, papel) VALUES (?, ?, 'x', 'ORGANIZADOR') RETURNING id",
+                Long.class, "Outro Organizador", email);
+        organizadoresCriados.add(id);
+        return id;
     }
 }

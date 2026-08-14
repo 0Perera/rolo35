@@ -1,12 +1,15 @@
 package br.com.rolo35.api.sessoes.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -15,15 +18,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
 import br.com.rolo35.api.common.PaginaDto;
+import br.com.rolo35.api.common.Paginacao;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
+import br.com.rolo35.api.sessoes.dto.OcupacaoSalaDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -288,17 +292,56 @@ class SessaoControllerTest {
     }
 
     @Test
-    void returns200WithSessaoGestaoArrayForGetMinhas() throws Exception {
+    void returns200WithSessaoGestaoPaginaForGetGestao() throws Exception {
         SessaoGestaoDto dto = new SessaoGestaoDto(
                 100L, 1L, "Sala 1", "Clube da Luta", "sinopse", LocalDateTime.now().plusDays(7),
                 new BigDecimal("25.00"), 40, true);
-        given(sessaoService.listarMinhas(anyString())).willReturn(List.of(dto));
+        given(sessaoService.listarParaGestao(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(dto), 0, 12, 1, 1));
 
-        mockMvc.perform(get("/api/sessoes/minhas")
+        mockMvc.perform(get("/api/sessoes/gestao")
                         .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(100))
-                .andExpect(jsonPath("$[0].editavel").value(true));
+                .andExpect(jsonPath("$.conteudo[0].id").value(100))
+                .andExpect(jsonPath("$.conteudo[0].editavel").value(true))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.totalPaginas").value(1));
+    }
+
+    /**
+     * O teto de tamanho é de servidor, não de cliente: sem ele a "paginação" da gestão vira uma
+     * listagem completa disfarçada, que é justamente o que o CAP-1 abriu ao remover o recorte por
+     * organizador. Mesma regra compartilhada que a vitrine usa.
+     */
+    @Test
+    void limitaOTamanhoDePaginaPedidoPeloClienteNaGestao() throws Exception {
+        given(sessaoService.listarParaGestao(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, Paginacao.TAMANHO_MAXIMO, 0, 0));
+
+        mockMvc.perform(get("/api/sessoes/gestao?tamanho=1000000")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isOk());
+
+        verify(sessaoService).listarParaGestao("organizador@rolo35.com.br", 0, 1000000);
+        assertThat(Paginacao.de(0, 1000000).getPageSize()).isEqualTo(Paginacao.TAMANHO_MAXIMO);
+    }
+
+    @Test
+    void returns200WithOcupacaoDaSalaForGetOcupacao() throws Exception {
+        LocalDateTime dataHora = LocalDateTime.now().plusDays(3).withNano(0);
+        given(sessaoService.listarOcupacaoDaSala(1L)).willReturn(List.of(
+                new OcupacaoSalaDto(7L, dataHora, dataHora.minusHours(4), dataHora.plusHours(4))));
+
+        mockMvc.perform(get("/api/sessoes/ocupacao?salaId=1")
+                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sessaoId").value(7))
+                .andExpect(jsonPath("$[0].bloqueadoDe").exists())
+                .andExpect(jsonPath("$[0].bloqueadoAte").exists())
+                // Nada de título nem de organizador: quem monta uma sessão precisa do horário
+                // ocupado, não de quem ocupou.
+                .andExpect(jsonPath("$[0].titulo").doesNotExist())
+                .andExpect(jsonPath("$[0].organizadorId").doesNotExist());
     }
 
     @Test
@@ -323,16 +366,6 @@ class SessaoControllerTest {
                         .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("SESSAO_NAO_ENCONTRADA"));
-    }
-
-    @Test
-    void returns403WithNaoAutorizadoEnvelopeForGetByIdOfAnotherOrganizador() throws Exception {
-        given(sessaoService.buscarPorId(anyLong(), anyString())).willThrow(new SessaoNaoPertenceAoOrganizadorException());
-
-        mockMvc.perform(get("/api/sessoes/100")
-                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }
 
     @Test
@@ -382,7 +415,7 @@ class SessaoControllerTest {
                 100L, 550L, "Clube da Luta", "http://poster", "Sala 1", LocalDateTime.now().plusDays(7),
                 new BigDecimal("25.00"),
                 List.of(new AssentoMapaDto(1L, "A", 1, "LIVRE"), new AssentoMapaDto(2L, "A", 2, "RESERVADO")));
-        given(sessaoService.mapaAssentos(100L)).willReturn(dto);
+        given(sessaoService.mapaAssentos(eq(100L), any())).willReturn(dto);
 
         mockMvc.perform(get("/api/sessoes/100/mapa-assentos"))
                 .andExpect(status().isOk())
@@ -401,7 +434,7 @@ class SessaoControllerTest {
 
     @Test
     void returns404WithSessaoNaoEncontradaEnvelopeForGetMapaAssentos() throws Exception {
-        given(sessaoService.mapaAssentos(999L)).willThrow(new SessaoNaoEncontradaException());
+        given(sessaoService.mapaAssentos(eq(999L), any())).willThrow(new SessaoNaoEncontradaException());
 
         mockMvc.perform(get("/api/sessoes/999/mapa-assentos"))
                 .andExpect(status().isNotFound())

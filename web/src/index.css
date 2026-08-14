@@ -79,3 +79,49 @@ textarea:focus-visible,
     opacity: 1;
   }
 }
+
+/* Estática do tubo sem sinal. Só a posição do grão muda — quem faz o salto é o `steps` de quem
+   aplica a animação, porque estática de TV pula de quadro em quadro, não desliza. */
+@keyframes rolo-chuvisco {
+  0% {
+    background-position:
+      0 0,
+      0 0;
+  }
+  25% {
+    background-position:
+      -14px 9px,
+      7px -11px;
+  }
+  50% {
+    background-position:
+      11px -7px,
+      -9px 13px;
+  }
+  75% {
+    background-position:
+      -6px 12px,
+      13px 5px;
+  }
+  100% {
+    background-position:
+      9px 4px,
+      -12px -6px;
+  }
+}
+
+/* O tremido do tubo, a linha de varredura, o LED e o chuvisco são enfeite: quem pediu menos
+   animação não deve levar nenhum deles. A troca automática de canal já era desligada no
+   componente, mas as animações CSS ignoravam a preferência — inclusive as declaradas em `style`,
+   que só o `!important` daqui alcança. Duração mínima em vez de `none` pra que cada uma pare no
+   próprio quadro final, sem sumir com o elemento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

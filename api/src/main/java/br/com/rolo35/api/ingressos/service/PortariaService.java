@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -45,11 +46,21 @@ public class PortariaService {
      */
     private static final int LIMITE_HISTORICO = 30;
 
-    // Janela operacional pra ativar sessão como "sessão do turno" — não reaproveita o buffer de
-    // 4h de conflito de sala (SessaoService): são conceitos diferentes, mesmo que o valor pareça
-    // parecido. Decidido em spec-backlog-hardening (CAP-8).
-    private static final long JANELA_TURNO_ANTES_MINUTOS = 30;
-    private static final long JANELA_TURNO_DEPOIS_HORAS = 2;
+    /**
+     * Janela operacional pra ativar sessão como "sessão do turno": até {@code janelaAntesMinutos}
+     * antes do horário dela e até {@code janelaDepoisHoras} depois. Não reaproveita o buffer de 4h
+     * de conflito de sala (SessaoService) — são conceitos diferentes, mesmo que o valor pareça
+     * parecido. Decidido em spec-backlog-hardening (CAP-8).
+     *
+     * <p>Configuráveis pelo mesmo motivo (e no mesmo formato) do teto de cadastro: o default é a
+     * regra de operação real, mas quem está avaliando ou desenvolvendo precisa alcançar a tela da
+     * portaria sem esperar o relógio bater na sessão certa. Todo seed nasce com data futura, então
+     * com a janela estrita nenhuma sessão semeada é selecionável. Alargar por ambiente é o que
+     * torna o fluxo exercitável sem afrouxar o que vai pro ar.
+     */
+    private final long janelaAntesMinutos;
+
+    private final long janelaDepoisHoras;
 
     private final UsuarioRepository usuarioRepository;
     private final SessaoRepository sessaoRepository;
@@ -64,7 +75,11 @@ public class PortariaService {
             UsuarioRepository usuarioRepository, SessaoRepository sessaoRepository, SalaRepository salaRepository,
             TurnoPortariaRepository turnoPortariaRepository, IngressoRepository ingressoRepository,
             AssentoRepository assentoRepository, CodigoIngressoService codigoIngressoService,
-            EntityManager entityManager) {
+            EntityManager entityManager,
+            @Value("${portaria.turno.janela-antes-minutos:30}") long janelaAntesMinutos,
+            @Value("${portaria.turno.janela-depois-horas:2}") long janelaDepoisHoras) {
+        this.janelaAntesMinutos = janelaAntesMinutos;
+        this.janelaDepoisHoras = janelaDepoisHoras;
         this.usuarioRepository = usuarioRepository;
         this.sessaoRepository = sessaoRepository;
         this.salaRepository = salaRepository;
@@ -81,8 +96,8 @@ public class PortariaService {
         Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
 
         LocalDateTime agora = LocalDateTime.now();
-        LocalDateTime inicioJanela = agora.minusHours(JANELA_TURNO_DEPOIS_HORAS);
-        LocalDateTime fimJanela = agora.plusMinutes(JANELA_TURNO_ANTES_MINUTOS);
+        LocalDateTime inicioJanela = agora.minusHours(janelaDepoisHoras);
+        LocalDateTime fimJanela = agora.plusMinutes(janelaAntesMinutos);
         if (sessao.getDataHora().isBefore(inicioJanela) || sessao.getDataHora().isAfter(fimJanela)) {
             throw new SessaoForaDaJanelaDoTurnoException();
         }
@@ -109,18 +124,7 @@ public class PortariaService {
     public ValidacaoIngressoDto validar(String portariaEmail, String codigo) {
         Sessao sessaoAtiva = obterSessaoAtivaOuLancar(portariaEmail);
 
-        Optional<UUID> idOptional = codigoIngressoService.extrairId(codigo);
-        if (idOptional.isEmpty() || !codigoIngressoService.validar(idOptional.get(), codigo)) {
-            return new ValidacaoIngressoDto(ResultadoValidacao.INVALIDO, null, null, null);
-        }
-
-        entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
-        Ingresso ingresso;
-        try {
-            ingresso = ingressoRepository.findByIdForUpdate(idOptional.get()).orElse(null);
-        } catch (PessimisticLockingFailureException e) {
-            throw new IngressoEmDisputaException();
-        }
+        Ingresso ingresso = localizar(codigo);
         if (ingresso == null) {
             return new ValidacaoIngressoDto(ResultadoValidacao.INVALIDO, null, null, null);
         }
@@ -143,6 +147,40 @@ public class PortariaService {
     }
 
     /**
+     * Resolve o texto lido — QR ou digitado — no ingresso correspondente, ou {@code null}.
+     *
+     * <p>Dois formatos, um caminho: o código assinado é reconhecido pela forma
+     * {@code uuid.assinatura} e só passa depois de conferida a HMAC; qualquer outra coisa é tentada
+     * como código curto de digitação manual. A ordem importa — um código assinado nunca tem 8
+     * caracteres, então não há ambiguidade, e checar a assinatura primeiro mantém o caminho da
+     * câmera exatamente como era.
+     *
+     * <p>Todos os motivos de falha (formato, assinatura adulterada, código inexistente) devolvem
+     * {@code null} e viram o mesmo {@code INVALIDO}, pelo mesmo raciocínio já registrado na Story
+     * 5.2: a resposta não pode virar oráculo de quais códigos existem.
+     */
+    private Ingresso localizar(String codigo) {
+        Optional<UUID> idAssinado = codigoIngressoService.extrairId(codigo)
+                .filter(id -> codigoIngressoService.validar(id, codigo));
+        Optional<String> codigoCurto = idAssinado.isPresent()
+                ? Optional.empty()
+                : codigoIngressoService.normalizarCodigoCurto(codigo);
+        if (idAssinado.isEmpty() && codigoCurto.isEmpty()) {
+            return null;
+        }
+
+        entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
+        try {
+            return idAssinado
+                    .flatMap(ingressoRepository::findByIdForUpdate)
+                    .or(() -> codigoCurto.flatMap(ingressoRepository::findByCodigoCurtoForUpdate))
+                    .orElse(null);
+        } catch (PessimisticLockingFailureException e) {
+            throw new IngressoEmDisputaException();
+        }
+    }
+
+    /**
      * Painel do turno (FR-21): leitura pura sobre o que a validação já persistiu. Não adquire lock
      * e não transiciona nada — {@code POST /portaria/validacoes} continua sendo o único caminho de
      * {@code VALIDO → UTILIZADO} (AD-9).
@@ -159,7 +197,7 @@ public class PortariaService {
                 ingressoRepository.buscarLeiturasDoTurno(sessaoAtiva.getId(), PageRequest.of(0, LIMITE_HISTORICO))
                         .stream()
                         .map(leitura -> new LeituraTurnoDto(
-                                codigoCurto(leitura.getIngressoId()),
+                                leitura.getCodigoCurto(),
                                 leitura.getAssentoFileira(),
                                 leitura.getAssentoNumero(),
                                 leitura.getValidadoEm()))
@@ -168,15 +206,6 @@ public class PortariaService {
                 ingressoRepository.countBySessaoIdAndStatus(sessaoAtiva.getId(), StatusIngresso.UTILIZADO),
                 ingressoRepository.countBySessaoId(sessaoAtiva.getId()),
                 leituras);
-    }
-
-    /**
-     * Prefixo pra conferência visual contra o ingresso na mão do cliente. Curto de propósito: o
-     * código completo é assinado por HMAC e vale como credencial (AD-8) — listá-lo inteiro numa
-     * tela transformaria o painel numa fonte de ingressos válidos.
-     */
-    private static String codigoCurto(UUID ingressoId) {
-        return ingressoId.toString().substring(0, 6).toUpperCase();
     }
 
     private SessaoAtivaDto montarDto(Sessao sessao) {

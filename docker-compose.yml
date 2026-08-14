@@ -32,11 +32,40 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       TMDB_API_TOKEN: ${TMDB_API_TOKEN}
       TZ: ${TZ:-America/Sao_Paulo}
+      # Ver .env.example: alargada no dev local pra que a portaria seja alcançável com o seed.
+      PORTARIA_JANELA_ANTES_MINUTOS: ${PORTARIA_JANELA_ANTES_MINUTOS:-20160}
+      PORTARIA_JANELA_DEPOIS_HORAS: ${PORTARIA_JANELA_DEPOIS_HORAS:-2}
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Vai pro bundle em tempo de build, não em runtime: quem lê esta URL é o navegador do
+        # usuário, não o container. Por isso o default aponta pro localhost:8080 publicado pelo
+        # serviço `api` acima — de dentro da rede do compose o nome `api` resolveria, mas o
+        # navegador está fora dela.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    container_name: rolo35-web
+    restart: unless-stopped
+    # Mesma porta do `vite dev` de propósito: o endereço do front não muda conforme o modo de
+    # execução, e CORS_ALLOWED_ORIGINS continua valendo sem ajuste.
+    ports:
+      - "5173:80"
+    # O único serviço sem healthcheck era este, então `docker compose ps` mostrava o front como
+    # "running" antes de o nginx aceitar conexão.
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      - api
 
 volumes:
   rolo35-postgres-data:

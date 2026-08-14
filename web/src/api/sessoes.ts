@@ -70,7 +70,12 @@ export interface AssentoMapa {
   id: number;
   fileira: string;
   numero: number;
-  status: 'LIVRE' | 'RESERVADO' | 'VENDIDO';
+  /**
+   * `MEU_HOLD` é status de leitura, não de banco: o servidor devolve ele no lugar de `RESERVADO`
+   * quando o hold é do cliente que fez a requisição. É o que deixa quem volta do checkout
+   * recuperar os próprios assentos em vez de encontrá-los bloqueados.
+   */
+  status: 'LIVRE' | 'RESERVADO' | 'VENDIDO' | 'MEU_HOLD';
 }
 
 export interface MapaAssentos {
@@ -136,8 +141,27 @@ export function listarSessoesPublicadas(consulta: ConsultaSessoes = {}): Promise
   return apiFetch<Pagina<SessaoPublicada>>(`/api/sessoes${query ? `?${query}` : ''}`);
 }
 
-export function listarMinhasSessoes(): Promise<SessaoGestao[]> {
-  return apiFetch<SessaoGestao[]>('/api/sessoes/minhas');
+export interface OcupacaoSala {
+  sessaoId: number;
+  dataHora: string;
+  /** Janela bloqueada, com o buffer de conflito já aplicado pelo back-end. */
+  bloqueadoDe: string;
+  bloqueadoAte: string;
+}
+
+/** Horários em que a sala não aceita sessão nova — só o intervalo, sem dizer de quem é cada sessão. */
+export function listarOcupacaoDaSala(salaId: number): Promise<OcupacaoSala[]> {
+  return apiFetch<OcupacaoSala[]>(`/api/sessoes/ocupacao?salaId=${salaId}`);
+}
+
+/**
+ * Agenda do cinema inteiro: qualquer organizador gerencia qualquer sessão.
+ *
+ * Paginada pelo mesmo motivo que a vitrine — sem o recorte por dono que o CAP-1 removeu, esta
+ * resposta é o histórico completo do cinema, crescendo indefinidamente com a agenda.
+ */
+export function listarSessoesParaGestao(pagina = 0): Promise<Pagina<SessaoGestao>> {
+  return apiFetch<Pagina<SessaoGestao>>(`/api/sessoes/gestao?pagina=${pagina}`);
 }
 
 export function buscarSessao(id: number): Promise<SessaoGestao> {

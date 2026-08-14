@@ -22,12 +22,13 @@ import br.com.rolo35.api.sessoes.SalaNaoEncontradaException;
 import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import br.com.rolo35.api.sessoes.catalogo.ParametroInvalidoException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -173,12 +174,13 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("SESSAO_NAO_ENCONTRADA", "Sessão não encontrada"));
     }
 
-    // Ownership: distinto do NAO_AUTORIZADO de papel errado (@PreAuthorize) — este é lançado pelo
-    // service quando o organizador autenticado não é dono da sessão, mesmo sabendo o ID.
-    @ExceptionHandler(SessaoNaoPertenceAoOrganizadorException.class)
-    public ResponseEntity<ApiError> handleSessaoNaoPertenceAoOrganizador() {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiError("NAO_AUTORIZADO", "Você não tem permissão para acessar este recurso"));
+    // 409, não 400: o corpo do pedido está correto — o que mudou foi o estado do mundo entre a
+    // tela ser carregada e o clique. Distinto de DATA_HORA_NO_PASSADO, que é o organizador pedindo
+    // uma data que não serve.
+    @ExceptionHandler(SessaoJaComecouException.class)
+    public ResponseEntity<ApiError> handleSessaoJaComecou() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "SESSAO_JA_COMECOU", "Sessão já começou — não é mais possível reservar nem pagar"));
     }
 
     @ExceptionHandler(SessaoComIngressoConfirmadoException.class)
@@ -228,10 +230,9 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("ASSENTO_EM_DISPUTA", "Assento em disputa no momento — tente novamente"));
     }
 
-    // Mesmo codigo/status de handleSessaoNaoPertenceAoOrganizador — é o mesmo conceito de negação
-    // de acesso, sem o significado de domínio que o nome daquela exceção carrega no throw site.
-    // Mora em common porque já atende pagamentos e reservas: uma cópia por domínio seria a
-    // terceira classe Java pro mesmo par 403/NAO_AUTORIZADO.
+    // Único 403 de domínio depois do CAP-1: mora em common porque atende pagamentos e reservas
+    // (recurso de outro cliente), e uma cópia por domínio seria mais uma classe Java pro mesmo par
+    // 403/NAO_AUTORIZADO. Sessão saiu daqui — não há mais dono por sessão a comparar.
     @ExceptionHandler(NaoAutorizadoException.class)
     public ResponseEntity<ApiError> handleNaoAutorizado() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -288,6 +289,30 @@ public class GlobalExceptionHandler {
         log.warn("Lock de ingresso não obtido dentro do timeout da transação", exception);
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError("INGRESSO_EM_DISPUTA", "Ingresso em disputa no momento — tente novamente"));
+    }
+
+    /**
+     * Rede de proteção pros backstops de banco da V8 (FK composta de {@code ingressos} contra
+     * {@code assento_sessao}, {@code UNIQUE (reserva_id, assento_id)}) e pras constraints que já
+     * existiam antes dela.
+     *
+     * <p>Enquanto {@code PagamentoService.confirmar()} for o único caminho de emissão, nada aqui
+     * dispara — o service já recusa antes. O comentário da própria migration diz que o backstop
+     * existe "pro dia em que não for": script de correção, endpoint novo, corrida de concorrência
+     * que passe entre a checagem e o INSERT. Esse dia é exatamente quando o cliente receberia um
+     * 500 {@code ERRO_INTERNO} em vez do envelope {@code {codigo, mensagem}} que o resto da API
+     * promete, e o front cairia no ramo genérico de erro.
+     *
+     * <p>409 e não 500 porque o pedido está correto: o que falhou foi o estado do mundo entre a
+     * leitura e a escrita — mesmo racional de {@code ASSENTO_INDISPONIVEL}. Fica logado como erro
+     * mesmo assim: chegar aqui significa que uma checagem de aplicação foi contornada, e isso é
+     * coisa pra investigar, não ruído normal de concorrência.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiError> handleDataIntegrityViolation(DataIntegrityViolationException exception) {
+        log.error("Constraint de banco recusou a escrita — invariante que o service devia ter barrado", exception);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                "CONFLITO_DE_DADOS", "A operação conflita com o estado atual dos dados — recarregue e tente de novo"));
     }
 
     @ExceptionHandler(Exception.class)

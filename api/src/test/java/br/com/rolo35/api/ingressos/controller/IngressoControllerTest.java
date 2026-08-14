@@ -1,12 +1,15 @@
 package br.com.rolo35.api.ingressos.controller;
 
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.com.rolo35.api.common.GlobalExceptionHandler;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.StatusIngresso;
 import br.com.rolo35.api.ingressos.dto.IngressoPublicoDto;
@@ -36,22 +39,40 @@ class IngressoControllerTest {
     private IngressoService ingressoService;
 
     @Test
-    void minhasReturns200WithArrayForClienteToken() throws Exception {
+    void minhasReturns200WithPaginaEnvelopeForClienteToken() throws Exception {
         IngressoResumoDto dto = new IngressoResumoDto(
                 UUID.randomUUID(), StatusIngresso.VALIDO, "A", 1, "Sessão fixture", null, "Sala 1",
-                LocalDateTime.now().plusDays(1), "codigo-x");
-        given(ingressoService.listarMinhas(anyString())).willReturn(List.of(dto));
+                LocalDateTime.now().plusDays(1), "codigo-x", "7ZK3QW9M");
+        given(ingressoService.listarMinhas(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(dto), 0, 12, 1, 1));
 
         mockMvc.perform(get("/api/ingressos/minhas")
                         .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].salaNome").value("Sala 1"));
+                .andExpect(jsonPath("$.conteudo[0].salaNome").value("Sala 1"))
+                .andExpect(jsonPath("$.totalPaginas").value(1));
+    }
+
+    // A tela precisa poder pedir a página seguinte: sem repasse, a barra de paginação navegaria
+    // entre páginas que o servidor ignora e a carteira mostraria sempre as mesmas linhas.
+    @Test
+    void minhasRepassaPaginaETamanhoPraoService() throws Exception {
+        given(ingressoService.listarMinhas(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 1, 5, 0, 0));
+
+        mockMvc.perform(get("/api/ingressos/minhas")
+                        .param("pagina", "1")
+                        .param("tamanho", "5")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null)))
+                .andExpect(status().isOk());
+
+        verify(ingressoService).listarMinhas("cliente1@rolo35.com.br", 1, 5);
     }
 
     @Test
     void buscarPublicoReturns200SemDadoDoClienteOuCodigo() throws Exception {
-        IngressoPublicoDto dto =
-                new IngressoPublicoDto("Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), StatusIngresso.VALIDO);
+        IngressoPublicoDto dto = new IngressoPublicoDto(
+                "Sessão fixture", "Sala 1", LocalDateTime.now().plusDays(1), StatusIngresso.VALIDO, "SB68XVZG");
         given(ingressoService.buscarPublico(anyString())).willReturn(dto);
 
         mockMvc.perform(get("/api/ingressos/algum-codigo"))
@@ -59,6 +80,9 @@ class IngressoControllerTest {
                 .andExpect(jsonPath("$.sessaoTitulo").value("Sessão fixture"))
                 .andExpect(jsonPath("$.salaNome").value("Sala 1"))
                 .andExpect(jsonPath("$.status").value("VALIDO"))
+                // O curto vem; o assinado não. São credenciais diferentes e só uma tem motivo de
+                // trafegar no corpo — a outra já está na URL de quem abriu o link.
+                .andExpect(jsonPath("$.codigoCurto").value("SB68XVZG"))
                 .andExpect(jsonPath("$.id").doesNotExist())
                 .andExpect(jsonPath("$.clienteId").doesNotExist())
                 .andExpect(jsonPath("$.codigo").doesNotExist());

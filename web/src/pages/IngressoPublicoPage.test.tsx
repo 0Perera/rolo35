@@ -11,6 +11,7 @@ const ingressoPublico: IngressoPublico = {
   salaNome: 'Sala 1',
   dataHora: '2030-01-01T20:00:00',
   status: 'VALIDO',
+  codigoCurto: '7ZK3QW9M',
 };
 
 function renderPage(codigo = 'abc-123.assinatura') {
@@ -69,12 +70,16 @@ describe('IngressoPublicoPage', () => {
     expect(screen.getByRole('button', { name: /copiar código/i })).toBeInTheDocument();
   });
 
-  it('renders the canhoto with the signed code and its QR', async () => {
+  // O canhoto mostra um código só, o curto. O assinado continua existindo — dentro do QR e na
+  // própria URL desta página — mas imprimir ~80 caracteres num canhoto de cinema não servia a
+  // ninguém: não dá pra ditar na fila e não dá pra selecionar com o dedo.
+  it('renders the short code and the QR, never the signed code', async () => {
     vi.spyOn(ingressosApi, 'buscarIngressoPublico').mockResolvedValue(ingressoPublico);
 
     renderPage();
 
-    expect(await screen.findByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
+    expect(await screen.findByText('7ZK3QW9M')).toBeInTheDocument();
+    expect(screen.queryByText(/CÓDIGO abc-123\.assinatura/)).not.toBeInTheDocument();
     // Payload do QR coberto em `ContratoQrPortaria.test.tsx` — aqui só interessa que o canhoto
     // renderizou com o QR no lugar.
     expect(screen.getByTitle(/QR code do ingresso/)).toBeInTheDocument();

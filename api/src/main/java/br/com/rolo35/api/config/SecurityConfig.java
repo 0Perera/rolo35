@@ -53,12 +53,26 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 "/api/auth/login", "/api/auth/cadastro", "/actuator/health")
                         .permitAll()
+                        // A documentação da API é pública porque é documentação: ela descreve o
+                        // contrato, não expõe dado. Gatear atrás de login obrigaria quem avalia a
+                        // conseguir um token antes de saber quais rotas existem — o inverso da
+                        // função dela. Nenhum dos paths abaixo lê nada do banco.
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/sessoes")
                         .permitAll()
                         // Matcher próprio (não amplia o path exato acima): libera só o mapa de
                         // assentos de uma sessão específica. Ampliar pra /api/sessoes/** vazaria
-                        // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/minhas.
+                        // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/gestao.
                         .requestMatchers(HttpMethod.GET, "/api/sessoes/*/mapa-assentos")
+                        .permitAll()
+                        // O filtro de sala da vitrine é tão público quanto a vitrine: é esta rota
+                        // que monta a lista de opções do seletor. Sem o matcher, ela herda
+                        // .anyRequest().authenticated() e responde 401 pro visitante deslogado —
+                        // que vê o seletor abrir com "TODAS AS SALAS" e mais nada. Nada vaza: o
+                        // SalaResumoDto só traz id, nome e capacidade, e o nome da sala já aparece
+                        // em cada card da listagem pública.
+                        .requestMatchers(HttpMethod.GET, "/api/salas")
                         .permitAll()
                         // /api/ingressos/minhas e /api/ingressos/{codigo} têm a mesma forma de
                         // path (um segmento só) — ordem importa aqui: o matcher específico e

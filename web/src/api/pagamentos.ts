@@ -6,6 +6,8 @@ export interface IngressoEmitido {
   id: string;
   assentoId: number;
   codigo: string;
+  /** Código curto pra ditar na portaria quando a câmera não lê. */
+  codigoCurto: string;
 }
 
 export interface Pagamento {

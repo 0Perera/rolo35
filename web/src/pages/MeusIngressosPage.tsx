@@ -1,16 +1,26 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { SessaoExpiradaError } from '../api/client';
 import { listarMeusIngressos, type IngressoResumo } from '../api/ingressos';
 import { AcoesDoIngresso } from '../components/AcoesDoIngresso';
 import { buttonClass } from '../components/Button';
 import { CanhotoIngresso } from '../components/CanhotoIngresso';
 import { PageShell } from '../components/PageShell';
+import { Paginacao } from '../components/Paginacao';
 import { SectionTitle } from '../components/SectionTitle';
 import { SeloStatusIngresso } from '../components/SeloStatusIngresso';
+import { useSessao } from '../lib/sessao';
 import { rotuloDeDia, rotuloDeHora } from '../lib/sessoes';
 
-type Estado = 'loading' | 'vazio' | 'erro' | 'expirada' | 'pronto';
+/**
+ * `sem-sessao` é distinto de `expirada`: um é quem nunca entrou, o outro é quem foi desconectado.
+ * O `apiFetch` só levanta `SessaoExpiradaError` quando havia token pra recusar, então sem essa
+ * separação o visitante caía em `erro` e lia "não foi possível carregar" — falha de servidor —
+ * quando o que faltava era login.
+ */
+type Estado = 'loading' | 'sem-sessao' | 'vazio' | 'erro' | 'expirada' | 'pronto';
+
+const TAMANHO_PAGINA = 12;
 
 function assentoDe(ingresso: IngressoResumo): string {
   return `${ingresso.assentoFileira}${ingresso.assentoNumero}`;
@@ -41,9 +51,42 @@ function LinhaIngresso({ ingresso, onAbrir }: { ingresso: IngressoResumo; onAbri
             {ingresso.salaNome.toUpperCase()} · ASSENTO {assentoDe(ingresso)}
           </span>
         </button>
-        <AcoesDoIngresso codigo={ingresso.codigo} />
+        <AcoesDoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto} />
       </div>
     </li>
+  );
+}
+
+/**
+ * Moldura dos três estados sem lista (sem login, sessão vencida, carteira vazia). Uma frase solta
+ * no alto de uma página vazia lê como carregamento que falhou: a moldura diz que a tela está
+ * inteira e só falta conteúdo, e dá ao convite o peso de destino, não de rodapé.
+ *
+ * `alerta` separa o que deu errado (sessão vencida) do que é só o estado normal da tela: leitor de
+ * tela interrompe a leitura num `alert` e espera a vez num `status`.
+ */
+function PainelSemLista({
+  titulo,
+  texto,
+  acao,
+  alerta = false,
+}: {
+  titulo: string;
+  texto: string;
+  acao?: ReactNode;
+  alerta?: boolean;
+}) {
+  return (
+    <div
+      role={alerta ? 'alert' : 'status'}
+      className="mt-9 border-[3px] border-dashed border-[#C7B694] px-6 py-12 text-center"
+    >
+      <h2 className="font-display text-[clamp(20px,3cqw,28px)] leading-[1.15]">{titulo}</h2>
+      {/* max-w em ch: linha de leitura curta, centralizada, em vez de uma faixa de texto de ponta
+          a ponta da carteira. */}
+      <p className="mx-auto mt-3.5 max-w-[46ch] font-mono text-xl leading-relaxed text-[#6D655B]">{texto}</p>
+      {acao && <div className="mt-7 flex justify-center">{acao}</div>}
+    </div>
   );
 }
 
@@ -59,7 +102,7 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
       </button>
 
       <div className="mt-5">
-        <CanhotoIngresso codigo={ingresso.codigo}>
+        <CanhotoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="font-mono text-[19px] tracking-[2px] text-[#6D655B]">
               ROLO 35 · {ingresso.salaNome.toUpperCase()}
@@ -73,15 +116,10 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
             {rotuloDeDia(ingresso.dataHora)} · {rotuloDeHora(ingresso.dataHora)} · ASSENTO{' '}
             {assentoDe(ingresso)}
           </p>
-          {/* break-all porque o código é `uuid.assinatura` — uma palavra só, longa o bastante pra
-              estourar o canhoto no mobile se ficar inquebrável. */}
-          <p className="mt-5 font-mono text-[17px] tracking-wide break-all text-[#6D655B]">
-            CÓDIGO {ingresso.codigo}
+          <p className="mt-5 font-mono text-base tracking-wide text-[#9C9488]">
+            APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
           </p>
-          <p className="mt-1 font-mono text-base tracking-wide text-[#9C9488]">
-            ASSINADO · APRESENTE NA PORTARIA ATÉ 15 MIN ANTES
-          </p>
-          <AcoesDoIngresso codigo={ingresso.codigo} className="mt-5" />
+          <AcoesDoIngresso codigo={ingresso.codigo} codigoCurto={ingresso.codigoCurto} className="mt-5" />
         </CanhotoIngresso>
       </div>
     </>
@@ -89,22 +127,36 @@ function DetalheIngresso({ ingresso, onVoltar }: { ingresso: IngressoResumo; onV
 }
 
 export function MeusIngressosPage() {
+  // A página vive na URL, como na vitrine: o cliente que compartilha o link ou volta pelo histórico
+  // do navegador cai onde estava, e não na primeira página.
+  const [parametros, setParametros] = useSearchParams();
+  const pagina = Number(parametros.get('pagina') ?? '0');
+
   const [ingressos, setIngressos] = useState<IngressoResumo[]>([]);
+  const [totalPaginas, setTotalPaginas] = useState(0);
   const [estado, setEstado] = useState<Estado>('loading');
   const [tentativa, setTentativa] = useState(0);
   const [abertoId, setAbertoId] = useState<string | null>(null);
+  const { token } = useSessao();
 
   useEffect(() => {
+    // Sem token não há requisição a fazer: a API responderia 401 e o convite seria o mesmo. Cortar
+    // aqui também evita anunciar erro de servidor durante o tempo do 401 voltar.
+    if (!token) {
+      setEstado('sem-sessao');
+      return;
+    }
     let ativo = true;
     setEstado('loading');
-    listarMeusIngressos()
+    listarMeusIngressos({ pagina, tamanho: TAMANHO_PAGINA })
       .then((resultado) => {
         if (!ativo) {
           return;
         }
-        setIngressos(resultado);
+        setIngressos(resultado.conteudo);
+        setTotalPaginas(resultado.totalPaginas);
         setAbertoId(null);
-        setEstado(resultado.length === 0 ? 'vazio' : 'pronto');
+        setEstado(resultado.conteudo.length === 0 ? 'vazio' : 'pronto');
       })
       .catch((erro: unknown) => {
         if (ativo) {
@@ -114,7 +166,16 @@ export function MeusIngressosPage() {
     return () => {
       ativo = false;
     };
-  }, [tentativa]);
+    // `token` entra nas dependências pra carteira se recarregar sozinha quando o `apiFetch`
+    // derruba a sessão numa outra aba — sem isso a tela ficaria mostrando ingressos de uma sessão
+    // que já não vale.
+  }, [tentativa, token, pagina]);
+
+  function irPara(novaPagina: number) {
+    const proximos = new URLSearchParams(parametros);
+    proximos.set('pagina', String(novaPagina));
+    setParametros(proximos);
+  }
 
   const aberto = ingressos.find((ingresso) => ingresso.id === abertoId) ?? null;
 
@@ -141,30 +202,45 @@ export function MeusIngressosPage() {
           </button>
         )}
 
+        {estado === 'sem-sessao' && (
+          <PainelSemLista
+            titulo="ENTRE PRA VER SEUS INGRESSOS"
+            texto="Seus ingressos ficam guardados na sua conta, com QR code, assento e sala — prontos pra apresentar na portaria."
+            acao={
+              // Mesmo `retomarEm` da sessão expirada: o link do menu é aberto a visitante de
+              // propósito, então quem chega por ele precisa cair de volta na carteira depois.
+              <Link to="/login" state={{ retomarEm: '/meus-ingressos' }} className={buttonClass('primary')}>
+                ENTRAR NA MINHA CONTA
+              </Link>
+            }
+          />
+        )}
+
         {estado === 'expirada' && (
-          <>
-            <p role="alert" className="mt-8 font-mono text-lg text-flame-600">
-              Sua sessão expirou. Entre de novo pra ver seus ingressos.
-            </p>
-            {/* `retomarEm` traz de volta pra carteira depois do login, em vez de largar na vitrine
-                quem só queria ver o ingresso. */}
-            <Link
-              to="/login"
-              state={{ retomarEm: '/meus-ingressos' }}
-              className={buttonClass('primary', 'mt-4')}
-            >
-              ENTRAR DE NOVO
-            </Link>
-          </>
+          <PainelSemLista
+            alerta
+            titulo="SUA SESSÃO EXPIROU"
+            texto="Faz um tempo que você entrou, e a gente encerra a sessão por segurança. Entre de novo pra abrir sua carteira."
+            acao={
+              // `retomarEm` traz de volta pra carteira depois do login, em vez de largar na vitrine
+              // quem só queria ver o ingresso.
+              <Link to="/login" state={{ retomarEm: '/meus-ingressos' }} className={buttonClass('primary')}>
+                ENTRAR DE NOVO
+              </Link>
+            }
+          />
         )}
 
         {estado === 'vazio' && (
-          <div className="mt-10 border-[3px] border-dashed border-[#C7B694] p-10 text-center">
-            <p className="font-mono text-xl text-[#6D655B]">Você ainda não tem ingressos.</p>
-            <Link to="/" className={buttonClass('primary', 'mt-[18px]')}>
-              VER SESSÕES
-            </Link>
-          </div>
+          <PainelSemLista
+            titulo="VOCÊ AINDA NÃO TEM INGRESSOS"
+            texto="Escolha uma sessão, marque seus assentos e o ingresso aparece aqui na hora."
+            acao={
+              <Link to="/" className={buttonClass('primary')}>
+                VER SESSÕES
+              </Link>
+            }
+          />
         )}
 
         {estado === 'pronto' && aberto && (
@@ -172,11 +248,16 @@ export function MeusIngressosPage() {
         )}
 
         {estado === 'pronto' && !aberto && (
-          <ul className="mt-8 flex flex-col gap-5">
-            {ingressos.map((ingresso) => (
-              <LinhaIngresso key={ingresso.id} ingresso={ingresso} onAbrir={() => setAbertoId(ingresso.id)} />
-            ))}
-          </ul>
+          <>
+            <ul className="mt-8 flex flex-col gap-5">
+              {ingressos.map((ingresso) => (
+                <LinhaIngresso key={ingresso.id} ingresso={ingresso} onAbrir={() => setAbertoId(ingresso.id)} />
+              ))}
+            </ul>
+            {/* Fora do canhoto aberto: lá a lista não está na tela, e uma barra de páginas sem
+                lista pra paginar só confunde. */}
+            <Paginacao pagina={pagina} totalPaginas={totalPaginas} onIr={irPara} rotulo="ingressos" />
+          </>
         )}
       </div>
     </PageShell>

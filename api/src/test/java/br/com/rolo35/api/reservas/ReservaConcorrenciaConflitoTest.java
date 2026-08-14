@@ -11,6 +11,7 @@ import br.com.rolo35.api.reservas.service.ReservaService;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -123,8 +124,8 @@ class ReservaConcorrenciaConflitoTest {
         Long sessaoId = sessao.getId();
 
         assentoSessaoRepository.saveAll(List.of(
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null)));
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.LIVRE, null, null)));
 
         ReservarAssentosRequest request = new ReservarAssentosRequest(sessao.getId(), List.of(a1.getId(), a2.getId()));
 
@@ -163,7 +164,7 @@ class ReservaConcorrenciaConflitoTest {
 
         List<AssentoSessao> linhas = assentoSessaoRepository.findByIdSessaoId(sessaoId);
         assertThat(linhas).allSatisfy(linha -> {
-            assertThat(linha.getStatus()).isEqualTo("RESERVADO");
+            assertThat(linha.getStatus()).isEqualTo(StatusAssento.RESERVADO);
             assertThat(linha.getReservaId()).isEqualTo(reservasAtivas.get(0).getId());
         });
     }

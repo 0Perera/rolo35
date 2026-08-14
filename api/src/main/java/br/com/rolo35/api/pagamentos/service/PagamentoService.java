@@ -18,7 +18,9 @@ import br.com.rolo35.api.reservas.ClienteNaoEncontradoException;
 import br.com.rolo35.api.reservas.Reserva;
 import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -35,17 +37,19 @@ public class PagamentoService {
     private final IngressoRepository ingressoRepository;
     private final CodigoIngressoService codigoIngressoService;
     private final UsuarioRepository usuarioRepository;
+    private final SessaoRepository sessaoRepository;
     private final EntityManager entityManager;
 
     public PagamentoService(
             ReservaRepository reservaRepository, AssentoSessaoRepository assentoSessaoRepository,
             IngressoRepository ingressoRepository, CodigoIngressoService codigoIngressoService,
-            UsuarioRepository usuarioRepository, EntityManager entityManager) {
+            UsuarioRepository usuarioRepository, SessaoRepository sessaoRepository, EntityManager entityManager) {
         this.reservaRepository = reservaRepository;
         this.assentoSessaoRepository = assentoSessaoRepository;
         this.ingressoRepository = ingressoRepository;
         this.codigoIngressoService = codigoIngressoService;
         this.usuarioRepository = usuarioRepository;
+        this.sessaoRepository = sessaoRepository;
         this.entityManager = entityManager;
     }
 
@@ -79,6 +83,13 @@ public class PagamentoService {
         if (reserva.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new ReservaExpiradaException();
         }
+        // FR-12: hold ainda dentro dos 10 minutos não basta se a sessão já começou — o ingresso
+        // emitido aqui nasceria sem porta pra entrar, e a portaria não tem como recusá-lo por
+        // horário (a validação confere sessão ativa, não relógio). Vem depois da idempotência de
+        // propósito: quem já confirmou o pagamento continua recuperando os ingressos dele.
+        if (sessaoRepository.jaComecou(reserva.getSessaoId())) {
+            throw new SessaoJaComecouException();
+        }
 
         List<Long> assentoIds = assentoSessaoRepository.findByIdSessaoId(reserva.getSessaoId()).stream()
                 .filter(a -> reserva.getId().equals(a.getReservaId()))
@@ -88,11 +99,15 @@ public class PagamentoService {
         if (request.resultadoSimulado() == ResultadoSimulado.APROVADO) {
             reserva.confirmar();
             reservaRepository.save(reserva);
-            List<Ingresso> ingressos = assentoIds.stream()
-                    .map(assentoId -> ingressoRepository.save(new Ingresso(
-                            null, reserva.getId(), assentoId, reserva.getSessaoId(), StatusIngresso.VALIDO, null,
-                            Instant.now())))
-                    .toList();
+            // Um INSERT em lote, e um createdAt só pra reserva inteira: os ingressos foram emitidos
+            // no mesmo ato, e IngressoRepository.buscarPorCliente() já pagina desempatando por
+            // (createdAt, id) justamente porque a emissão em lote produz o mesmo instante.
+            Instant emitidoEm = Instant.now();
+            List<Ingresso> ingressos = ingressoRepository.saveAll(assentoIds.stream()
+                    .map(assentoId -> new Ingresso(
+                            null, reserva.getId(), assentoId, reserva.getSessaoId(),
+                            codigoIngressoService.gerarCodigoCurto(), StatusIngresso.VALIDO, null, emitidoEm))
+                    .toList());
             int linhasAfetadas =
                     assentoSessaoRepository.reivindicarVendido(reserva.getSessaoId(), assentoIds, reserva.getId());
             if (linhasAfetadas != assentoIds.size()) {
@@ -120,7 +135,8 @@ public class PagamentoService {
     private List<IngressoDto> paraDto(List<Ingresso> ingressos) {
         return ingressos.stream()
                 .map(ingresso -> new IngressoDto(
-                        ingresso.getId(), ingresso.getAssentoId(), codigoIngressoService.gerar(ingresso.getId())))
+                        ingresso.getId(), ingresso.getAssentoId(), codigoIngressoService.gerar(ingresso.getId()),
+                        ingresso.getCodigoCurto()))
                 .toList();
     }
 }

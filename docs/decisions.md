@@ -96,7 +96,11 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
-## Deploy Render + Vercel, aceitando limitação de free tier
+## ~~Deploy Render + Vercel, aceitando limitação de free tier~~ — revogada pelo CAP-6
+
+> **Revogada.** A Vercel saiu do plano de deploy: o `render.yaml` sobe os três serviços numa conta
+> só. Ver "Deploy inteiro no Render por blueprint, em vez de API no Render + front na Vercel
+> (CAP-6)" mais abaixo.
 
 - **Decisão**: API no Render (free), front na Vercel; limitação documentada no README.
 - **Por quê**: risco aceito conscientemente — mitigado no README, com possibilidade de upgrade pro plano pago do Render se necessário pra evitar cold start; Docker Compose cobrindo a aplicação inteira garante caminho alternativo de "sobe com um comando" se o deploy falhar.
@@ -426,7 +430,12 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
-## Ownership checado antes da validação de corpo na edição de sessão (Story 2.2)
+## ~~Ownership checado antes da validação de corpo na edição de sessão (Story 2.2)~~ — revogada pelo CAP-1
+
+> **Revogada.** O CAP-1 removeu o ownership de sessão inteiro, e com ele a ordem que esta decisão
+> estabelecia. `SessaoNaoPertenceAoOrganizadorException` não existe mais. Fica registrada porque o
+> raciocínio sobre vazamento por diferença de status continua valendo para outras rotas — ver
+> "Sessão é recurso do cinema, não do organizador (CAP-1)" abaixo.
 
 - **Decisão**: em `SessaoService.editar`, a checagem de que o organizador autenticado é dono da sessão (`SessaoNaoPertenceAoOrganizadorException`) roda antes de qualquer validação do corpo da requisição (`DataHoraNoPassadoException`, conflito de horário, etc.) — nessa ordem, mesmo que o corpo esteja malformado.
 - **Por quê**: se a validação de corpo rodasse primeiro, um organizador tentando editar sessão de outro (ID certo, mas sem ser o dono) só descobriria isso depois de passar por um 400 de corpo malformado — ou, pior, um 400 nunca apareceria e a diferença de status entre "corpo ruim" e "não é seu" vazaria, por inferência, se aquele ID de sessão existe e pertence a outra pessoa. Checar dono primeiro garante 403 sempre que o recurso não é do chamador, independente do que vier no corpo — mesma classe de cuidado que já rege a mitigação de timing attack no login.
@@ -513,6 +522,10 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ## `NaoAutorizadoException` subiu pra `common`; `SessaoNaoPertenceAoOrganizadorException` ficou onde estava (Story 4.3)
 
+> **Parcialmente revogada pelo CAP-1.** A parte sobre `NaoAutorizadoException` em `common` continua
+> valendo. A segunda metade não: `SessaoNaoPertenceAoOrganizadorException` foi apagada junto com o
+> ownership de sessão, então não há mais o que manter onde estava.
+
 - **Decisão**: `pagamentos.NaoAutorizadoException` virou `common.NaoAutorizadoException`, passando a atender também `reservas`. `sessoes.SessaoNaoPertenceAoOrganizadorException` **não** entrou no movimento.
 - **Por quê**: já existiam quatro origens do mesmo par `403 NAO_AUTORIZADO`, e uma classe nova em `reservas` seria a segunda cópia de uma exceção que nasceu com nome genérico; a alternativa — `reservas` importar de `pagamentos` — inverteria a direção de dependência registrada pra Story 4.1. `common` é onde `GlobalExceptionHandler` e `ApiError` já moram, então nada se inverte. A exceção de sessão ficou porque o nome carrega significado no throw site e nos testes (é ownership de sessão, não papel errado): colapsá-la numa genérica perderia informação. O objetivo era parar de multiplicar cópias de uma exceção sem significado próprio, não uniformizar tudo.
 
@@ -561,9 +574,136 @@ seções de Uso de IA e Decisões técnicas do README final.
 
 ---
 
+## Sessão é recurso do cinema, não do organizador que a criou (CAP-1)
+
+- **Decisão**: qualquer usuário com papel `ORGANIZADOR` lista, abre e edita qualquer sessão. `SessaoNaoPertenceAoOrganizadorException` foi removida, junto do seu handler `403/NAO_AUTORIZADO`; `GET /api/sessoes/minhas` virou `GET /api/sessoes/gestao` e a query de gestão perdeu o `WHERE organizador_id = ?`. A coluna `sessoes.organizador_id` continua existindo e continua sendo preenchida na criação — ela registra autoria, não posse, e é a autoria (não quem editou) que volta no `SessaoResponse` de `PUT /api/sessoes/{id}`.
+- **Por quê**: o isolamento multi-tenant entre organizadores nunca foi pedido. O PDF oficial do desafio especifica um organizador seedado e nenhuma noção de vários organizadores independentes disputando o mesmo cinema; a decisão "Escopo de um único cinema, não plataforma multi-local" já tinha registrado que salas são pool compartilhado "sem conceito de posse", e sessão ter dono contradizia isso — o mesmo cinema, com a mesma sala e a mesma portaria, mas com uma agenda invisível pra metade da equipe. Na operação real de um cinema de bairro, quem cobre o turno da noite precisa corrigir a sessão que o turno da tarde cadastrou errado. Manter o isolamento significava manter uma dimensão de autorização inteira (e sua superfície de bug) pra sustentar uma regra que ninguém pediu.
+- **Consequência assumida**: não há trilha de quem editou o quê — `organizador_id` só diz quem criou. Auditoria de edição seria uma tabela nova, fora do escopo do desafio; a alternativa barata (sobrescrever `organizador_id` com quem editou por último) foi rejeitada por destruir a única informação de autoria que existe hoje.
+- **Efeito no requisito**: a leitura estrita de "organizador só gerencia sessão própria" (FR-2) deixa de valer; a leitura que fica é "só quem tem papel `ORGANIZADOR` gerencia sessões", que continua sendo garantida pelo `@PreAuthorize` de cada rota de gestão.
+- **Ressalva que faltava nesta entrada** (levantada em code review depois do commit): o ownership também era, por acidente, o que limitava o raio do cadastro público. `POST /api/auth/cadastro` é `permitAll` e aceita `papel` no corpo (Story 1.3), então qualquer visitante cria uma conta `ORGANIZADOR`; antes do CAP-1 essa conta só mexia nas sessões que ela própria tivesse criado, e agora mexe em todas. Nenhuma das duas decisões está errada isolada — juntas é que somam. Mantido assim de propósito, porque é o que torna as três telas avaliáveis sem seed manual, e declarado no README §17 em vez de escondido. Num produto real, o cadastro público criaria só `CLIENTE` e staff viria por convite.
+
+---
+
+## O front entra no `docker compose`, servido por nginx (CAP-5)
+
+- **Decisão**: `docker-compose.yml` ganha um serviço `web` — build multi-stage (`node:22-alpine` compila o bundle, `nginx:1.27-alpine` serve) publicado em `localhost:5173`, a mesma porta do `vite dev`. `docker compose up` passa a subir a aplicação inteira: banco, API e front.
+- **Por quê**: antes, executar o projeto exigia dois comandos em dois lugares (`docker compose up` na raiz, `npm install && npm run dev` em `web/`) e, portanto, ter Node instalado. Isso existia porque o front ia pra Vercel e o back pro Render — uma decisão de deploy vazando pro caminho de execução local de quem só quer ver o sistema rodar. Um comando só é o que um avaliador espera de um projeto que já tem Docker no stack.
+- **Detalhes que a escolha obriga**: `VITE_API_URL` é `ARG` de build, não `ENV` de runtime — o Vite inlina `import.meta.env` no bundle, e quem lê essa URL é o navegador do usuário, que está fora da rede do compose (por isso o default é `http://localhost:8080`, e não `http://api:8080`). O nginx precisa de `try_files ... /index.html`, senão dar F5 em `/organizador` devolve 404 dele em vez da aplicação. E a porta 5173 é a mesma do Vite de propósito: o endereço do front não muda conforme o modo de execução, então `CORS_ALLOWED_ORIGINS` continua valendo sem ajuste.
+- **O que não muda**: o Vite continua sendo o caminho de desenvolvimento. O serviço `web` serve bundle estático, sem hot reload — quem for editar o front derruba ele (`docker compose stop web`) e roda `npm run dev` na mesma porta.
+
+---
+
+## Deploy inteiro no Render por blueprint, em vez de API no Render + front na Vercel (CAP-6)
+
+- **Decisão**: `render.yaml` na raiz sobe os três serviços numa conta só — Static Site pro front, Web Service Docker pra API, Postgres gerenciado. A Vercel sai do plano de deploy.
+- **Por quê**: o arranjo anterior espalhava um projeto pequeno por duas contas e dois pipelines, e criava um acoplamento chato de manter: cada lado precisa da URL do outro (CORS de um lado, `VITE_API_URL` do outro), então qualquer redeploy que mude domínio quebra o par. Um blueprint único deixa o deploy inteiro versionado no repositório e reproduzível por quem clonar — que é o mesmo argumento do Docker Compose, aplicado à nuvem. Também melhora a limitação mais visível do plano free: Static Site é CDN e **não dorme**, então a aplicação abre na hora; só a primeira chamada de API paga o cold start de ~1min.
+- **Detalhe que o Render obriga**: a `connectionString` do banco gerenciado vem no formato `postgres://...`, que o driver JDBC não aceita. Em vez de gambiarra de conversão, `application.properties` passa a montar a URL a partir de `DB_HOST`/`DB_PORT`/`DB_NAME` como *fallback* — `SPRING_DATASOURCE_URL` continua sendo o caminho normal do compose e do dev local, sem mudança de comportamento.
+- **O que ficou manual, e por quê**: `TMDB_API_TOKEN` (segredo) e o par `CORS_ALLOWED_ORIGINS`/`VITE_API_URL` ficam como `sync: false`. As URLs são previsíveis (`https://<nome>.onrender.com`), mas o Render sufixa o nome quando ele já está em uso — chutar no arquivo daria um blueprint que aplica e não funciona, o que é pior do que dois campos preenchidos no apply.
+
+---
+
+## As duas gerações de Jackson são inevitáveis, e `@JsonProperty` já está no pacote certo (CAP-9)
+
+- **Decisão**: nada muda no código. O `import com.fasterxml.jackson.annotation.JsonProperty` de `TmdbClient` **não** é resquício do Jackson 2 — é o pacote correto também no Jackson 3. O POM do `tools.jackson.core:jackson-databind:3.x` declara textualmente `<!-- Annotations remain at Jackson 2.x group id -->` e depende de `com.fasterxml.jackson.core:jackson-annotations`. Só `jackson-core` e `jackson-databind` migraram pra `tools.jackson.*`.
+- **Por quê o item foi levantado**: a árvore de dependências mostra as duas gerações lado a lado (`tools.jackson.core:*:3.1.4` e `com.fasterxml.jackson.core:*:2.21`), o que parece descuido. Não é: o Jackson 2 entra como dependência transitiva de `jjwt-jackson`, que é o serializador JSON do JJWT 0.13 e não tem versão pro Jackson 3. As alternativas do próprio JJWT (`jjwt-gson`, `jjwt-orgjson`) trocariam uma biblioteca por outra sem eliminar a duplicação de propósito.
+- **Consequência**: convivência declarada, não acidental. O `ObjectMapper` que a aplicação usa é o do Spring Boot 4 (`tools.jackson.databind.ObjectMapper`); o Jackson 2 vive só dentro do JJWT, assinando e lendo token.
+
+---
+
+## Código curto de digitação manual, ao lado do código assinado — não no lugar dele (CAP-11)
+
+- **Decisão**: `ingressos` ganha a coluna `codigo_curto` (`VARCHAR(8)`, `NOT NULL`, índice único), gerada na emissão por `SecureRandom` em Base32 Crockford. `POST /api/portaria/validacoes` aceita os dois formatos: se o texto tem a forma `uuid.assinatura`, segue exatamente o caminho de antes (confere HMAC, busca por id); qualquer outra coisa é normalizada como código curto e resolvida por `findByCodigoCurtoForUpdate`. Daí em diante o fluxo é o mesmo — sessão ativa, estado do ingresso, transição `VALIDO → UTILIZADO` sob o mesmo lock. QR, link público e leitura por câmera continuam usando exclusivamente o código assinado.
+- **Por quê**: o fallback da câmera era digitar `uuid.assinatura` — 36 caracteres mais uma assinatura Base64. Ninguém faz isso na frente de uma fila, então na prática a portaria não tinha plano B para tela riscada, celular sem bateria ou luz ruim. O painel do turno já reconhecia a necessidade: ele exibia um prefixo do UUID pra conferência visual, um código curto improvisado que não servia pra nada além de olhar. Agora ele mostra o código real, o mesmo que está no canhoto.
+- **Base32 Crockford, e não hexadecimal ou Base64**: o alfabeto exclui `I`, `L`, `O` e `U` — exatamente os caracteres que se confundem com `1`, `0` e entre si quando alguém dita por cima do balcão. A normalização aceita minúscula, hífen e as trocas confundíveis, então quem digita o que está escrito acerta.
+- **Sobre a segurança, explicitamente**: 8 caracteres Base32 são 40 bits, e não há assinatura — é mais fraco que o código HMAC, por construção. O que sustenta a decisão é onde ele vale: só em `POST /api/portaria/validacoes`, que exige token de papel `PORTARIA`. Força bruta contra esse endpoint pressupõe uma conta de operador válida, o que é uma categoria de ameaça diferente de "qualquer um na internet". O caminho principal (câmera + HMAC) não foi enfraquecido em nada, e o endpoint público de ingresso (`GET /api/ingressos/{codigo}`) **não** aceita código curto.
+- **Colisão**: 40 bits dão ~1,1 × 10¹² combinações; o índice único é o backstop. Numa colisão a emissão falha alto (erro de integridade) em vez de emitir dois ingressos com o mesmo código — o que é o comportamento certo, ainda que ríspido. Retentativa automática não foi implementada: a probabilidade nesse volume não justifica o código.
+
+---
+
+## Precedência da validação: "evento errado" vem antes de "já utilizado" (CAP-10)
+
+- **Decisão**: `PortariaService.validar()` checa a sessão **antes** do status. Um ingresso `UTILIZADO` de outra sessão devolve `EVENTO_ERRADO`, não `JA_UTILIZADO`. A ordem já era essa no código desde a Story 5.2, mas nunca tinha sido registrada como decisão — era uma escolha invisível de ordem de `if`.
+- **Por quê**: a pergunta que a portaria precisa responder na porta é "essa pessoa entra aqui?", e a resposta mais acionável pra um ingresso de outra sessão é mandá-la pra sala certa. `JA_UTILIZADO` sugeriria que a pessoa já entrou *nesta* sessão, que é falso e manda o operador procurar um problema que não existe. A informação de que aquele ingresso já foi usado em outro lugar não muda nada pra este operador — ele não valida a outra sessão.
+- **Consequência**: não existe resultado composto ("de outro evento e já usado"). Os quatro resultados continuam mutuamente exclusivos, que é o que a tela da portaria sabe desenhar.
+
+---
+
+## Sem pull request: merge direto na branch de trabalho (CAP-12)
+
+- **Decisão**: o projeto não usa pull requests. Cada capability vira um commit próprio direto na branch de trabalho, com mensagem no formato Conventional Commits explicando o porquê, e a integração é merge direto.
+- **Por quê**: PR existe pra pedir revisão de outra pessoa e pra gatear merge por CI. Aqui não há outra pessoa — é trabalho solo, com prazo de 7 dias — e o gate de qualidade que um PR daria já roda antes de cada commit: teste primeiro (RED → GREEN), suíte inteira verde antes de commitar. Abrir PR pra si mesmo adicionaria cerimônia sem adicionar nenhuma checagem que já não aconteça.
+- **O que substitui a revisão**: os ciclos de code review registrados em `_bmad-output/implementation-artifacts/` — feitos por agente, com achados aplicados ou explicitamente recusados — e este próprio arquivo, que é onde as decisões ficam auditáveis depois do fato.
+- **Emenda, no fechamento**: as integrações finais na `main` foram feitas por pull request (#1, a Story 1.3; #2, a branch de acabamento), e a regra acima continua valendo pro que ela descreve. São situações diferentes, não a mesma situação com resposta diferente. Durante o sprint, cada capability era um commit direto e um PR por commit seria cerimônia sem revisor e sem CI. Na integração final entram 47 commits, 139 arquivos e sete migrations de uma vez, e aí o PR paga por dois motivos que independem de haver outra pessoa: um diff revisável antes de tocar a branch principal, e um resumo escrito do que mudou e por quê, que fica anexado ao merge em vez de espalhado por 47 mensagens. O merge é commit de merge, não squash — achatar os 47 commits apagaria o rastro de ciclo RED → GREEN → REFACTOR que o README §16 aponta como verificável.
+
+---
+
+## Swagger UI entra; o envelope de erro fica documentado num lugar só (CAP-15)
+
+- **Decisão**: `springdoc-openapi-starter-webmvc-ui` 2.8.6 adicionado, com `/swagger-ui.html` e `/v3/api-docs` públicos e um `OpenApiConfig` mínimo (título, descrição e esquema `bearer-jwt`, pro botão *Authorize* funcionar). O envelope de erro `{codigo, mensagem}` **não** é anotado endpoint a endpoint com `@ApiResponse`.
+- **Por quê o springdoc, mesmo sendo Grupo C**: o custo real foi uma dependência e um `@Configuration` de 40 linhas, e o ganho é quem avalia conseguir exercitar a API sem montar `curl` na mão. A documentação é pública de propósito — ela descreve o contrato, não expõe dado, e gatear atrás de login obrigaria a conseguir um token antes de saber quais rotas existem.
+- **Por quê não anotar o envelope**: seriam mais de vinte `@ApiResponse` repetindo a mesma estrutura em cima de controllers que hoje se leem em dez segundos, e a informação útil — quais códigos existem, com que status, e quando cada um acontece — já está numa tabela única no README §6. Vinte cópias parciais de uma tabela completa é pior do que a tabela.
+- **Risco assumido, com alarme**: springdoc 2.8.6 é publicado pro Spring Boot 3.x e este projeto roda no 4.1 com Jackson 3. A combinação funciona hoje (verificado, não presumido), mas é o tipo de coisa que quebra em silêncio numa atualização. `OpenApiDocsTest` sobe o contexto inteiro e exige `200` nos dois endpoints, com rotas conhecidas presentes no JSON — se a compatibilidade cair, a suíte cai junto.
+---
+
 ## `POST /api/auth/cadastro` ganha teto por endereço — emenda parcial ao "sem rate limiting" do projeto (Story 1.3, pós code review)
 
 - **Decisão**: a rota de cadastro passa a ter teto de tentativas por endereço de origem (`LimitadorDeCadastro`: janela fixa de 60 minutos, 5 tentativas, tudo em memória do processo), respondendo `429 LIMITE_DE_CADASTRO_EXCEDIDO` no envelope da API. Os dois valores são configuráveis por `CADASTRO_LIMITE_TENTATIVAS` e `CADASTRO_LIMITE_JANELA_MINUTOS`, com default no código. É emenda **parcial** a duas decisões anteriores: "rate limiting em endpoints públicos fica fora do V1" (`ARCHITECTURE-SPINE.md`, ecoada em `epics.md` e na linha de simplificações assumidas deste arquivo) e "auto-registro é aberto por decisão deliberada" (entrada anterior). Nenhuma das duas é revogada: as demais rotas públicas seguem sem teto, e o cadastro segue sem gate de autorização — quem quiser criar conta `PORTARIA` continua podendo, só não milhares delas.
 - **Por quê**: a decisão de arquitetura foi tomada quando "rota pública" significava leitura — busca de sessões, mapa de assentos, link de ingresso, que são exatamente os exemplos que ela cita. Abusar dessas custa banda. A Story 1.3 criou a primeira rota pública que **escreve**, e escreve conta com o papel que o corpo pedir, inclusive `PORTARIA`, que valida ingresso na entrada do cinema. O premissa da decisão original não cobre esse caso, então ela não decide esse caso. O code review da story registrou a lacuna como deferida; o teto entrou depois, a pedido, porque mineração de conta privilegiada custando zero é um degrau diferente de banda desperdiçada.
 - **O que este teto não é**: fronteira de segurança. O endereço sai do primeiro elemento de `X-Forwarded-For` — necessário porque atrás do proxy do Render `getRemoteAddr()` devolveria o proxy e limitaria o mundo inteiro como um cliente só, mas falsificável por quem alcançar a API direto. Quem dispõe de muitos endereços passa por cima. A contagem vive na memória de um processo: reiniciar a API zera, e duas instâncias contam separado. O que ele entrega é encarecer o abuso casual, que antes custava zero. Conter abuso de verdade pede convite, verificação de e-mail ou contador compartilhado, e isso segue em `deferred-work.md`.
 - **Como não regride**: `LimitadorDeCadastroTest` cobre a mecânica com relógio injetado (teto, insistência dentro da janela, virada da janela, independência por endereço, e o descarte de janelas vencidas — sem ele o mapa cresceria sob endereços forjados e o próprio limite viraria vetor de negação de serviço). `CadastroLimiteControllerTest` cobre o contrato HTTP com o limitador real e teto baixo: o 429 no envelope, a tentativa bloqueada não chegando ao serviço, endereços que não dividem teto, a leitura do primeiro elemento da cadeia de proxies, e corpo inválido não gastando cota. `AuthControllerTest` e `AuthSecurityTest` substituem o limitador por mock de propósito — lá o teto real reprovaria testes que nada têm a ver com limite.
+
+---
+
+## O canhoto imprime só o código curto, e é ele que o botão copiar entrega
+
+- **Decisão**: nenhum dos três canhotos (emissão, carteira, página pública) imprime mais o código assinado `uuid.assinatura`, e o prefixo `ASSINADO ·` sai junto com ele. Em tela fica um código só, o curto de 8 caracteres, já no painel escuro ao lado do QR. O botão `⧉ COPIAR CÓDIGO` passa a entregar o curto em vez do assinado. `IngressoPublicoDto` ganha `codigoCurto` — sem isso a página pública seria a única das três sem código nenhum pra ditar. **Nada do back-end de validação muda**: o QR continua carregando o assinado, e `POST /api/portaria/validacoes` continua aceitando os dois formatos.
+- **Por quê**: é o motivo pelo qual o código curto foi criado, levado até a interface. A entrada anterior (CAP-11) já registrava que digitar 36 caracteres mais uma assinatura Base64 na frente de uma fila não é algo que alguém faça; o canhoto continuava imprimindo exatamente isso, ocupando duas linhas do cartão com `break-all` pra não estourar no mobile. Era o mesmo ingresso em três formas ao mesmo tempo — QR, assinado e curto. Copiar seguia a mesma lógica invertida: entregava ao clipboard justamente o código que ninguém consegue usar à mão.
+- **O assinado não desaparece**: ele continua dentro do QR, continua sendo o identificador de `GET /api/ingressos/{codigo}` e continua sendo conferido antes de qualquer consulta ao banco naquela rota (AD-8 intacto). O que ele deixa de ser é texto impresso.
+
+### A fraqueza do código curto, aceita conscientemente
+
+Isto não é ressalva de rodapé: é uma redução de segurança conhecida, escolhida de propósito para que a regra de negócio exista de fato. O que se aceita, explicitamente:
+
+- São **40 bits de `SecureRandom` sem assinatura**, contra os ~256 bits inforjáveis da HMAC. Um código válido não pode ser derivado de nada — só sorteado —, mas é um segredo curto, não uma prova criptográfica.
+- `POST /api/portaria/validacoes` **não tem rate limit**: quem tem token de operador tenta à vontade. O que segura é a razão de acerto, não o número de tentativas — só serve código da sessão do turno, e numa sala de 200 lugares isso é da ordem de 1 em 5,5 bilhões por chute.
+- A barreira real passa a ser a autorização `@PreAuthorize("hasRole('PORTARIA')")`, e nesse caminho ela é **camada única**: a HMAC não está lá pra cobrir um erro de ordenação de matcher no `SecurityConfig` — classe de bug que este projeto já teve uma vez, documentada no comentário de `SecurityConfig` sobre `/api/ingressos/minhas`. `PortariaSecurityTest` fixa os quatro casos (sem token, `CLIENTE`, `ORGANIZADOR`, `PORTARIA`) justamente porque agora é essa checagem que sustenta o resto.
+- Esta mudança **amplia onde ele circula**: passa a ser o que o botão copiar entrega e passa a aparecer no corpo da resposta pública, que não exige autenticação.
+
+A troca é direta. Sem código curto, a portaria não tem plano B quando a câmera falha — tela riscada, celular sem bateria, luz ruim de saguão — e o requisito de validação manual vira letra morta. Com ele, o caminho principal (câmera + HMAC) segue intacto e a fraqueza fica contida num endpoint autenticado. **Mitigação pendente**, registrada em `deferred-work.md`: rate limit em `/validacoes`, reusando o padrão que `LimitadorDeCadastro` já estabeleceu no projeto.
+
+### O que foi descartado junto
+
+Unificar as duas credenciais — código curto virando o que o QR carrega e a única coisa que a portaria aceita — chegou a ser especificado e planejado em 9 tasks. A primeira delas foi implementada e revertida, porque sozinha fazia a portaria recusar todo QR já emitido: o canhoto continuava gravando o assinado. O plano inteiro foi então descartado e seus artefatos removidos do repositório.
+
+O motivo de não retomar não foi o custo de execução, foi o que ele custava em desenho: a assinatura no portão é camada redundante barata, e removê-la deixaria a autorização como ponto único de falha em **todos** os caminhos de validação, não só no manual. O ganho de performance que a especificação alegava — uma HMAC por linha da carteira — já não existia: a paginação limita a resposta a 50 linhas (`Paginacao.TAMANHO_MAXIMO`), então o custo não cresce com o histórico do cliente. Sobrava simplificar `PortariaService.localizar()` de dois formatos para um, o que não paga o preço.
+
+---
+
+## A API sai do plano free do Render e vai pro `starter`
+
+- **Decisão**: `rolo35-api` passa a rodar no plano `starter` (0.5 vCPU, US$ 7/mês) em vez do `free`. O Postgres e o Static Site do front continuam no free.
+- **Por quê**: não foi preferência, foi medição. Rodando a imagem de produção num container com as restrições exatas do plano free — `--cpus=0.1 --memory=512m` —, o Spring Boot levou **179s** pra subir. O trabalho de startup é quase todo CPU-bound e single-thread (carga de ~10 mil classes em modo interpretado, metamodel do Hibernate, springdoc varrendo os controllers), então a 10% de um core cada etapa custa dezenas de vezes o normal; da linha do tempo do log, 83s vão até o Flyway terminar e outros 96s no que vem depois. Como o serviço free ainda dorme após 15 min sem tráfego, o efeito prático era uma falha certa: o `REQUEST_TIMEOUT_MS` de 90s do cliente HTTP do front aborta antes dos 179s, então **a primeira interação depois de qualquer pausa quebrava sozinha**, com a API subindo normalmente. Quem abrisse a aplicação pra avaliar veria erro de rede na primeira tentativa.
+- **Por que não resolver de graça**: as alternativas foram consideradas e nenhuma paga melhor. Ping externo de keep-warm mantém o serviço acordado mas é infraestrutura fora do repositório, invisível pra quem clona e silenciosamente quebrável. `spring.main.lazy-initialization=true` e CDS na imagem encurtam o boot (~30% cada) sem eliminar a soneca — continuaria sendo uma corrida contra o timeout, só com margem melhor. Trocar de plataforma resolveria de verdade: o Cloud Run dá 1 vCPU no free, dez vezes o Render, com *startup CPU boost*. Mas custaria migrar o deploy inteiro, tirar o Postgres do Render e reescrever a documentação de execução a três dias do prazo — risco alto pra um ganho que US$ 7 compram sem tocar em nada.
+- **O que muda no repositório**: uma linha em `render.yaml`. A RAM continua 512 MB, que já era folgada — o teste estabilizou em 318 MB, sem OOM.
+
+---
+
+## O mapa de assentos distingue o hold do próprio cliente, e reservar de novo cancela o anterior
+
+- **Decisão**: `GET /api/sessoes/{id}/mapa-assentos` continua público, mas passa a aproveitar o token quando ele vem: assento segurado por quem fez a requisição volta com status `MEU_HOLD` em vez de `RESERVADO`, e a tela o entrega clicável e já selecionado. Junto disso, `ReservaService.reservar()` cancela a reserva `ATIVA` anterior do mesmo cliente naquela sessão e devolve os assentos dela, antes de travar os novos. `StatusReserva` ganha `CANCELADA` (migration `V14`).
+- **Por quê**: o caminho mais banal do fluxo estava quebrado — escolher assentos, ir pro checkout e voltar pra trocar. O mapa não sabia quem perguntava, então os próprios assentos voltavam como `RESERVADO` e sem clique; o cliente ficava trancado fora do que ele mesmo segurava até o TTL de 10 minutos vencer, e não havia rota de liberar. Pior que o incômodo era o efeito no estoque: escolhendo assentos diferentes, o hold antigo seguia de pé, e os lugares abandonados ficavam bloqueados pra todo mundo por 10 minutos. Numa sessão cheia isso é venda perdida.
+- **`MEU_HOLD` não é estado de banco**: a coluna `assento_sessao.status` continua com o `CHECK` de `LIVRE`/`RESERVADO`/`VENDIDO`. É status de leitura, calculado por requisição — depende de quem pergunta, então não faria sentido guardado. A projeção do mapa ganhou um `LEFT JOIN` em `reservas` pra saber o dono do hold; `LEFT` e não `INNER` porque assento livre tem `reserva_id` nulo e precisa continuar na lista.
+- **A ordem do cancelamento é o que faz a troca funcionar**: liberar o hold anterior roda **antes** do lock dos assentos novos. Depois do lock, a checagem de disponibilidade ainda enxergaria o próprio hold do cliente e recusaria com `ASSENTO_INDISPONIVEL` — que é exatamente o sintoma original. E roda **depois** da validação de forma (AD-5): um clique com seleção inválida não pode destruir o hold que o cliente já tinha.
+- **`CANCELADA` e não `RECUSADA`**: `RECUSADA` é desfecho de pagamento simulado, houve tentativa e resposta. Reaproveitar aquele valor faria o histórico do cliente registrar uma recusa que nunca existiu.
+- **A busca do hold anterior devolve lista, não `Optional`**: antes deste fix o mesmo cliente acumulava várias reservas ativas na mesma sessão — era o próprio bug. Num banco com dados anteriores, `Optional` estouraria em vez de recolher a sujeira que existe.
+- **Como não regride**: `SessaoServiceTest` cobre os cinco casos do status de leitura (hold próprio, hold de terceiro, visitante deslogado, hold próprio já vencido — que vira `LIVRE`, não `MEU_HOLD` — e assento vendido). `ReservaServiceTest` fixa o cancelamento, a ordem contra o lock e a seleção inválida não destruindo hold. `ReservaAssentoLockRepositoryTest` prova contra Postgres real que `liberarPorReserva` solta só os assentos daquela reserva e nunca um `VENDIDO`, que a busca ignora outro cliente e status não-`ATIVA`, e que o mapa traz o dono do hold sem perder os assentos livres. No front, `MapaAssentosPage.test.tsx` cobre o retorno com os assentos próprios selecionados e clicáveis, com o hold de terceiro seguindo bloqueado.
+
+---
+
+## A janela do turno da portaria vira configuração de ambiente, com o default sendo a regra real
+
+- **Decisão**: os dois limites da janela em que a portaria pode ativar uma sessão como turno passam a vir de `portaria.turno.janela-antes-minutos` e `portaria.turno.janela-depois-horas`, com default `30` e `2` — exatamente os valores que o CAP-8 decidiu. O `docker-compose.yml` e o `.env.example` sobem o ambiente local com `PORTARIA_JANELA_ANTES_MINUTOS=20160` (14 dias). Produção não define a variável e fica no default.
+- **Por quê**: com a janela estrita, a tela da portaria era inalcançável sem esperar o relógio. Todo o seed nasce com data futura — a V2 semeia a sete dias, a V10 e a V13 de dez a treze dias à frente —, então nenhuma sessão semeada cai dentro de 30min antes/2h depois de agora. O épico inteiro da portaria ficava sem caminho de teste manual: não dava pra selecionar turno, e sem turno não dá pra validar ingresso.
+- **Por que configuração e não relaxar a regra**: a janela existe por segurança operacional, não por capricho — ativar a sessão errada faz a fila inteira ser recusada com ingresso legítimo na mão, e o CAP-8 registrou isso. Baixar o default resolveria o teste às custas do que vai pro ar. É o mesmo formato já usado pelo teto de cadastro (`CADASTRO_LIMITE_*`): o valor de operação mora no código, o ambiente ajusta quando precisa.
+- **Por que não semear uma sessão perto de agora**: seria a alternativa óbvia, e ela decai. O seed roda uma vez, no primeiro boot; uma sessão ancorada em `now()` deixa de ser reservável assim que o horário passa (FR-10) e some da vitrine, virando lixo no catálogo dias depois. A variável não decai e não inventa dado.
+- **Como não regride**: `PortariaServiceTest` fixa os dois lados — uma janela alargada por configuração aceita uma sessão a sete dias, que o default recusaria, e uma janela configurada continua recusando o que está fora dela. Os testes da regra real seguem construindo o service com `30` e `2` explícitos, então continuam aferindo operação, não conveniência.

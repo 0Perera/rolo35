@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { SelecaoTurnoPortariaPage } from './SelecaoTurnoPortariaPage';
+import { ApiRequestError } from '../api/client';
 import * as portariaApi from '../api/portaria';
 import * as sessoesApi from '../api/sessoes';
 import type { SessaoPublicada } from '../api/sessoes';
@@ -22,6 +23,7 @@ const sessaoA: SessaoPublicada = {
 };
 
 const sessaoB: SessaoPublicada = { ...sessaoA, id: 2, titulo: 'Matrix' };
+const sessaoC: SessaoPublicada = { ...sessaoA, id: 3, titulo: 'Duna' };
 
 const turnoClubeDaLuta = {
   sessaoId: 1,
@@ -150,6 +152,72 @@ describe('SelecaoTurnoPortariaPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível trocar a sessão/i);
     // E o painel continua honesto sobre qual sessão está de fato ativa.
     expect(screen.getByText('Clube da Luta')).toBeInTheDocument();
+  });
+
+  // A janela de -30min/+2h mora no servidor (PortariaService). Sem repetir o motivo na tela, a
+  // recusa vira "não foi possível" e o operador tenta a mesma sessão pra sempre.
+  it('explains the shift window when the server refuses a session outside it', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
+    vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockRejectedValue(
+      new ApiRequestError('Sessão fora da janela', 409, 'SESSAO_FORA_DA_JANELA_DO_TURNO'),
+    );
+    const user = userEvent.setup();
+
+    renderPagina();
+
+    await user.click((await listaDeSessoes()).getByRole('button', { name: /matrix/i }));
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent(/30 min/i);
+    expect(alerta).toHaveTextContent(/2 h/i);
+  });
+
+  // O aviso montava e desmontava a cada clique, empurrando a tela inteira pra cima e de volta —
+  // parecia bug de renderização. O slot fica reservado mesmo vazio.
+  it('keeps the notice slot reserved so the page does not jump on click', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
+    vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockRejectedValue(new Error('falha de rede'));
+    const user = userEvent.setup();
+
+    renderPagina();
+    const lista = await listaDeSessoes();
+    expect(screen.getByTestId('aviso-troca')).toBeInTheDocument();
+
+    await user.click(lista.getByRole('button', { name: /matrix/i }));
+    await screen.findByRole('alert');
+
+    expect(screen.getByTestId('aviso-troca')).toBeInTheDocument();
+  });
+
+  // Escurecer a lista inteira num piscar transformava a espera em glitch. Quem está abrindo é uma
+  // linha só, e ela precisa dizer isso — inclusive pra quem não enxerga a opacidade mudar.
+  it('shows which session is opening and marks only that row as busy', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB, sessaoC]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
+    vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+
+    renderPagina();
+    const lista = await listaDeSessoes();
+
+    await user.click(lista.getByRole('button', { name: /matrix/i }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/abrindo matrix/i);
+    expect(lista.getByRole('button', { name: /matrix/i })).toHaveAttribute('aria-busy', 'true');
+    expect(lista.getByRole('button', { name: /duna/i })).toHaveAttribute('aria-busy', 'false');
+  });
+
+  // "2 sessões encontradas" com uma linha só na tela parece resultado sumido. A que falta é a
+  // ativa, que já tem card próprio acima e não repete na lista.
+  it('says why the count is bigger than the list when the active session was filtered out', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
+
+    renderPagina();
+
+    expect(await screen.findByText(/2 sessões encontradas/i)).toHaveTextContent(/ativa acima/i);
   });
 
   // A lista pública filtra `data_hora >= now()`, então a sessão sai dela no instante em que começa

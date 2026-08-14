@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public interface IngressoResumoProjection {
+
+    /** O código de digitação manual, pra que a carteira mostre o mesmo que o canhoto da compra. */
+    String getCodigoCurto();
     UUID getId();
 
     StatusIngresso getStatus();

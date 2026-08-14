@@ -85,4 +85,58 @@ class CodigoIngressoServiceTest {
     void construtorLancaExcecaoParaSecretNulo() {
         assertThatThrownBy(() -> new CodigoIngressoService(null)).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void codigoCurtoTemOitoCaracteresDoAlfabetoCrockford() {
+        for (int i = 0; i < 200; i++) {
+            assertThat(service.gerarCodigoCurto()).matches("[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{8}");
+        }
+    }
+
+    // Não é decoração: I, L, O e U fora do alfabeto é o que faz o código sobreviver a ser ditado
+    // por telefone e digitado por outra pessoa.
+    @Test
+    void codigoCurtoNuncaUsaLetrasQueSeConfundemComNumeros() {
+        for (int i = 0; i < 200; i++) {
+            assertThat(service.gerarCodigoCurto()).doesNotContain("I", "L", "O", "U");
+        }
+    }
+
+    @Test
+    void codigosCurtosNaoSeRepetemEmVolumePequeno() {
+        java.util.Set<String> gerados = new java.util.HashSet<>();
+        for (int i = 0; i < 1_000; i++) {
+            gerados.add(service.gerarCodigoCurto());
+        }
+
+        assertThat(gerados).hasSize(1_000);
+    }
+
+    // A tolerância de leitura do Crockford: quem digita o que está escrito no canhoto acerta,
+    // mesmo trocando O por 0 ou digitando em minúscula.
+    @Test
+    void normalizaCaixaSeparadoresEOsCaracteresConfundiveis() {
+        assertThat(service.normalizarCodigoCurto("7zk3qw9m")).contains("7ZK3QW9M");
+        assertThat(service.normalizarCodigoCurto(" 7ZK3-QW9M ")).contains("7ZK3QW9M");
+        assertThat(service.normalizarCodigoCurto("7ZK3QWOM")).contains("7ZK3QW0M");
+        assertThat(service.normalizarCodigoCurto("7ZK3QWIM")).contains("7ZK3QW1M");
+        assertThat(service.normalizarCodigoCurto("7ZK3QWLM")).contains("7ZK3QW1M");
+    }
+
+    @Test
+    void recusaOQueNaoPodeSerCodigoCurto() {
+        assertThat(service.normalizarCodigoCurto(null)).isEmpty();
+        assertThat(service.normalizarCodigoCurto("")).isEmpty();
+        assertThat(service.normalizarCodigoCurto("7ZK3QW9")).isEmpty();
+        assertThat(service.normalizarCodigoCurto("7ZK3QW9MX")).isEmpty();
+        // O código assinado inteiro nunca pode ser confundido com um código curto.
+        assertThat(service.normalizarCodigoCurto(service.gerar(UUID.randomUUID()))).isEmpty();
+    }
+
+    // U não está no alfabeto e, ao contrário de I/L/O, não tem equivalente numérico — então é
+    // recusado em vez de traduzido.
+    @Test
+    void recusaCaractereForaDoAlfabetoSemEquivalente() {
+        assertThat(service.normalizarCodigoCurto("7ZK3QWUM")).isEmpty();
+    }
 }

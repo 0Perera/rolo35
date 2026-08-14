@@ -4,6 +4,7 @@ import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
+import br.com.rolo35.api.sessoes.dto.OcupacaoSalaDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -57,10 +58,27 @@ public class SessaoController {
         return ResponseEntity.ok(sessaoService.listarPublicadas(busca, tmdbId, salaId, pagina, tamanho));
     }
 
-    @GetMapping("/minhas")
+    /**
+     * Agenda de gestão do cinema: qualquer ORGANIZADOR vê e edita qualquer sessão. Era
+     * {@code /minhas} até CAP-1 — o nome antigo prometia um recorte por dono que não existe mais.
+     */
+    @GetMapping("/gestao")
     @PreAuthorize("hasRole('ORGANIZADOR')")
-    public ResponseEntity<List<SessaoGestaoDto>> listarMinhas(Authentication authentication) {
-        return ResponseEntity.ok(sessaoService.listarMinhas(authentication.getName()));
+    public ResponseEntity<PaginaDto<SessaoGestaoDto>> listarParaGestao(
+            Authentication authentication,
+            @RequestParam(name = "pagina", defaultValue = "0") int pagina,
+            @RequestParam(name = "tamanho", defaultValue = "12") int tamanho) {
+        return ResponseEntity.ok(sessaoService.listarParaGestao(authentication.getName(), pagina, tamanho));
+    }
+
+    /**
+     * Path fixo declarado antes de {@code /{id}} — o Spring resolve por especificidade e não por
+     * ordem, mas manter os dois vizinhos deixa visível que {@code ocupacao} nunca pode virar um id.
+     */
+    @GetMapping("/ocupacao")
+    @PreAuthorize("hasRole('ORGANIZADOR')")
+    public ResponseEntity<List<OcupacaoSalaDto>> ocupacaoDaSala(@RequestParam(name = "salaId") Long salaId) {
+        return ResponseEntity.ok(sessaoService.listarOcupacaoDaSala(salaId));
     }
 
     @GetMapping("/{id}")
@@ -76,8 +94,15 @@ public class SessaoController {
         return ResponseEntity.ok(sessaoService.editar(id, request, authentication.getName()));
     }
 
+    /**
+     * Rota pública, mas que aproveita o token quando ele vem: o filtro JWT roda em toda requisição
+     * (não tem {@code shouldNotFilter}), então visitante deslogado chega com {@code authentication}
+     * nulo e cliente logado chega identificado. É isso que deixa o mapa marcar o hold do próprio
+     * cliente sem fechar a rota.
+     */
     @GetMapping("/{id}/mapa-assentos")
-    public ResponseEntity<MapaAssentosDto> mapaAssentos(@PathVariable Long id) {
-        return ResponseEntity.ok(sessaoService.mapaAssentos(id));
+    public ResponseEntity<MapaAssentosDto> mapaAssentos(@PathVariable Long id, Authentication authentication) {
+        String clienteEmail = authentication == null ? null : authentication.getName();
+        return ResponseEntity.ok(sessaoService.mapaAssentos(id, clienteEmail));
     }
 }

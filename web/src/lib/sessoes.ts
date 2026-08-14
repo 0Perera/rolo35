@@ -38,3 +38,41 @@ export function resumoDeSalas(sessoes: SessaoPublicada[]): string {
 export function contagemDeSessoes(total: number): string {
   return `${total} ${total === 1 ? 'SESSÃO' : 'SESSÕES'}`;
 }
+
+/** Um filme da vitrine, com todos os horários dele em cartaz. */
+export interface FilmeAgrupado {
+  tmdbId: number;
+  titulo: string;
+  posterUrl: string | null;
+  dataEstreia: string | null;
+  sessoes: SessaoPublicada[];
+}
+
+/**
+ * A API devolve uma linha por sessão; a vitrine mostra um card por filme. O snapshot do TMDb
+ * (título, pôster, estreia) se repete em todas as sessões do mesmo filme, então vale a primeira.
+ */
+export function agruparPorFilme(sessoes: SessaoPublicada[]): FilmeAgrupado[] {
+  const porFilme = new Map<number, FilmeAgrupado>();
+
+  for (const sessao of sessoes) {
+    const existente = porFilme.get(sessao.tmdbId);
+    if (existente) {
+      existente.sessoes.push(sessao);
+    } else {
+      porFilme.set(sessao.tmdbId, {
+        tmdbId: sessao.tmdbId,
+        titulo: sessao.titulo,
+        posterUrl: sessao.posterUrl,
+        dataEstreia: sessao.dataEstreia,
+        sessoes: [sessao],
+      });
+    }
+  }
+
+  for (const filme of porFilme.values()) {
+    filme.sessoes.sort((a, b) => a.dataHora.localeCompare(b.dataHora));
+  }
+
+  return Array.from(porFilme.values());
+}

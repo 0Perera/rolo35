@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { listarSessoesPublicadas, type SessaoPublicada } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { PageShell } from '../components/PageShell';
@@ -22,6 +22,33 @@ function agruparPorDia(sessoes: SessaoPublicada[]): { dia: string; sessoes: Sess
   }
 
   return Array.from(porDia.entries()).map(([dia, sessoesDoDia]) => ({ dia, sessoes: sessoesDoDia }));
+}
+
+/**
+ * O resumo de salas é o único ponto da tela onde cabe explicar o que é "SALA 1": os botões de
+ * horário repetem o nome, mas link dentro de `<button>` é HTML inválido e roubaria o clique do
+ * horário.
+ *
+ * <p>O nome acessível começa pelo texto visível de propósito (WCAG 2.5.3, Label in Name): quem
+ * navega por comando de voz fala "sala 1" e acerta o link, e quem lista os links pelo leitor de
+ * tela não recebe só "2 SALAS" solto.
+ */
+function LinkDasSalas({ sessoes }: { sessoes: SessaoPublicada[] }) {
+  const location = useLocation();
+  const resumo = resumoDeSalas(sessoes);
+  return (
+    <Link
+      to="/salas"
+      // Mesmo `retomarEm` do login: sem ele a página de salas só sabe voltar pra vitrine, e quem
+      // estava escolhendo horário teria que reachar o filme e refazer a escolha pra voltar.
+      state={{ retomarEm: `${location.pathname}${location.search}` }}
+      aria-label={`${resumo} — ver as salas do Rolo 35`}
+      // A faixa em volta é toda de texto puro; sem o sublinhado o link não se anuncia como link.
+      className="underline decoration-dotted underline-offset-4 hover:text-flame-600"
+    >
+      {resumo}
+    </Link>
+  );
 }
 
 export function FilmeDetalhePage() {
@@ -106,7 +133,7 @@ export function FilmeDetalhePage() {
                   {sessoesDoFilme[0].dataEstreia.slice(0, 4)}
                 </span>
               )}
-              <span>{resumoDeSalas(sessoesDoFilme)}</span>
+              <LinkDasSalas sessoes={sessoesDoFilme} />
               <span className="text-ink-950/30">/</span>
               <span>{contagemDeSessoes(sessoesDoFilme.length)}</span>
               <span className="text-ink-950/30">/</span>

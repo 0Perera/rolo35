@@ -44,6 +44,54 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
     @Query(value = "SELECT EXISTS (SELECT 1 FROM ingressos WHERE sessao_id = :sessaoId)", nativeQuery = true)
     boolean existeIngressoConfirmado(@Param("sessaoId") Long sessaoId);
 
+    /**
+     * Sessão já começou (FR-10/FR-12): guard de reserva e de pagamento.
+     *
+     * <p>Usa {@code now()} do banco, e não o relógio da JVM, pra ser exatamente o complemento de
+     * {@code listarPublicadas} ({@code data_hora >= now()}): com dois relógios, uma sessão podia
+     * sumir da vitrine e continuar reservável. Sessão inexistente devolve {@code false} de
+     * propósito — quem chama já tem tratamento próprio pra id que não existe, e inventar aqui um
+     * segundo caminho de "não encontrada" só mudaria a resposta de erro de quem chuta ids.
+     */
+    @Query(
+            value = "SELECT EXISTS (SELECT 1 FROM sessoes WHERE id = :sessaoId AND data_hora < now())",
+            nativeQuery = true)
+    boolean jaComecou(@Param("sessaoId") Long sessaoId);
+
+    /**
+     * Janelas em que a sala não aceita sessão nova, pro formulário avisar antes do submit.
+     *
+     * <p>O recorte é o mesmo de {@code existeConflitante}, não "sessões futuras": uma sessão que já
+     * começou continua bloqueando enquanto o buffer dela não vencer, então o filtro é sobre o fim
+     * da janela ({@code data_hora + buffer > now()}) e não sobre {@code data_hora}. Um filtro por
+     * sessão futura mostraria a sala livre num horário que o {@code POST} recusaria — exatamente o
+     * 409-surpresa que esta consulta existe pra evitar.
+     */
+    @Query(value = """
+        SELECT s.id AS id, s.data_hora AS dataHora
+        FROM sessoes s
+        WHERE s.sala_id = :salaId
+          AND (s.data_hora + (INTERVAL '1 minute' * :bufferMinutos)) > now()
+        ORDER BY s.data_hora
+        """, nativeQuery = true)
+    List<SessaoOcupacaoProjection> listarOcupacaoDaSala(
+            @Param("salaId") Long salaId, @Param("bufferMinutos") int bufferMinutos);
+
+    /**
+     * Listagem de gestão: todas as sessões do cinema, sem filtro por organizador. A coluna
+     * {@code organizador_id} continua registrando quem criou cada sessão, mas não restringe mais
+     * quem a vê ou edita — a equipe de organizadores é compartilhada (CAP-1, ver
+     * {@code docs/decisions.md}).
+     *
+     * <p>Paginada pelo mesmo motivo que {@code listarPublicadas}: o {@code WHERE organizador_id = ?}
+     * que o CAP-1 removeu era o único recorte desta consulta, e sem ele a resposta é o histórico
+     * inteiro do cinema, crescendo indefinidamente com a agenda.
+     *
+     * <p>O {@code ORDER BY} desempata por {@code id}: {@code data_hora} sozinho não é único (duas
+     * salas podem ter sessão no mesmo horário), e ordem instável entre páginas faz uma sessão
+     * aparecer duas vezes ou nenhuma na travessia. O {@code countQuery} é explícito porque o
+     * {@code GROUP BY} faria a contagem derivada contar linhas de assento, não de sessão.
+     */
     @Query(value = """
         SELECT s.id AS id, s.sala_id AS salaId, sa.nome AS salaNome, s.titulo AS titulo,
                s.sinopse AS sinopse, s.data_hora AS dataHora, s.preco AS preco,
@@ -52,11 +100,17 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
         FROM sessoes s
         JOIN salas sa ON sa.id = s.sala_id
         JOIN assentos a ON a.sala_id = s.sala_id
-        WHERE s.organizador_id = :organizadorId
         GROUP BY s.id, s.sala_id, sa.nome
-        ORDER BY s.data_hora
-        """, nativeQuery = true)
-    List<SessaoGestaoProjection> findByOrganizadorId(@Param("organizadorId") Long organizadorId);
+        ORDER BY s.data_hora, s.id
+        """,
+            countQuery = """
+        SELECT COUNT(*)
+        FROM sessoes s
+        JOIN salas sa ON sa.id = s.sala_id
+        WHERE EXISTS (SELECT 1 FROM assentos a WHERE a.sala_id = s.sala_id)
+        """,
+            nativeQuery = true)
+    Page<SessaoGestaoProjection> findParaGestao(Pageable pageable);
 
     /**
      * Listagem pública paginada, com busca por título do filme, nome da sala ou data/hora escrita

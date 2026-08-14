@@ -44,6 +44,7 @@ class PortariaServiceValidacaoTest {
     private static final Long PORTARIA_ID = 4L;
     private static final Long SESSAO_ATIVA_ID = 1L;
     private static final String CODIGO = "codigo-qualquer";
+    private static final String CODIGO_CURTO = "7ZK3QW9M";
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -75,9 +76,11 @@ class PortariaServiceValidacaoTest {
     private PortariaService portariaService;
 
     private void setUp() {
+        // Janela do turno nos defaults de produção: nada neste arquivo depende dela — a sessão
+        // ativa vem stubada direto — mas usar outro valor aqui seria ruído.
         portariaService = new PortariaService(
                 usuarioRepository, sessaoRepository, salaRepository, turnoPortariaRepository, ingressoRepository,
-                assentoRepository, codigoIngressoService, entityManager);
+                assentoRepository, codigoIngressoService, entityManager, 30, 2);
     }
 
     private void stubSessaoAtiva() {
@@ -116,7 +119,7 @@ class PortariaServiceValidacaoTest {
     }
 
     private Ingresso ingresso(UUID id, Long sessaoId, StatusIngresso status) {
-        return new Ingresso(id, 1L, 1L, sessaoId, status, null, Instant.now());
+        return new Ingresso(id, 1L, 1L, sessaoId, CODIGO_CURTO, status, null, Instant.now());
     }
 
     private Assento assento(Long id, String fileira, Integer numero) {
@@ -143,11 +146,66 @@ class PortariaServiceValidacaoTest {
         setUp();
         stubSessaoAtiva();
         given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.empty());
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO)).willReturn(Optional.empty());
 
         ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
 
         assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.INVALIDO);
         verify(ingressoRepository, never()).findByIdForUpdate(any());
+        verify(ingressoRepository, never()).findByCodigoCurtoForUpdate(any());
+    }
+
+    // O código curto é o caminho de digitação manual quando a câmera não lê. Cai no MESMO fluxo de
+    // verificação: sessão ativa, estado do ingresso e transição VALIDO -> UTILIZADO sob lock.
+    @Test
+    void codigoCurtoValidoMudaParaUtilizadoESalva() {
+        setUp();
+        stubSessaoAtiva();
+        stubLockTimeout();
+        UUID id = UUID.randomUUID();
+        given(codigoIngressoService.extrairId(CODIGO_CURTO)).willReturn(Optional.empty());
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
+        Ingresso ingresso = ingresso(id, SESSAO_ATIVA_ID, StatusIngresso.VALIDO);
+        given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.of(ingresso));
+        given(assentoRepository.findById(1L)).willReturn(Optional.of(assento(1L, "A", 1)));
+
+        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO_CURTO);
+
+        assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.VALIDO);
+        assertThat(ingresso.getStatus()).isEqualTo(StatusIngresso.UTILIZADO);
+        verify(ingressoRepository).save(ingresso);
+    }
+
+    // Mesma regra do caminho assinado: um código curto de outra sessão não libera a porta.
+    @Test
+    void codigoCurtoDeOutraSessaoRetornaEventoErrado() {
+        setUp();
+        stubSessaoAtiva();
+        stubLockTimeout();
+        given(codigoIngressoService.extrairId(CODIGO_CURTO)).willReturn(Optional.empty());
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
+        Ingresso ingresso = ingresso(UUID.randomUUID(), 999L, StatusIngresso.VALIDO);
+        given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.of(ingresso));
+        given(assentoRepository.findById(1L)).willReturn(Optional.of(assento(1L, "A", 1)));
+
+        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO_CURTO);
+
+        assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.EVENTO_ERRADO);
+        verify(ingressoRepository, never()).save(any());
+    }
+
+    @Test
+    void codigoCurtoInexistenteRetornaInvalido() {
+        setUp();
+        stubSessaoAtiva();
+        stubLockTimeout();
+        given(codigoIngressoService.extrairId(CODIGO_CURTO)).willReturn(Optional.empty());
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO_CURTO)).willReturn(Optional.of(CODIGO_CURTO));
+        given(ingressoRepository.findByCodigoCurtoForUpdate(CODIGO_CURTO)).willReturn(Optional.empty());
+
+        ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO_CURTO);
+
+        assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.INVALIDO);
     }
 
     @Test
@@ -157,11 +215,15 @@ class PortariaServiceValidacaoTest {
         UUID id = UUID.randomUUID();
         given(codigoIngressoService.extrairId(CODIGO)).willReturn(Optional.of(id));
         given(codigoIngressoService.validar(id, CODIGO)).willReturn(false);
+        // Assinatura adulterada não vira tentativa de código curto por acidente: a forma
+        // uuid.assinatura tem muito mais que 8 caracteres, e a normalização recusa.
+        given(codigoIngressoService.normalizarCodigoCurto(CODIGO)).willReturn(Optional.empty());
 
         ValidacaoIngressoDto dto = portariaService.validar(PORTARIA_EMAIL, CODIGO);
 
         assertThat(dto.resultado()).isEqualTo(ResultadoValidacao.INVALIDO);
         verify(ingressoRepository, never()).findByIdForUpdate(any());
+        verify(ingressoRepository, never()).findByCodigoCurtoForUpdate(any());
     }
 
     @Test

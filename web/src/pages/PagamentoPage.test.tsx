@@ -33,8 +33,8 @@ const reservaAtiva: ReservaCheckout = {
 const pagamentoAprovado: Pagamento = {
   status: 'CONFIRMADA',
   ingressos: [
-    { id: 'u-1', assentoId: 1, codigo: 'aaaa-1111.assinatura1' },
-    { id: 'u-2', assentoId: 2, codigo: 'bbbb-2222.assinatura2' },
+    { id: 'u-1', assentoId: 1, codigo: 'aaaa-1111.assinatura1', codigoCurto: '7ZK3QW9M' },
+    { id: 'u-2', assentoId: 2, codigo: 'bbbb-2222.assinatura2', codigoCurto: 'H4TN2XPB' },
   ],
 };
 
@@ -104,10 +104,27 @@ describe('PagamentoPage', () => {
     });
     expect(await screen.findByText(/ticket na mão/i)).toBeInTheDocument();
     expect(screen.getAllByText(/escaneie na portaria/i)).toHaveLength(2);
-    // `CÓDIGO ` no padrão: o código sozinho casaria também com o title do SVG do QR, que carrega a
-    // URL pública — e aí o teste passaria sem o canhoto mostrar código nenhum.
-    expect(screen.getByText(/CÓDIGO aaaa-1111\.assinatura1/)).toBeInTheDocument();
-    expect(screen.getByText(/CÓDIGO bbbb-2222\.assinatura2/)).toBeInTheDocument();
+    // O código assinado não é impresso em canhoto nenhum: ele vive no QR e na URL do link
+    // público. `CÓDIGO ` no padrão porque o código sozinho casaria também com o title do SVG.
+    expect(screen.queryByText(/CÓDIGO aaaa-1111\.assinatura1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/CÓDIGO bbbb-2222\.assinatura2/)).not.toBeInTheDocument();
+  });
+
+  // É o único código impresso no canhoto, e o plano B da câmera só serve se estiver ali: sem ele
+  // em tela, ninguém tem o que ditar quando a leitura falha na porta.
+  it('prints the short code on each ticket, next to the QR', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    vi.spyOn(pagamentosApi, 'confirmarPagamento').mockResolvedValue(pagamentoAprovado);
+    const user = userEvent.setup();
+
+    renderPage();
+    await preencherCartao(user);
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    await screen.findByText(/ticket na mão/i);
+    expect(screen.getByText('7ZK3QW9M')).toBeInTheDocument();
+    expect(screen.getByText('H4TN2XPB')).toBeInTheDocument();
+    expect(screen.getAllByText(/ou dite o código/i)).toHaveLength(2);
   });
 
   // Aprovar e recusar trocam a tela sem trocar de rota, então RolarAoTrocarDeRota não age: sem
@@ -218,6 +235,21 @@ describe('PagamentoPage', () => {
     expect(await screen.findByText(/reserva expirou/i)).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: /escolher assentos/i }));
     expect(await screen.findByText('página do mapa')).toBeInTheDocument();
+  });
+
+  it('treats a 409 SESSAO_JA_COMECOU as terminal, without offering to retry the payment', async () => {
+    vi.spyOn(reservasApi, 'buscarReserva').mockResolvedValue(reservaAtiva);
+    vi.spyOn(pagamentosApi, 'confirmarPagamento').mockRejectedValue(
+      new ApiRequestError('Sessão já começou', 409, 'SESSAO_JA_COMECOU'),
+    );
+    const user = userEvent.setup();
+
+    renderPage();
+    await preencherCartao(user);
+    await user.click(screen.getByRole('button', { name: /confirmar pagamento/i }));
+
+    expect(await screen.findByText(/sessão já começou/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /confirmar pagamento/i })).not.toBeInTheDocument();
   });
 
   it('treats a 409 RESERVA_EM_DISPUTA as retryable, keeping the confirm button usable', async () => {

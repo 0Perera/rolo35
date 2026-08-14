@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.Paginacao;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.DataEstreiaInvalidaException;
 import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
@@ -28,9 +29,9 @@ import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.repository.AssentoMapaProjection;
@@ -38,6 +39,7 @@ import br.com.rolo35.api.sessoes.repository.AssentoRepository;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SalaRepository;
 import br.com.rolo35.api.sessoes.repository.SessaoListagemProjection;
+import br.com.rolo35.api.sessoes.repository.SessaoOcupacaoProjection;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -108,6 +110,14 @@ class SessaoServiceTest {
         return usuario;
     }
 
+    private Usuario clienteCom(Long id) {
+        Usuario usuario = new Usuario();
+        ReflectionTestUtils.setField(usuario, "id", id);
+        ReflectionTestUtils.setField(usuario, "email", "cliente1@rolo35.com.br");
+        ReflectionTestUtils.setField(usuario, "papel", "CLIENTE");
+        return usuario;
+    }
+
     private Assento assentoCom(Long id, Long salaId, String fileira, int numero) {
         Assento assento = new Assento();
         ReflectionTestUtils.setField(assento, "id", id);
@@ -159,7 +169,7 @@ class SessaoServiceTest {
         ArgumentCaptor<List<br.com.rolo35.api.sessoes.AssentoSessao>> captor = ArgumentCaptor.forClass(List.class);
         verify(assentoSessaoRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(40);
-        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo("LIVRE"));
+        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo(StatusAssento.LIVRE));
     }
 
     // A capacidade anunciada tem que sair do mapa de assentos de fato cadastrado (AC1), não do
@@ -366,7 +376,7 @@ class SessaoServiceTest {
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
-        assertThat(captor.getValue().getPageSize()).isEqualTo(SessaoService.TAMANHO_PAGINA_MAXIMO);
+        assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_MAXIMO);
     }
 
     @Test
@@ -377,8 +387,46 @@ class SessaoServiceTest {
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         then(sessaoRepository).should().listarPublicadas(anyString(), anyLong(), anyLong(), captor.capture());
-        assertThat(captor.getValue().getPageSize()).isEqualTo(SessaoService.TAMANHO_PAGINA_PADRAO);
+        assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_PADRAO);
         assertThat(captor.getValue().getPageNumber()).isZero();
+    }
+
+    private SessaoOcupacaoProjection ocupacaoCom(Long id, LocalDateTime dataHora) {
+        SessaoOcupacaoProjection projecao = mock(SessaoOcupacaoProjection.class);
+        given(projecao.getId()).willReturn(id);
+        given(projecao.getDataHora()).willReturn(dataHora);
+        return projecao;
+    }
+
+    // O buffer é aplicado no back-end de propósito: se o formulário calculasse a janela, existiriam
+    // duas cópias da regra de conflito, e a do front seria a que ninguém lembra de atualizar.
+    @Test
+    void ocupacaoDaSalaDevolveAJanelaBloqueadaJaComOBufferAplicado() {
+        LocalDateTime dataHora = LocalDateTime.now().plusDays(3).withNano(0);
+        // A projeção é montada antes: um given() aninhado dentro de outro deixa o primeiro
+        // inacabado e o Mockito reclama de UnfinishedStubbing.
+        SessaoOcupacaoProjection projecao = ocupacaoCom(7L, dataHora);
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(sessaoRepository.listarOcupacaoDaSala(1L, 240)).willReturn(List.of(projecao));
+
+        var ocupacao = sessaoService.listarOcupacaoDaSala(1L);
+
+        assertThat(ocupacao).singleElement().satisfies(janela -> {
+            assertThat(janela.sessaoId()).isEqualTo(7L);
+            assertThat(janela.dataHora()).isEqualTo(dataHora);
+            assertThat(janela.bloqueadoDe()).isEqualTo(dataHora.minusHours(4));
+            assertThat(janela.bloqueadoAte()).isEqualTo(dataHora.plusHours(4));
+        });
+    }
+
+    @Test
+    void ocupacaoDeSalaInexistenteFalhaAntesDeConsultarSessoes() {
+        given(salaRepository.findById(99L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sessaoService.listarOcupacaoDaSala(99L))
+                .isInstanceOf(SalaNaoEncontradaException.class);
+
+        verify(sessaoRepository, never()).listarOcupacaoDaSala(any(), any(Integer.class));
     }
 
     private Sessao sessaoCom(Long id, Long organizadorId, Long salaId, String titulo, LocalDateTime dataHora) {
@@ -433,7 +481,7 @@ class SessaoServiceTest {
                 .willReturn(false);
         given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
-        AssentoSessao linhaAntiga = new AssentoSessao(new AssentoSessaoId(5L, 1L), "LIVRE", null, null);
+        AssentoSessao linhaAntiga = new AssentoSessao(new AssentoSessaoId(5L, 1L), StatusAssento.LIVRE, null, null);
         given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(linhaAntiga));
 
         var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");
@@ -444,7 +492,7 @@ class SessaoServiceTest {
         ArgumentCaptor<List<AssentoSessao>> captor = ArgumentCaptor.forClass(List.class);
         verify(assentoSessaoRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(12);
-        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo("LIVRE"));
+        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo(StatusAssento.LIVRE));
     }
 
     // Dívida obrigatória do review da Story 2.2 (deferred-work.md): trocar de sala com um hold
@@ -461,7 +509,7 @@ class SessaoServiceTest {
         given(sessaoRepository.existeConflitanteExcluindo(eq(2L), any(LocalDateTime.class), any(Integer.class), eq(5L)))
                 .willReturn(false);
         AssentoSessao holdAtivo =
-                new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().plusMinutes(5));
+                new AssentoSessao(new AssentoSessaoId(5L, 1L), StatusAssento.RESERVADO, 42L, LocalDateTime.now().plusMinutes(5));
         given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(holdAtivo));
 
         assertThatThrownBy(() -> sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br"))
@@ -486,7 +534,7 @@ class SessaoServiceTest {
         given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
         AssentoSessao holdVencido =
-                new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().minusMinutes(1));
+                new AssentoSessao(new AssentoSessaoId(5L, 1L), StatusAssento.RESERVADO, 42L, LocalDateTime.now().minusMinutes(1));
         given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(holdVencido));
 
         var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");
@@ -505,18 +553,44 @@ class SessaoServiceTest {
                 .isInstanceOf(SessaoNaoEncontradaException.class);
     }
 
+    // CAP-1: sessão é recurso do cinema, não do organizador que a criou — qualquer ORGANIZADOR
+    // autenticado edita qualquer sessão. O campo organizador_id continua registrando a autoria, e
+    // é ele (não quem editou) que volta na resposta.
     @Test
-    void rejeitaEdicaoDeSessaoDeOutroOrganizadorSemChecarTravaOuConflito() {
+    void editaSessaoCriadaPorOutroOrganizadorPreservandoAAutoria() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         stubOrganizador();
         Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
         given(sessaoRepository.findByIdForUpdate(5L)).willReturn(Optional.of(deOutroOrganizador));
+        given(sessaoRepository.existeIngressoConfirmado(5L)).willReturn(false);
+        given(sessaoRepository.existeConflitanteExcluindo(anyLong(), any(LocalDateTime.class), any(Integer.class), anyLong()))
+                .willReturn(false);
+        given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
 
-        assertThatThrownBy(() -> sessaoService.editar(5L, editarRequestValido(1L), "organizador@rolo35.com.br"))
-                .isInstanceOf(SessaoNaoPertenceAoOrganizadorException.class);
+        var resposta = sessaoService.editar(5L, editarRequestValido(1L), "organizador@rolo35.com.br");
 
-        verify(sessaoRepository, never()).existeIngressoConfirmado(any());
-        verify(sessaoRepository, never()).save(any());
+        assertThat(resposta.titulo()).isEqualTo("Clube da Luta (editado)");
+        assertThat(resposta.organizadorId()).isEqualTo(99L);
+    }
+
+    // O CAP-1 também tirou o ownership de buscarPorId, e o único teste que cobria aquele caminho
+    // (o 403 de GET /api/sessoes/{id}) foi apagado junto, sem substituto: os três usos de
+    // buscarPorId em teste eram todos mock do próprio service, então o corpo do método nunca
+    // rodava. Reinstalar a checagem passava despercebido pela suíte inteira.
+    @Test
+    void buscaPorIdSessaoCriadaPorOutroOrganizador() {
+        stubOrganizador();
+        Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
+        given(sessaoRepository.findById(5L)).willReturn(Optional.of(deOutroOrganizador));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(assentoSessaoRepository.findByIdSessaoId(5L)).willReturn(List.of());
+        given(sessaoRepository.existeIngressoConfirmado(5L)).willReturn(false);
+
+        var dto = sessaoService.buscarPorId(5L, "organizador@rolo35.com.br");
+
+        assertThat(dto.id()).isEqualTo(5L);
+        assertThat(dto.titulo()).isEqualTo("Clube da Luta");
     }
 
     @Test
@@ -550,12 +624,10 @@ class SessaoServiceTest {
         verify(sessaoRepository, never()).save(any());
     }
 
-    // Ownership precisa ser checado antes de validar o corpo (AC2: tentativa de editar sessão de
-    // outro organizador é sempre 403, mesmo com corpo inválido) — então a sessão já foi carregada
-    // (e o dono conferido) quando o erro de data no passado é lançado; só o lock da *sala* segue
-    // evitado, porque nada até aqui depende dela.
+    // A sessão já foi carregada (e travada) quando o erro de data no passado é lançado; só o lock
+    // da *sala* segue evitado, porque nada até aqui depende dela.
     @Test
-    void rejeitaEdicaoComDataHoraNoPassadoAposConfirmarQueSessaoEDoOrganizador() {
+    void rejeitaEdicaoComDataHoraNoPassadoSemTravarSala() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         stubOrganizador();
         Sessao existente = sessaoCom(5L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
@@ -569,11 +641,10 @@ class SessaoServiceTest {
         verify(salaRepository, never()).findByIdForUpdate(any());
     }
 
-    // AC2: tentativa de editar sessão de outro organizador é rejeitada com 403 — "mesmo sabendo o
-    // ID" e independentemente do resto do corpo estar malformado. Prova o fix: sem essa ordem, um
-    // corpo com dataHora no passado mirando sessão alheia devolveria 400 em vez de 403.
+    // Sessão de outro organizador não tem mais tratamento próprio (CAP-1): o corpo é validado
+    // igual ao de uma sessão criada por quem está editando.
     @Test
-    void rejeitaEdicaoDeSessaoDeOutroOrganizadorMesmoComDataHoraNoPassado() {
+    void rejeitaEdicaoComDataHoraNoPassadoTambemEmSessaoDeOutroOrganizador() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         stubOrganizador();
         Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
@@ -582,7 +653,7 @@ class SessaoServiceTest {
                 1L, "Clube da Luta", "sinopse", LocalDateTime.now().minusDays(1), new BigDecimal("30.00"));
 
         assertThatThrownBy(() -> sessaoService.editar(5L, request, "organizador@rolo35.com.br"))
-                .isInstanceOf(SessaoNaoPertenceAoOrganizadorException.class);
+                .isInstanceOf(DataHoraNoPassadoException.class);
     }
 
     @Test
@@ -597,12 +668,23 @@ class SessaoServiceTest {
 
     private AssentoMapaProjection projecaoMapaCom(
             Long assentoId, String fileira, Integer numero, String status, LocalDateTime expiresAt) {
+        return projecaoMapaCom(assentoId, fileira, numero, status, expiresAt, null);
+    }
+
+    private AssentoMapaProjection projecaoMapaCom(
+            Long assentoId,
+            String fileira,
+            Integer numero,
+            String status,
+            LocalDateTime expiresAt,
+            Long clienteIdDoHold) {
         AssentoMapaProjection projecao = mock(AssentoMapaProjection.class);
         given(projecao.getAssentoId()).willReturn(assentoId);
         given(projecao.getFileira()).willReturn(fileira);
         given(projecao.getNumero()).willReturn(numero);
         given(projecao.getStatus()).willReturn(status);
         lenient().when(projecao.getExpiresAt()).thenReturn(expiresAt);
+        lenient().when(projecao.getClienteIdDoHold()).thenReturn(clienteIdDoHold);
         return projecao;
     }
 
@@ -614,7 +696,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "LIVRE", null));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.sessaoId()).isEqualTo(7L);
         // O tmdbId é o que permite voltar do mapa pra tela de escolha de sessão do filme: sem ele,
@@ -638,7 +720,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5)));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
     }
@@ -651,7 +733,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().minusMinutes(5)));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.assentos().get(0).status()).isEqualTo("LIVRE");
         verify(assentoSessaoRepository, never()).save(any());
@@ -666,7 +748,7 @@ class SessaoServiceTest {
         var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "VENDIDO", null));
         given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
 
-        var mapa = sessaoService.mapaAssentos(7L);
+        var mapa = sessaoService.mapaAssentos(7L, null);
 
         assertThat(mapa.assentos().get(0).status()).isEqualTo("VENDIDO");
     }
@@ -675,6 +757,91 @@ class SessaoServiceTest {
     void rejeitaMapaAssentosDeSessaoInexistente() {
         given(sessaoRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> sessaoService.mapaAssentos(999L)).isInstanceOf(SessaoNaoEncontradaException.class);
+        assertThatThrownBy(() -> sessaoService.mapaAssentos(999L, null))
+                .isInstanceOf(SessaoNaoEncontradaException.class);
+    }
+
+    // O cliente que volta do checkout pra trocar de assento via os próprios assentos como
+    // RESERVADO e sem clique — trancado fora do que ele mesmo segurava, até o TTL de 10min vencer.
+    // MEU_HOLD existe só na leitura: é status de tela, nunca vai pro banco (a coluna continua com o
+    // CHECK de LIVRE/RESERVADO/VENDIDO).
+    @Test
+    void mapaAssentosMarcaComoMeuHoldOAssentoSeguradoPeloProprioCliente() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5), 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("MEU_HOLD");
+    }
+
+    @Test
+    void mapaAssentosMantemReservadoQuandoOHoldEhDeOutroCliente() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5), 99L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
+    }
+
+    // A rota é pública: visitante deslogado continua vendo o mapa, e pra ele todo hold é de
+    // terceiro. Sem este caso, resolver o cliente viraria requisito e a vitrine quebraria.
+    @Test
+    void mapaAssentosSemClienteAutenticadoNaoConsultaUsuarioENemMarcaMeuHold() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().plusMinutes(5), 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, null);
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("RESERVADO");
+        verify(usuarioRepository, never()).findByEmail(any());
+    }
+
+    // Hold vencido é LIVRE pra todo mundo, inclusive pro dono: MEU_HOLD não pode ressuscitar um
+    // hold que o TTL lazy (AD-4) já derrubou, senão o dono veria como seu um assento que qualquer
+    // outra pessoa pode reivindicar no instante seguinte.
+    @Test
+    void mapaAssentosNaoMarcaMeuHoldQuandoOProprioHoldJaVenceu() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes =
+                List.of(projecaoMapaCom(1L, "A", 1, "RESERVADO", LocalDateTime.now().minusMinutes(5), 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("LIVRE");
+    }
+
+    // Assento já vendido é VENDIDO mesmo pra quem comprou: MEU_HOLD é sobre hold, não sobre posse.
+    @Test
+    void mapaAssentosNaoMarcaMeuHoldEmAssentoVendido() {
+        Sessao sessao = sessaoCom(7L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(30));
+        given(sessaoRepository.findById(7L)).willReturn(Optional.of(sessao));
+        given(salaRepository.findById(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
+        given(usuarioRepository.findByEmail("cliente1@rolo35.com.br")).willReturn(Optional.of(clienteCom(42L)));
+        var projecoes = List.of(projecaoMapaCom(1L, "A", 1, "VENDIDO", null, 42L));
+        given(assentoSessaoRepository.buscarMapaPorSessao(7L)).willReturn(projecoes);
+
+        var mapa = sessaoService.mapaAssentos(7L, "cliente1@rolo35.com.br");
+
+        assertThat(mapa.assentos().get(0).status()).isEqualTo("VENDIDO");
     }
 }

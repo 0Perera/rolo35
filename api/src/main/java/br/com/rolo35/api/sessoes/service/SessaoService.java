@@ -2,6 +2,7 @@ package br.com.rolo35.api.sessoes.service;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.Paginacao;
 import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
@@ -17,11 +18,12 @@ import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.MapaAssentosDto;
+import br.com.rolo35.api.sessoes.dto.OcupacaoSalaDto;
 import br.com.rolo35.api.sessoes.dto.SessaoGestaoDto;
 import br.com.rolo35.api.sessoes.dto.SessaoListagemDto;
 import br.com.rolo35.api.sessoes.dto.SessaoResponse;
@@ -36,7 +38,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import org.springframework.data.domain.PageRequest;
+
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,10 +47,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class SessaoService {
 
     private static final int BUFFER_MINUTOS = 240;
-    static final int TAMANHO_PAGINA_PADRAO = 12;
-    static final int TAMANHO_PAGINA_MAXIMO = 50;
-    private static final String STATUS_LIVRE = "LIVRE";
-    private static final String STATUS_RESERVADO = "RESERVADO";
+
+    // Fora de StatusAssento de propósito: aquele enum espelha a coluna, que tem CHECK de três
+    // valores. Este aqui é status de tela, calculado por requisição a partir de quem pergunta.
+    private static final String STATUS_MEU_HOLD = "MEU_HOLD";
 
     private final SalaRepository salaRepository;
     private final AssentoRepository assentoRepository;
@@ -115,7 +117,7 @@ public class SessaoService {
 
         List<AssentoSessao> assentoSessoes = assentos.stream()
                 .map(assento -> new AssentoSessao(
-                        new AssentoSessaoId(sessaoSalva.getId(), assento.getId()), STATUS_LIVRE, null, null))
+                        new AssentoSessaoId(sessaoSalva.getId(), assento.getId()), StatusAssento.LIVRE, null, null))
                 .toList();
         assentoSessaoRepository.saveAll(assentoSessoes);
 
@@ -127,19 +129,13 @@ public class SessaoService {
 
     @Transactional
     public SessaoResponse editar(Long id, EditarSessaoRequest request, String organizadorEmail) {
-        Usuario organizador = usuarioRepository
-                .findByEmail(organizadorEmail)
-                .orElseThrow(OrganizadorNaoEncontradoException::new);
+        // A conta ainda precisa existir — um JWT válido de usuário já removido não edita nada. O
+        // que não existe mais é comparar essa conta com a que criou a sessão (CAP-1).
+        usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         Sessao sessao = sessaoRepository.findByIdForUpdate(id).orElseThrow(SessaoNaoEncontradaException::new);
 
-        // Ownership vem antes de qualquer validação de corpo (AC2): tentar editar sessão de outro
-        // organizador é sempre 403, mesmo sabendo o ID e mesmo com corpo malformado — não pode
-        // vazar um 400 antes de confirmar o dono.
-        if (!sessao.getOrganizadorId().equals(organizador.getId())) {
-            throw new SessaoNaoPertenceAoOrganizadorException();
-        }
         if (!request.dataHora().isAfter(LocalDateTime.now())) {
             throw new DataHoraNoPassadoException();
         }
@@ -176,7 +172,7 @@ public class SessaoService {
                 throw new SalaSemAssentosException();
             }
             List<AssentoSessao> assentoSessoes = assentos.stream()
-                    .map(assento -> new AssentoSessao(new AssentoSessaoId(id, assento.getId()), STATUS_LIVRE, null, null))
+                    .map(assento -> new AssentoSessao(new AssentoSessaoId(id, assento.getId()), StatusAssento.LIVRE, null, null))
                     .toList();
             assentoSessaoRepository.saveAll(assentoSessoes);
             capacidade = assentos.size();
@@ -197,29 +193,45 @@ public class SessaoService {
                 sessaoSalva.getId(), sala.getId(), sala.getNome(), sessaoSalva.getTmdbId(), sessaoSalva.getTitulo(),
                 sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(),
                 sessaoSalva.getDataEstreia() == null ? null : sessaoSalva.getDataEstreia().toString(),
-                sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
+                sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, sessaoSalva.getOrganizadorId());
     }
 
-    public List<SessaoGestaoDto> listarMinhas(String organizadorEmail) {
-        Usuario organizador = usuarioRepository
-                .findByEmail(organizadorEmail)
-                .orElseThrow(OrganizadorNaoEncontradoException::new);
-        return sessaoRepository.findByOrganizadorId(organizador.getId()).stream()
-                .map(projecao -> new SessaoGestaoDto(
+    /**
+     * Gestão lista o cinema inteiro, não a agenda pessoal de quem chamou (CAP-1). O e-mail continua
+     * na assinatura só pra exigir uma conta viva por trás do token.
+     *
+     * <p>Paginada pelo mesmo {@link Paginacao} da vitrine: o teto de tamanho é regra de servidor e
+     * vale igual pros dois lados, senão a listagem de gestão vira a única rota sem limite.
+     */
+    public PaginaDto<SessaoGestaoDto> listarParaGestao(String organizadorEmail, int pagina, int tamanho) {
+        usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
+        return PaginaDto.de(
+                sessaoRepository.findParaGestao(Paginacao.de(pagina, tamanho)),
+                projecao -> new SessaoGestaoDto(
                         projecao.getId(), projecao.getSalaId(), projecao.getSalaNome(), projecao.getTitulo(),
                         projecao.getSinopse(), projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
-                        projecao.getEditavel()))
+                        projecao.getEditavel()));
+    }
+
+    /**
+     * Ocupação da sala pro formulário mostrar o conflito antes do submit, em vez de deixar o
+     * organizador descobrir por {@code 409}. O buffer é aplicado aqui: a regra de conflito é do
+     * back-end, e duplicá-la no front garantiria que as duas cópias divergissem.
+     */
+    public List<OcupacaoSalaDto> listarOcupacaoDaSala(Long salaId) {
+        salaRepository.findById(salaId).orElseThrow(SalaNaoEncontradaException::new);
+        return sessaoRepository.listarOcupacaoDaSala(salaId, BUFFER_MINUTOS).stream()
+                .map(projecao -> new OcupacaoSalaDto(
+                        projecao.getId(),
+                        projecao.getDataHora(),
+                        projecao.getDataHora().minusMinutes(BUFFER_MINUTOS),
+                        projecao.getDataHora().plusMinutes(BUFFER_MINUTOS)))
                 .toList();
     }
 
     public SessaoGestaoDto buscarPorId(Long id, String organizadorEmail) {
-        Usuario organizador = usuarioRepository
-                .findByEmail(organizadorEmail)
-                .orElseThrow(OrganizadorNaoEncontradoException::new);
+        usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
         Sessao sessao = sessaoRepository.findById(id).orElseThrow(SessaoNaoEncontradaException::new);
-        if (!sessao.getOrganizadorId().equals(organizador.getId())) {
-            throw new SessaoNaoPertenceAoOrganizadorException();
-        }
         Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
         int capacidade = assentoSessaoRepository.findByIdSessaoId(id).size();
         boolean editavel = !sessaoRepository.existeIngressoConfirmado(id);
@@ -230,7 +242,7 @@ public class SessaoService {
 
     public PaginaDto<SessaoListagemDto> listarPublicadas(
             String busca, Long tmdbId, Long salaId, int pagina, int tamanho) {
-        Pageable paginacao = PageRequest.of(Math.max(pagina, 0), limitarTamanho(tamanho));
+        Pageable paginacao = Paginacao.de(pagina, tamanho);
         return PaginaDto.de(
                 sessaoRepository.listarPublicadas(
                         padraoDeBusca(busca), tmdbId == null ? 0L : tmdbId, salaId == null ? 0L : salaId, paginacao),
@@ -239,19 +251,6 @@ public class SessaoService {
                         projecao.getPosterUrl(), projecao.getSinopse(), projecao.getDataEstreia(),
                         projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
                         projecao.getAssentosLivres() == 0));
-    }
-
-    /**
-     * Teto de servidor: sem ele, um cliente pede {@code tamanho=1000000} e a "paginação" vira uma
-     * listagem completa disfarçada, com o custo de memória e de rede que a paginação existia pra
-     * evitar. Tamanho inválido cai no padrão em vez de estourar — página é parâmetro de navegação,
-     * não entrada de negócio.
-     */
-    private static int limitarTamanho(int tamanho) {
-        if (tamanho < 1) {
-            return TAMANHO_PAGINA_PADRAO;
-        }
-        return Math.min(tamanho, TAMANHO_PAGINA_MAXIMO);
     }
 
     /**
@@ -281,29 +280,61 @@ public class SessaoService {
         }
     }
 
-    public MapaAssentosDto mapaAssentos(Long sessaoId) {
+    /**
+     * Mapa de assentos da sessão. Rota pública: {@code clienteEmail} vem {@code null} pra visitante
+     * deslogado, e nesse caso todo hold é de terceiro.
+     *
+     * <p>Quando há cliente autenticado, o hold dele volta como {@code MEU_HOLD} em vez de
+     * {@code RESERVADO}. Sem essa distinção, quem voltava do checkout pra trocar de assento via os
+     * próprios assentos bloqueados e sem clique, trancado fora do que ele mesmo segurava até o TTL
+     * de 10min vencer.
+     */
+    public MapaAssentosDto mapaAssentos(Long sessaoId, String clienteEmail) {
         Sessao sessao = sessaoRepository.findById(sessaoId).orElseThrow(SessaoNaoEncontradaException::new);
         Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
         LocalDateTime agora = LocalDateTime.now();
+        // orElse(null) e não orElseThrow: um token válido de usuário já removido não pode derrubar
+        // uma rota pública — ele só deixa de ter hold próprio pra reconhecer.
+        Long clienteId = clienteEmail == null
+                ? null
+                : usuarioRepository.findByEmail(clienteEmail).map(Usuario::getId).orElse(null);
         List<AssentoMapaDto> assentos = assentoSessaoRepository.buscarMapaPorSessao(sessaoId).stream()
-                .map(p -> new AssentoMapaDto(p.getAssentoId(), p.getFileira(), p.getNumero(), statusEfetivo(p, agora)))
+                .map(p -> new AssentoMapaDto(
+                        p.getAssentoId(), p.getFileira(), p.getNumero(), statusEfetivo(p, agora, clienteId)))
                 .toList();
         return new MapaAssentosDto(
                 sessao.getId(), sessao.getTmdbId(), sessao.getTitulo(), sessao.getPosterUrl(), sala.getNome(),
                 sessao.getDataHora(), sessao.getPreco(), assentos);
     }
 
-    private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora) {
-        boolean holdVencido = STATUS_RESERVADO.equals(projecao.getStatus())
-                && projecao.getExpiresAt() != null
-                && projecao.getExpiresAt().isBefore(agora);
-        return holdVencido ? STATUS_LIVRE : projecao.getStatus();
+    /**
+     * Status como a tela precisa ver, não como a coluna guarda.
+     *
+     * <p>{@code MEU_HOLD} é status de leitura e só existe aqui: a coluna
+     * {@code assento_sessao.status} continua com o {@code CHECK} de
+     * {@code LIVRE}/{@code RESERVADO}/{@code VENDIDO}, e nada persiste esse valor. Ele depende de
+     * quem pergunta, então nem faria sentido como estado guardado.
+     *
+     * <p>A ordem das checagens importa: hold vencido vira {@code LIVRE} <b>antes</b> de olhar de
+     * quem ele é. Um hold que o TTL lazy (AD-4) já derrubou não pode voltar a parecer do dono —
+     * qualquer outra pessoa pode reivindicar aquele assento no instante seguinte.
+     */
+    private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora, Long clienteId) {
+        // A projeção vem de query nativa, então aqui o status ainda é o texto cru da coluna — o
+        // enum entra na borda, comparando pelo name().
+        boolean reservado = StatusAssento.RESERVADO.name().equals(projecao.getStatus());
+        boolean holdVencido = reservado && projecao.getExpiresAt() != null && projecao.getExpiresAt().isBefore(agora);
+        if (holdVencido) {
+            return StatusAssento.LIVRE.name();
+        }
+        boolean holdEhMeu = reservado && clienteId != null && clienteId.equals(projecao.getClienteIdDoHold());
+        return holdEhMeu ? STATUS_MEU_HOLD : projecao.getStatus();
     }
 
     // Mesma regra de TTL lazy (AD-4) de statusEfetivo, aplicada a AssentoSessao em vez da
     // projeção de leitura: hold vencido não é hold ativo, uma nova reserva pode reivindicar.
     private boolean holdAtivo(AssentoSessao assento, LocalDateTime agora) {
-        return STATUS_RESERVADO.equals(assento.getStatus())
+        return assento.getStatus() == StatusAssento.RESERVADO
                 && assento.getExpiresAt() != null
                 && !assento.getExpiresAt().isBefore(agora);
     }

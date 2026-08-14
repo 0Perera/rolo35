@@ -76,7 +76,7 @@
 - **`buscarPublico()` faz 3 consultas sequenciais (`Ingresso`→`Sessao`→`Sala`) em vez de um `JOIN` único como `buscarPorCliente()`** — inconsistente dentro da mesma classe, mas é sempre exatamente 3 consultas fixas por chamada, não N+1 real que cresce com o resultado. Revisitar se o tráfego da rota pública de compartilhamento justificar a otimização. [`api/src/main/java/br/com/rolo35/api/ingressos/service/IngressoService.java`]
 - **`permitAll()` de `/api/ingressos/*` em `SecurityConfig` é um catch-all** — qualquer rota `GET` futura de um segmento só sob `/api/ingressos/` herdaria `permitAll()` por padrão, a menos que um matcher mais específico e autenticado seja declarado antes dela (mesmo cuidado que `/minhas` já recebeu). Tradeoff deliberado, já documentado em `docs/decisions.md`. Revisitar se uma rota nova nesse formato for adicionada sem esse cuidado. [`api/src/main/java/br/com/rolo35/api/config/SecurityConfig.java`]
 - **Side-channel de tempo entre "assinatura inválida" (resposta rápida, sem banco) e "assinatura válida mas não encontrado" (mais lenta, com banco) em `buscarPublico()`** — fora do modelo de ameaça declarado pela AC5, que é sobre conteúdo da resposta, não tempo de resposta. Revisitar só se um requisito explícito de resistência a timing attack for adicionado ao projeto. [`api/src/main/java/br/com/rolo35/api/ingressos/service/IngressoService.java`]
-- **`listarMinhas()` sem paginação** — todo o histórico de ingressos do cliente vem numa resposta só, sem limite. Fora do escopo declarado do desafio de 7 dias. Revisitar se o volume de ingressos por cliente crescer o bastante pra importar. [`api/src/main/java/br/com/rolo35/api/ingressos/service/IngressoService.java`]
+- ~~**`listarMinhas()` sem paginação**~~ — **resolvido.** O adiamento supunha que o volume não chegaria a importar, mas o critério era o tamanho do seed, não o desenho: a carteira gera um código assinado por linha devolvida, então o custo de abrir a tela cresce com o histórico do cliente e o seed cresce no CAP-13. Agora devolve o envelope `PaginaDto` de `GET /api/sessoes`, com teto de tamanho em `common.Paginacao`, `countQuery` próprio e desempate por `i.id` no `ORDER BY`. [`api/src/main/java/br/com/rolo35/api/ingressos/service/IngressoService.java`, `api/src/main/java/br/com/rolo35/api/ingressos/repository/IngressoRepository.java`]
 - **`IngressoService.listarMinhas()`/`buscarPublico()` sem `@Transactional(readOnly = true)`** — mesmo padrão já usado pelos métodos de leitura de `SessaoService` (`listarMinhas`, `listarPublicadas`, `mapaAssentos`), nenhum deles anotado. Não é uma inconsistência nova desta story. [`api/src/main/java/br/com/rolo35/api/ingressos/service/IngressoService.java`]
 
 ## Deferred from: 4-3-checkout-de-pagamento-no-front (2026-08-12)
@@ -143,3 +143,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/1-3-cadastro-de-usuario.md`
   summary: `sprint-status.yaml` linha 44 não é YAML válido — o escalar de `last_updated` contém `Epic 5 fechado:` sem aspas.
   evidence: Presente desde `HEAD~10`, anterior a esta story. Não foi corrigido junto porque é um arquivo que a ferramentaria BMad reescreve, e mudar o estilo de aspas pode conflitar com as próprias escritas dela. Vale uma passada dedicada.
+
+## Deferred from: code review of SPEC.md — Grupo A (2026-08-14)
+
+- source_spec: `_bmad-output/specs/spec-backlog-hardening/SPEC.md`
+  summary: Rota `*` em `web/src/App.tsx` devolve 200 com página em branco em vez de 404.
+  evidence: Pré-existente e convenção comum de SPA. `web/nginx.conf` e as `routes` do `render.yaml` reescrevem qualquer caminho pra `index.html`, então o 404 real nunca chega ao navegador de todo jeito.
+
+- source_spec: `_bmad-output/specs/spec-backlog-hardening/SPEC.md`
+  summary: `SessaoService.editar` deixa mover pro futuro uma sessão cuja `data_hora` já passou.
+  evidence: Valida que a `dataHora` nova é futura (`SessaoService.java:127-129`), nunca que a atual não passou. `existeIngressoConfirmado` já barra o caso com ingresso vendido; sobra remarcar sessão sem venda, que é plausivelmente legítimo. O CAP-2 recortou FR-10/FR-12 (reserva e pagamento) de propósito, então não é regressão deste ciclo.
+
+## Deferred from: canhoto sem código longo (2026-08-14)
+
+- source_spec: `docs/decisions.md` — entrada "O canhoto imprime só o código curto, e é ele que o botão copiar entrega"
+  summary: `POST /api/portaria/validacoes` não tem rate limit, e o código curto de 40 bits sem assinatura é um dos dois formatos que ela aceita.
+  evidence: A fraqueza está declarada e aceita na entrada de decisão — o que segura hoje é a autorização `@PreAuthorize("hasRole('PORTARIA')")` mais a razão de acerto (só serve código da sessão do turno, ~1 em bilhões por tentativa), não um limite de tentativas. Com o código curto agora impresso como único código do canhoto e entregue pelo botão de copiar, ele circula mais do que circulava. O padrão de mitigação já existe no projeto: `LimitadorDeCadastro` (janela fixa em memória, `429` no envelope da API), aplicado hoje só ao cadastro. Aplicar ali é trabalho pequeno; ficou fora por escopo, não por dificuldade.

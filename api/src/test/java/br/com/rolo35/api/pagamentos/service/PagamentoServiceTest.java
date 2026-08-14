@@ -27,7 +27,10 @@ import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
+import br.com.rolo35.api.sessoes.repository.SessaoRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.time.Instant;
@@ -37,6 +40,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -44,6 +48,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class PagamentoServiceTest {
+
+    /**
+     * Código curto de fixture. A emissão real usa SecureRandom; aqui o valor só precisa ser
+     * único (a coluna é UNIQUE) e caber no alfabeto Base32 Crockford de 8 caracteres.
+     */
+    private static String codigoCurtoDeTeste() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
 
     private static final String CLIENTE_EMAIL = "cliente1@rolo35.com.br";
     private static final Long CLIENTE_ID = 7L;
@@ -66,6 +78,9 @@ class PagamentoServiceTest {
     private UsuarioRepository usuarioRepository;
 
     @Mock
+    private SessaoRepository sessaoRepository;
+
+    @Mock
     private EntityManager entityManager;
 
     @Mock
@@ -76,7 +91,7 @@ class PagamentoServiceTest {
     private void setUp() {
         pagamentoService = new PagamentoService(
                 reservaRepository, assentoSessaoRepository, ingressoRepository, codigoIngressoService,
-                usuarioRepository, entityManager);
+                usuarioRepository, sessaoRepository, entityManager);
     }
 
     private void stubEntityManager() {
@@ -95,8 +110,20 @@ class PagamentoServiceTest {
         return new Reserva(RESERVA_ID, CLIENTE_ID, SESSAO_ID, StatusReserva.ATIVA, Instant.now(), expiresAt);
     }
 
+    /**
+     * A emissão é um saveAll só, não um save por assento: o mock reflete isso, e é o que o teste de
+     * lote abaixo verifica explicitamente.
+     */
+    private void stubEmissaoEmLote() {
+        given(ingressoRepository.saveAll(anyList())).willAnswer(invocation -> {
+            List<Ingresso> ingressos = invocation.getArgument(0);
+            ingressos.forEach(ingresso -> ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID()));
+            return ingressos;
+        });
+    }
+
     private AssentoSessao assentoDaReserva(Long assentoId) {
-        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), "RESERVADO", RESERVA_ID, LocalDateTime.now().plusMinutes(5));
+        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), StatusAssento.RESERVADO, RESERVA_ID, LocalDateTime.now().plusMinutes(5));
     }
 
     @Test
@@ -109,11 +136,7 @@ class PagamentoServiceTest {
                 .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
         given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
                 .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
-        given(ingressoRepository.save(any(Ingresso.class))).willAnswer(invocation -> {
-            Ingresso ingresso = invocation.getArgument(0);
-            ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID());
-            return ingresso;
-        });
+        stubEmissaoEmLote();
         given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
         given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(2);
 
@@ -126,6 +149,37 @@ class PagamentoServiceTest {
         verify(assentoSessaoRepository).reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID);
     }
 
+    // A emissão é a única escrita da classe que ainda ia de um em um, destoando do padrão em lote
+    // do resto (saveAll de assento_sessao na criação de sessão, UPDATE único em reivindicarVendido).
+    // Com o teto de 6 assentos por reserva o ganho é pequeno, mas a inconsistência era gratuita.
+    @Test
+    void emiteOsIngressosNumSaveSoENaoUmPorAssento() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        List<Long> assentoIds = List.of(10L, 20L);
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID))
+                .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
+        given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
+                .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
+        stubEmissaoEmLote();
+        given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
+        given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(2);
+
+        pagamentoService.confirmar(
+                new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL);
+
+        verify(ingressoRepository, never()).save(any(Ingresso.class));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Ingresso>> captor = ArgumentCaptor.forClass(List.class);
+        verify(ingressoRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).hasSize(2);
+        // Um createdAt só pra reserva inteira: os ingressos foram emitidos no mesmo ato, e
+        // IngressoRepository.buscarPorCliente() já depende de desempate estável pra paginar.
+        assertThat(captor.getValue()).extracting(Ingresso::getCreatedAt).containsOnly(
+                captor.getValue().get(0).getCreatedAt());
+    }
+
     @Test
     void aprovadoComLinhasAfetadasMenorQueEsperadoLancaAssentoIndisponivel() {
         setUp();
@@ -136,11 +190,7 @@ class PagamentoServiceTest {
                 .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
         given(assentoSessaoRepository.findByIdSessaoId(SESSAO_ID))
                 .willReturn(List.of(assentoDaReserva(10L), assentoDaReserva(20L)));
-        given(ingressoRepository.save(any(Ingresso.class))).willAnswer(invocation -> {
-            Ingresso ingresso = invocation.getArgument(0);
-            ReflectionTestUtils.setField(ingresso, "id", UUID.randomUUID());
-            return ingresso;
-        });
+        stubEmissaoEmLote();
         // UPDATE afetou só 1 das 2 linhas esperadas — o WHERE de defesa em profundidade
         // (reservaId) recusou parte da atualização, mesmo já sob o lock pessimista de Reserva.
         given(assentoSessaoRepository.reivindicarVendido(SESSAO_ID, assentoIds, RESERVA_ID)).willReturn(1);
@@ -248,6 +298,50 @@ class PagamentoServiceTest {
         verify(reservaRepository, never()).save(any());
     }
 
+    // FR-12: hold ainda válido não basta se a sessão já começou — o ingresso emitido aqui nasceria
+    // sem porta pra entrar. Vem depois da checagem de expiração porque reserva vencida é o motivo
+    // mais local (e o que o cliente resolve refazendo a seleção).
+    @Test
+    void sessaoQueJaComecouLancaSessaoJaComecouMesmoComHoldValido() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID))
+                .willReturn(Optional.of(reservaAtiva(LocalDateTime.now().plusMinutes(5))));
+        given(sessaoRepository.jaComecou(SESSAO_ID)).willReturn(true);
+
+        assertThatThrownBy(() -> pagamentoService.confirmar(
+                        new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL))
+                .isInstanceOf(SessaoJaComecouException.class);
+
+        verify(reservaRepository, never()).save(any());
+        verify(ingressoRepository, never()).save(any());
+    }
+
+    // Idempotência vem antes do guard de sessão: uma compra que já foi confirmada continua
+    // devolvendo os ingressos dela depois que a sessão começa — quem já pagou não perde o F5.
+    //
+    // Quem prende a ordem é o `verify(never())` no fim, não um stub de `jaComecou`: o early-return
+    // acontece antes da chamada, então stubar `true` seria stub inútil (o strict stubs do
+    // MockitoExtension recusa) e provaria menos — com o default `false` do Mockito, mover o guard
+    // pra cima do early-return deixaria este teste verde do mesmo jeito.
+    @Test
+    void reservaJaConfirmadaDevolveRespostaMesmoComSessaoJaComecada() {
+        setUp();
+        stubEntityManager();
+        stubCliente();
+        Reserva jaConfirmada =
+                new Reserva(RESERVA_ID, CLIENTE_ID, SESSAO_ID, StatusReserva.CONFIRMADA, Instant.now(), LocalDateTime.now().minusMinutes(1));
+        given(reservaRepository.findByIdForUpdate(RESERVA_ID)).willReturn(Optional.of(jaConfirmada));
+        given(ingressoRepository.findByReservaId(RESERVA_ID)).willReturn(List.of());
+
+        PagamentoDto dto = pagamentoService.confirmar(
+                new ConfirmarPagamentoRequest(RESERVA_ID, ResultadoSimulado.APROVADO), CLIENTE_EMAIL);
+
+        assertThat(dto.status()).isEqualTo(StatusReserva.CONFIRMADA);
+        verify(sessaoRepository, never()).jaComecou(anyLong());
+    }
+
     @Test
     void reservaJaConfirmadaDevolveRespostaPersistidaSemReprocessar() {
         setUp();
@@ -257,7 +351,7 @@ class PagamentoServiceTest {
                 new Reserva(RESERVA_ID, CLIENTE_ID, SESSAO_ID, StatusReserva.CONFIRMADA, Instant.now(), LocalDateTime.now().plusMinutes(5));
         given(reservaRepository.findByIdForUpdate(RESERVA_ID)).willReturn(Optional.of(reservaConfirmada));
         Ingresso ingressoExistente =
-                new Ingresso(UUID.randomUUID(), RESERVA_ID, 10L, SESSAO_ID, StatusIngresso.VALIDO, null, Instant.now());
+                new Ingresso(UUID.randomUUID(), RESERVA_ID, 10L, SESSAO_ID, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findByReservaId(RESERVA_ID)).willReturn(List.of(ingressoExistente));
         given(codigoIngressoService.gerar(any(UUID.class))).willReturn("codigo-gerado");
 

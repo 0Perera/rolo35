@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -134,7 +135,7 @@ class SessaoSecurityTest {
     // herdaria .anyRequest().authenticated() em silêncio.
     @Test
     void returns200ForGetMapaAssentosWithoutAnyToken() throws Exception {
-        given(sessaoService.mapaAssentos(100L)).willReturn(null);
+        given(sessaoService.mapaAssentos(eq(100L), any())).willReturn(null);
 
         mockMvc.perform(get("/api/sessoes/100/mapa-assentos")).andExpect(status().isOk());
     }
@@ -148,24 +149,39 @@ class SessaoSecurityTest {
     // Regressão explícita do risco descrito no comentário de SecurityConfig: o permitAll()
     // novo de /api/sessoes/*/mapa-assentos (Story 3.1) não pode vazar pra essa rota de gestão.
     @Test
-    void returns401WithNaoAutenticadoEnvelopeForGetMinhasWithoutAnyToken() throws Exception {
-        mockMvc.perform(get("/api/sessoes/minhas")).andExpect(status().isUnauthorized());
+    void returns401WithNaoAutenticadoEnvelopeForGetGestaoWithoutAnyToken() throws Exception {
+        mockMvc.perform(get("/api/sessoes/gestao")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void returns200ForGetMinhasWithOrganizadorToken() throws Exception {
-        given(sessaoService.listarMinhas(anyString())).willReturn(List.of());
+    void returns200ForGetGestaoWithOrganizadorToken() throws Exception {
+        given(sessaoService.listarParaGestao(anyString(), anyInt(), anyInt()))
+                .willReturn(new PaginaDto<>(List.of(), 0, 12, 0, 0));
         String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
 
-        mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/sessoes/gestao").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void returns403WithNaoAutorizadoEnvelopeForGetMinhasWithClienteToken() throws Exception {
+    void returns403WithNaoAutorizadoEnvelopeForGetGestaoWithClienteToken() throws Exception {
         String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
 
-        mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/sessoes/gestao").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
+    }
+
+    @Test
+    void returns401ForGetOcupacaoWithoutAnyToken() throws Exception {
+        mockMvc.perform(get("/api/sessoes/ocupacao?salaId=1")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returns403ForGetOcupacaoWithClienteToken() throws Exception {
+        String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
+
+        mockMvc.perform(get("/api/sessoes/ocupacao?salaId=1").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }

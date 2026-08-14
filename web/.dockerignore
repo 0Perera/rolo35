@@ -1,0 +1,15 @@
+node_modules
+dist
+.vite
+*.tsbuildinfo
+coverage
+
+# O Dockerfile usa COPY . ., então qualquer coisa não listada aqui vira camada da imagem — e
+# camada de imagem é distribuível e inspecionável por quem receber o registry. `.env` local é o
+# caso que importa: mesmo que VITE_* seja público por natureza (o Vite inlina no bundle), o
+# arquivo não tem por que viajar junto, e a regra tem que valer antes de alguém guardar ali algo
+# que não é público.
+.env
+.env.*
+.git
+.gitignore

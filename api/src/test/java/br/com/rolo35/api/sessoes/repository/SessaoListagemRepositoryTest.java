@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.com.rolo35.api.TestcontainersConfiguration;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.service.SessaoService;
@@ -85,7 +86,7 @@ class SessaoListagemRepositoryTest {
         var sessaoEsgotada = sessaoService.criar(requestCom(salaId, TITULO_ESGOTADA, base.plusHours(5)), ORGANIZADOR);
 
         List<AssentoSessao> assentosDaEsgotada = assentoSessaoRepository.findByIdSessaoId(sessaoEsgotada.id());
-        assentosDaEsgotada.forEach(as -> ReflectionTestUtils.setField(as, "status", "VENDIDO"));
+        assentosDaEsgotada.forEach(as -> ReflectionTestUtils.setField(as, "status", StatusAssento.VENDIDO));
         assentoSessaoRepository.saveAll(assentosDaEsgotada);
 
         List<SessaoListagemProjection> listagem =

@@ -1,8 +1,8 @@
 # Regras de negócio implementadas
 
 Levantamento do que está de fato codificado no back-end (`api/src/main/java`) e
-no schema (`api/src/main/resources/db/migration`) na branch
-`epic-4-pagamento-e-ingressos` (épico 4 fechado), na data deste documento. Não é um
+no schema (`api/src/main/resources/db/migration`), na data deste documento —
+já cobre os épicos 4 e 5 (pagamento/ingressos e portaria). Não é um
 espelho das stories/epics — é o que existe em código, com o arquivo/linha de
 origem pra cada regra. Regras descritas em stories mas ainda não
 implementadas estão marcadas explicitamente como pendentes.
@@ -40,7 +40,7 @@ implementadas estão marcadas explicitamente como pendentes.
   não tem token, e a Story 1.3 decidiu não gatear a escolha de papel);
   o matcher do mapa de assentos é por path exato (`/api/sessoes/*/mapa-assentos`)
   para não vazar `GET /api/sessoes/{id}` (gestão, só ORGANIZADOR) nem
-  `GET /api/sessoes/minhas` (`SecurityConfig.java:48-57`).
+  `GET /api/sessoes/gestao` (`SecurityConfig.java:48-57`).
 - **Toda outra rota exige autenticação** (`anyRequest().authenticated()`,
   `SecurityConfig.java:57-58`).
 - **`POST /api/auth/cadastro` tem teto por endereço de origem**: 5 tentativas por
@@ -92,12 +92,14 @@ implementadas estão marcadas explicitamente como pendentes.
   - `lock_timeout` de 3s setado antes do lock, pra falhar rápido em vez de
     travar a requisição indefinidamente se a linha da sala já estiver
     lockada (`SessaoService.java:80`, `:128`).
-- **Edição de sessão é bloqueada por dono**: só o organizador que criou pode
-  editar; checagem de ownership roda **antes** de qualquer validação de
-  corpo, pra nunca vazar um 400 antes de confirmar quem é o dono (mesmo ID
-  certo + corpo malformado ainda dá 403) —
-  `SessaoNaoPertenceAoOrganizadorException`
-  (`SessaoService.java:134-136`, comentário AC2).
+- **Edição de sessão não é bloqueada por dono** (CAP-1): qualquer `ORGANIZADOR`
+  autenticado edita qualquer sessão, porque a sessão é recurso do cinema e a
+  equipe de organizadores é compartilhada. O que a edição ainda exige é que a
+  conta do token exista (`OrganizadorNaoEncontradoException`, `SessaoService.java:130`)
+  — um JWT válido de usuário já removido não edita nada. `sessoes.organizador_id`
+  continua registrando quem criou, e é essa autoria (não quem editou) que volta
+  na resposta. A regra anterior, com `SessaoNaoPertenceAoOrganizadorException`
+  checada antes de validar o corpo, foi **removida**; a exceção não existe mais.
 - **Sessão com ingresso confirmado não pode mais ser editada**:
   `SessaoComIngressoConfirmadoException`, checado via
   `existeIngressoConfirmado` (`SessaoService.java:140-142`).
@@ -120,6 +122,10 @@ implementadas estão marcadas explicitamente como pendentes.
 - **Seleção de 1 a 6 assentos, sem duplicados**, validada **antes** de qualquer
   lock — a transação que segura linhas de `assento_sessao` precisa ser a mais
   curta possível (`ReservaService.java:29`, `:50-54`).
+- **Sessão que já começou não pode receber nova reserva** (FR-10):
+  `SessaoJaComecouException`, checado contra `sessaoRepository.jaComecou(...)`
+  antes do lock — a vitrine só lista sessão futura, mas uma aba aberta há uma
+  hora não sabe disso (`ReservaService.java:68-73`).
 - **A seleção já cria o hold**: os assentos vão para `RESERVADO` com
   `expires_at = now() + 10min` e `reserva_id` preenchido; a `Reserva` nasce
   `ATIVA` com o mesmo `expires_at` (`ReservaService.java:30`, `:78-82`).
@@ -184,6 +190,10 @@ implementadas estão marcadas explicitamente como pendentes.
   `PagamentoConcorrenciaConflitanteTest`).
 - **Reserva expirada é recusada** (409 `RESERVA_EXPIRADA`), checada depois do
   lock, contra `now()` (`PagamentoService.java:79-81`).
+- **Sessão que já começou não pode ser paga** (FR-12): `SessaoJaComecouException`,
+  checada depois da idempotência (quem já confirmou continua recuperando os
+  ingressos) e depois da expiração — um hold ainda dentro dos 10 minutos não
+  basta se a sessão já começou nesse meio-tempo (`PagamentoService.java:86-92`).
 - **Aprovado**: `Reserva` vira `CONFIRMADA`, sai **um ingresso por assento**
   (`StatusIngresso.VALIDO`) e os assentos viram `VENDIDO` — estado final, não
   expira (`PagamentoService.java:88-101`).
@@ -208,8 +218,10 @@ implementadas estão marcadas explicitamente como pendentes.
   (comparação em tempo constante); base64 malformado é rejeitado sem exceção
   vazando (`CodigoIngressoService.validar`, `:36-49`).
 - **"Meus ingressos" é filtrado por dono no banco**, via `reservas.cliente_id`,
-  numa query só com `JOIN` de assento/sessão/sala (sem N+1), ordenada por
-  `data_hora DESC` e desempatada por `created_at DESC`
+  numa query só com `JOIN` de assento/sessão/sala (sem N+1), ordenada pela
+  compra (`ingressos.created_at DESC`) e desempatada por `id DESC` — a carteira
+  é histórico de compra, não agenda: quem sai do pagamento acha o ingresso novo
+  na primeira linha, mesmo que a sessão dele seja anterior à de uma compra velha
   (`IngressoRepository.buscarPorCliente`, `:17-29`;
   `IngressoService.listarMinhas`, `:41-50`). Índices em
   `V4__indices_ingressos_por_cliente.sql`.
@@ -220,12 +232,21 @@ implementadas estão marcadas explicitamente como pendentes.
 - **"Não existe" e "assinatura inválida" devolvem a mesma resposta**
   (404 `INGRESSO_NAO_ENCONTRADO`), pelo mesmo motivo
   (`GlobalExceptionHandler`, handler de `IngressoNaoEncontradoException`).
-- **Link público expõe só filme, sala, horário e status** — nada do comprador
-  (`IngressoPublicoDto`).
+- **Link público expõe só filme, sala, horário, status e o código curto** — nada do
+  comprador (`IngressoPublicoDto`). O código curto vai junto porque quem recebeu o
+  link é quem vai entrar na sala, e sem ele a página não tem o que ditar na portaria
+  se a câmera falhar; não é exposição nova, já que a própria URL carrega o código
+  assinado, que a portaria também aceita.
 - **QR é gerado no front a partir do código assinado**, não por endpoint de imagem
-  da API (`qrcode.react` em `components/CanhotoIngresso.tsx`); a URL que ele carrega
-  é montada num único lugar (`web/src/lib/ingressos.ts`) para que o QR da carteira e
-  o link da página pública nunca divirjam.
+  da API (`qrcode.react` em `components/CanhotoIngresso.tsx`). Ele carrega o código
+  em si, **não uma URL** — apontar a câmera do celular pra ele mostra texto, não abre
+  página. A URL pública é outra coisa: montada num único lugar
+  (`web/src/lib/ingressos.ts`), serve só ao botão de compartilhar, pra que o link da
+  carteira e o da página pública nunca divirjam. `ContratoQrPortaria.test.tsx` existe
+  pra vigiar exatamente essa confusão, que já virou bug uma vez.
+- **O canhoto imprime só o código curto**: o assinado não aparece em tela nenhuma —
+  vive dentro do QR e na URL do link público. O botão de copiar entrega o curto, que
+  é o formato que alguém consegue transcrever e ditar.
 - **Nenhum dado de cartão trafega ou é persistido**: o corpo de
   `POST /api/pagamentos/confirmar` aceita só `{reservaId, resultadoSimulado}`; os
   campos do checkout são validados no cliente (`web/src/lib/cartao.ts`) e descartados.
@@ -250,6 +271,15 @@ implementadas estão marcadas explicitamente como pendentes.
   `sessoes.data_hora`, `sessoes.sala_id`, e o composto
   `sessoes (sala_id, data_hora)` (`V3__indice_sessoes_sala_data_hora.sql`)
   que serve exatamente a query de conflito de horário acima.
+- **Ingresso aponta pra uma linha real do mapa da sessão**: FK composta
+  `fk_ingressos_assento_sessao (sessao_id, assento_id)` contra `assento_sessao`
+  (`V8__backstops_ingressos.sql`) — as FKs simples de `sessao_id` e `assento_id`
+  isoladas não bastavam, pois cada uma valida sua coluna sem impedir um assento
+  de outra sala num ingresso de sessão diferente.
+- **Uma reserva não emite dois ingressos pro mesmo assento**:
+  `uq_ingressos_reserva_assento UNIQUE (reserva_id, assento_id)`
+  (`V8__backstops_ingressos.sql`) — backstop de banco pro mesmo invariante que
+  `PagamentoService.confirmar()` já garante por construção.
 
 ## Portaria (épico 5, implementado)
 
@@ -262,27 +292,43 @@ abaixo:
 - Retorno inequívoco da validação (`VALIDO` / `INVALIDO` / `JA_UTILIZADO` /
   `EVENTO_ERRADO`) como `200` + campo `resultado`, com sessão checada antes do
   status.
-- Assinatura HMAC conferida **antes** de qualquer consulta ou lock: um código
-  forjado nunca chega a segurar uma linha de `ingressos`.
+- **Dois formatos aceitos, um caminho** (`PortariaService.localizar`): texto na
+  forma `uuid.assinatura` tem a HMAC conferida e é buscado por id; qualquer outra
+  coisa é normalizada como código curto de 8 caracteres e resolvida por
+  `findByCodigoCurtoForUpdate`. Daí em diante o fluxo é idêntico. A leitura por
+  câmera usa o primeiro; a digitação manual, na prática, o segundo — é o que está
+  impresso no canhoto.
+- Formato recusado **antes** de qualquer consulta ou lock, nos dois caminhos:
+  assinatura inválida e código curto fora do alfabeto param na mesma porta, sem
+  chegar a segurar uma linha de `ingressos`.
+- Todo motivo de falha vira o mesmo `INVALIDO` — formato, assinatura adulterada,
+  código inexistente. A resposta não pode virar oráculo de quais códigos existem.
 - Não-validação-duplicada do mesmo ingresso sob concorrência real: lock
-  pessimista em `ingressos` (`findByIdForUpdate` + `SET LOCAL lock_timeout`),
-  provado por `PortariaValidacaoConcorrenciaTest` com duas threads contra
-  Postgres real — exatamente uma responde `VALIDO`.
-- O QR do ingresso carrega o **código assinado** (`uuid.assinatura`), que é o
-  payload que a validação espera — não o link público, que serve o botão de
+  pessimista em `ingressos` (`findByIdForUpdate` / `findByCodigoCurtoForUpdate` +
+  `SET LOCAL lock_timeout`), provado por `PortariaValidacaoConcorrenciaTest` com
+  duas threads contra Postgres real — exatamente uma responde `VALIDO`.
+- O QR do ingresso carrega o **código assinado** (`uuid.assinatura`), que é um dos
+  dois payloads que a validação aceita — não o link público, que serve o botão de
   compartilhar. A travessia entre as duas pontas é coberta por
   `web/src/pages/ContratoQrPortaria.test.tsx`.
 
-Pendências conhecidas do épico: `POST /api/portaria/turno` não valida
-server-side se a sessão é futura/publicada (a restrição vive só na lista do
-front), e não há janela dedicada de "sessões em andamento agora".
+- Janela operacional do turno: `POST /api/portaria/turno` só aceita sessão cujo
+  `data_hora` esteja entre 2h no passado e 30min no futuro a partir de agora —
+  fora disso, `409 SESSAO_FORA_DA_JANELA_DO_TURNO`. Existe porque a sessão ativa
+  é o que separa `VALIDO` de `EVENTO_ERRADO`: ativar por engano a sessão de
+  outro dia faz a fila inteira ser recusada com ingresso legítimo na mão. As
+  constantes são próprias (`JANELA_TURNO_ANTES_MINUTOS` /
+  `JANELA_TURNO_DEPOIS_HORAS`), separadas do buffer de 4h do conflito de sala —
+  conceitos diferentes. A tela repete o motivo da recusa em
+  `SelecaoTurnoPortariaPage`, senão o operador tenta a mesma sessão pra sempre.
 
-Lacunas conhecidas nas regras **já implementadas** (achados de revisão
-adversarial, ainda abertos) estão em
-`_bmad-output/implementation-artifacts/business-rules-gaps.md` — as principais:
-reserva e pagamento não rejeitam sessão cujo horário já passou, e `ingressos`
-não tem `UNIQUE (reserva_id, assento_id)` nem FK composta contra
-`assento_sessao`.
+Os achados de revisão adversarial sobre as regras **já implementadas** estão em
+`_bmad-output/implementation-artifacts/business-rules-gaps.md`. Todos foram
+fechados, com uma exceção declarada: **não existe estratégia de rotação do
+secret HMAC** (AD-8). Se o secret precisar trocar, todo ingresso já emitido —
+inclusive link público, que não expira — vira inválido de uma vez, sem janela de
+migração. O fix correto (secret versionado com validação dupla durante a
+transição) não coube no prazo; a limitação está declarada também no README.
 
-Este documento cobre só o que existe hoje; ao implementar cada item acima,
-mover a entrada correspondente para a seção do módulo e apagar daqui.
+Este documento cobre só o que existe hoje; ao fechar um item, mover a entrada
+correspondente para a seção do módulo e apagar daqui.

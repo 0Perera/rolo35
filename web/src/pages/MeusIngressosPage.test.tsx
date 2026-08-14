@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MeusIngressosPage } from './MeusIngressosPage';
 import * as ingressosApi from '../api/ingressos';
 import type { IngressoResumo } from '../api/ingressos';
+import type { Pagina } from '../api/sessoes';
 import { SessaoExpiradaError } from '../api/client';
 
 const ingresso: IngressoResumo = {
@@ -17,9 +18,24 @@ const ingresso: IngressoResumo = {
   salaNome: 'Sala 1',
   dataHora: '2030-01-01T20:00:00',
   codigo: 'abc-123.assinatura',
+  codigoCurto: '7ZK3QW9M',
 };
 
-function renderPage() {
+function paginaDe(
+  conteudo: IngressoResumo[],
+  extras: Partial<Pagina<IngressoResumo>> = {},
+): Pagina<IngressoResumo> {
+  return {
+    conteudo,
+    pagina: 0,
+    tamanho: 12,
+    total: conteudo.length,
+    totalPaginas: conteudo.length === 0 ? 0 : 1,
+    ...extras,
+  };
+}
+
+function renderDeslogado() {
   return render(
     <MemoryRouter initialEntries={['/meus-ingressos']}>
       <MeusIngressosPage />
@@ -27,9 +43,17 @@ function renderPage() {
   );
 }
 
+/** A carteira é do cliente logado: sem token a página nem chega a chamar a API. */
+function renderPage() {
+  localStorage.setItem('rolo35.token', 'token-abc');
+  localStorage.setItem('rolo35.papel', 'CLIENTE');
+  return renderDeslogado();
+}
+
 describe('MeusIngressosPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it('shows a loading state while ingressos are being fetched', () => {
@@ -41,7 +65,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('shows an empty state with a link to the sessões when the client has no ingressos', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([]));
 
     renderPage();
 
@@ -71,8 +95,49 @@ describe('MeusIngressosPage', () => {
     expect(screen.queryByRole('button', { name: /tentar novamente/i })).not.toBeInTheDocument();
   });
 
+  // Quem nunca entrou não tem sessão "expirada" pra recuperar: o 401 chega como erro comum, e a
+  // carteira anunciava falha de servidor pra quem só precisava fazer login. Sem token não há o que
+  // buscar — o convite não espera resposta de API nenhuma.
+  it('invites a visitor with no session to log in instead of reporting a failure', async () => {
+    const listar = vi.spyOn(ingressosApi, 'listarMeusIngressos');
+
+    renderDeslogado();
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/entre pra ver seus ingressos/i);
+    expect(screen.getByRole('link', { name: /entrar na minha conta/i })).toHaveAttribute('href', '/login');
+    expect(screen.queryByText(/não foi possível carregar/i)).not.toBeInTheDocument();
+    expect(listar).not.toHaveBeenCalled();
+  });
+
+  // Carteira sem paginação cresce sem limite: o histórico só aumenta, e cada linha custa um código
+  // assinado no servidor. A página tem que ser decidida lá, não recortada aqui.
+  it('asks the server for one page of the wallet, not the whole history', async () => {
+    const listarSpy = vi
+      .spyOn(ingressosApi, 'listarMeusIngressos')
+      .mockResolvedValue(paginaDe([ingresso], { total: 30, totalPaginas: 3 }));
+    const user = userEvent.setup();
+
+    renderPage();
+    await screen.findByText('Clube da Luta');
+
+    expect(listarSpy).toHaveBeenCalledWith(expect.objectContaining({ pagina: 0, tamanho: 12 }));
+
+    await user.click(screen.getByRole('button', { name: /página 2/i }));
+
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ pagina: 1 }));
+  });
+
+  it('hides the pagination bar when the whole wallet fits in one page', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
+
+    renderPage();
+
+    await screen.findByText('Clube da Luta');
+    expect(screen.queryByRole('navigation', { name: /paginação/i })).not.toBeInTheDocument();
+  });
+
   it('renders each ingresso with session title, sala and assento', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
@@ -82,14 +147,17 @@ describe('MeusIngressosPage', () => {
     expect(screen.getByText('VALIDO')).toBeInTheDocument();
   });
 
-  it('opens the canhoto with the signed code and its QR', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+  it('opens the canhoto with the short code and its QR, never the signed code', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
     await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
 
-    expect(screen.getByText(/CÓDIGO abc-123\.assinatura/)).toBeInTheDocument();
+    expect(screen.getByText('7ZK3QW9M')).toBeInTheDocument();
+    // Um código só em tela. O assinado não some do sistema — ele continua dentro do QR e na URL
+    // do link público —, só deixa de ser impresso, porque ninguém dita nem digita 80 caracteres.
+    expect(screen.queryByText(/CÓDIGO abc-123\.assinatura/)).not.toBeInTheDocument();
     // O QR carrega o código assinado, não o link público — o payload em si é coberto por
     // `ContratoQrPortaria.test.tsx`, que fecha a travessia até a chamada da portaria.
     expect(screen.getByTitle(/QR code do ingresso/)).toBeInTheDocument();
@@ -97,7 +165,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('goes back to the list from the canhoto', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
 
     renderPage();
 
@@ -109,7 +177,7 @@ describe('MeusIngressosPage', () => {
   });
 
   it('copies the public link when sharing', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 
@@ -126,11 +194,11 @@ describe('MeusIngressosPage', () => {
     vi.unstubAllGlobals();
   });
 
-  // O código é `uuid.assinatura`: uma palavra só, longa, quebrada em várias linhas. Selecionar com
-  // o dedo é inviável, e é no celular que o cliente abre o ingresso — o botão é a única forma
-  // prática de levar o código pra digitação manual na portaria.
-  it('copies the signed code itself, not the public link', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+  // Copiar entrega o código curto, que é o que a portaria aceita digitado. Com 8 caracteres dá
+  // pra transcrever à mão — mas quem transcreve troca um caractere, e o outro lado chega na porta
+  // com um ingresso que não existe. O botão é o que fecha esse buraco.
+  it('copies the short code, not the signed code nor the public link', async () => {
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
 
@@ -138,7 +206,7 @@ describe('MeusIngressosPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /ver ingresso de clube da luta/i }));
     await userEvent.click(screen.getByRole('button', { name: /copiar código/i }));
 
-    expect(writeText).toHaveBeenCalledWith('abc-123.assinatura');
+    expect(writeText).toHaveBeenCalledWith('7ZK3QW9M');
     expect(await screen.findByRole('button', { name: /código copiado/i })).toBeInTheDocument();
 
     vi.unstubAllGlobals();
@@ -148,7 +216,7 @@ describe('MeusIngressosPage', () => {
   // implementado pelo jsdom. O que não pode acontecer é o clique não dizer nada: antes o erro era
   // engolido e o usuário ficava sem saber se copiou.
   it('says out loud when copying is not possible instead of failing silently', async () => {
-    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue([ingresso]);
+    vi.spyOn(ingressosApi, 'listarMeusIngressos').mockResolvedValue(paginaDe([ingresso]));
     vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
 
     renderPage();

@@ -21,6 +21,7 @@ import br.com.rolo35.api.reservas.dto.ReservaCheckoutDto;
 import br.com.rolo35.api.reservas.dto.ReservaDto;
 import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.service.ReservaService;
+import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -105,6 +106,26 @@ class ReservaControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("ASSENTO_INDISPONIVEL"))
+                .andExpect(jsonPath("$.mensagem").exists());
+    }
+
+    /**
+     * O código do envelope é contrato de rede: `MapaAssentosPage` compara `error.codigo` com esta
+     * string exata pra distinguir "sessão acabou" de "assento tomado". Os testes de serviço asseram
+     * o tipo Java da exceção e os de front constroem o erro à mão, então sem este caso trocar a
+     * string ou o status aqui mantinha a suíte inteira verde e quebrava a tela.
+     */
+    @Test
+    void returns409WithSessaoJaComecouEnvelopeWhenServiceRejects() throws Exception {
+        given(reservaService.reservar(any(ReservarAssentosRequest.class), anyString()))
+                .willThrow(new SessaoJaComecouException());
+
+        mockMvc.perform(post("/api/reservas")
+                        .principal(new UsernamePasswordAuthenticationToken("cliente1@rolo35.com.br", null))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(requestValido())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("SESSAO_JA_COMECOU"))
                 .andExpect(jsonPath("$.mensagem").exists());
     }
 

@@ -9,6 +9,7 @@ import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -120,7 +121,7 @@ class ReservaCheckoutRepositoryTest {
     private void reivindicar(Long sessaoId, Long assentoId, Long reservaId) {
         AssentoSessaoId id = new AssentoSessaoId(sessaoId, assentoId);
         assentoSessaoRepository.save(
-                new AssentoSessao(id, "RESERVADO", reservaId, LocalDateTime.now().plusMinutes(10).withNano(0)));
+                new AssentoSessao(id, StatusAssento.RESERVADO, reservaId, LocalDateTime.now().plusMinutes(10).withNano(0)));
         linhasCriadas.add(id);
     }
 

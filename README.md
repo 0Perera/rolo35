@@ -8,6 +8,12 @@
   <img alt="TDD" src="https://img.shields.io/badge/XP-TDD-F4E9D4?style=for-the-badge&labelColor=171219">
 </p>
 
+<p align="center">
+  <img alt="A home do Rolo 35 num monitor de desktop: header escuro com logo, navegação e conta; o destaque é uma TV de tubo com o cartaz de Clube da Luta, selo tocando agora, sala, data, preço, sinopse e botão de comprar ingresso; abaixo, a faixa clara com busca por filme, filtro de sala e a grade de sessões em cartaz" src="docs/assets/preview-desktop.png" width="66%">
+  &nbsp;
+  <img alt="A mesma home num celular: header numa linha, a TV de tubo ocupando a largura da tela com A Origem em destaque, botão de comprar ingresso e a listagem de sessões logo abaixo" src="docs/assets/preview-mobile.png" width="23%">
+</p>
+
 **Rolo 35** é uma plataforma de eventos e ingressos de cinema: o organizador publica sessões a
 partir do catálogo do TMDb, o cliente escolhe o assento num mapa de sala, paga de forma simulada e
 recebe um ingresso com código assinado e link público de compartilhamento — e a portaria valida esse
@@ -25,12 +31,12 @@ negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
 - [2. Estado da entrega](#2-estado-da-entrega)
 - [3. Como rodar](#3-como-rodar)
   - [3.1 Pré-requisitos](#31-pré-requisitos)
-  - [3.2 Subir back-end + banco](#32-subir-back-end--banco)
-  - [3.3 Subir o front-end](#33-subir-o-front-end)
+  - [3.2 Subir a aplicação inteira](#32-subir-a-aplicação-inteira)
+  - [3.3 Desenvolver o front com hot reload](#33-desenvolver-o-front-com-hot-reload)
   - [3.4 Variáveis de ambiente](#34-variáveis-de-ambiente)
   - [3.5 Banco de dados, migrations e seed](#35-banco-de-dados-migrations-e-seed)
   - [3.6 Rodar os testes](#36-rodar-os-testes)
-  - [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free)
+  - [3.7 Deploy e notas de operação](#37-deploy-e-notas-de-operação)
 - [4. Dados de teste](#4-dados-de-teste)
 - [5. Roteiro de avaliação em 5 minutos](#5-roteiro-de-avaliação-em-5-minutos)
 - [6. Referência da API](#6-referência-da-api)
@@ -98,16 +104,17 @@ Detalhamento honesto de tudo que falta, com o motivo, em
 
 ### 3.1 Pré-requisitos
 
-- **Docker** e **Docker Compose** (sobem Postgres + API; nada de Java instalado na máquina é
-  necessário pra rodar).
-- **Node.js 20+** e npm (front-end roda fora do compose, porque o destino dele é a Vercel).
+- **Docker** e **Docker Compose** (sobem Postgres, API e front; nada de Java nem de Node instalado
+  na máquina é necessário pra rodar).
+- **Node.js 20+** e npm — só pra desenvolver o front com hot reload (`3.3`). Pra apenas executar o
+  projeto, o compose basta.
 - Um **API Read Access Token do TMDb** (v4). Gere em
   <https://www.themoviedb.org/settings/api> — é o token longo (JWT), não a `api_key` v3 legada.
   Sem ele a API sobe normalmente, mas a busca de filmes responde `502 CATALOGO_INDISPONIVEL` — não
   existe segredo com fallback no código, por decisão de segurança. O resto do fluxo (sessão semeada,
   reserva, pagamento, ingresso) funciona sem TMDb.
 
-### 3.2 Subir back-end + banco
+### 3.2 Subir a aplicação inteira
 
 ```bash
 git clone <url-do-repo> && cd rolo35
@@ -116,24 +123,34 @@ cp .env.example .env          # os valores padrão já servem pro dev local
 docker compose up -d --build
 ```
 
+Um comando sobe os três serviços: Postgres, API e front.
+
 Verificação:
 
 ```bash
 curl -s localhost:8080/actuator/health     # {"status":"UP"}
 curl -s localhost:8080/api/sessoes         # lista a sessão semeada, sem token
+# e abra http://localhost:5173 no navegador
 ```
 
-O primeiro `up` compila a API dentro do Docker (multi-stage build) e pode levar alguns minutos. O
-Flyway aplica schema e seed automaticamente no boot da API — não há passo manual de banco.
+O primeiro `up` compila a API e o bundle do front dentro do Docker (multi-stage nos dois) e pode
+levar alguns minutos. O Flyway aplica schema e seed automaticamente no boot da API — não há passo
+manual de banco.
 
-### 3.3 Subir o front-end
+### 3.3 Desenvolver o front com hot reload
+
+O serviço `web` do compose serve o bundle estático por nginx — é o que se quer pra *executar* o
+projeto, não pra editá-lo. Pra desenvolver, derrube ele e use o Vite:
 
 ```bash
+docker compose stop web
 cd web
-cp .env.example .env          # já aponta pra API local em localhost:8080
 npm install
-npm run dev                   # SPA em http://localhost:5173
+npm run dev                   # mesma porta, http://localhost:5173, agora com hot reload
 ```
+
+`VITE_API_URL` tem default `http://localhost:8080` no código, então nem `.env` é preciso no caso
+local.
 
 ### 3.4 Variáveis de ambiente
 
@@ -147,7 +164,8 @@ npm run dev                   # SPA em http://localhost:5173
 | `TMDB_API_TOKEN` | raiz | Token v4 do TMDb, usado só pelo back-end |
 | `CORS_ALLOWED_ORIGINS` | raiz | Allow-list de origens da API (default: `http://localhost:5173`) |
 | `TZ` | raiz | Fuso da JVM e do Postgres — **obrigatória**, veja o aviso abaixo |
-| `VITE_API_URL` | `web/` | URL da API consumida pela SPA |
+| `PORTARIA_JANELA_ANTES_MINUTOS` / `PORTARIA_JANELA_DEPOIS_HORAS` | raiz | Janela em que a portaria pode ativar uma sessão como turno (defaults: `30` e `2`). O compose já sobe alargado — sem isso nenhuma sessão do seed é selecionável, veja abaixo |
+| `VITE_API_URL` | raiz | URL da API consumida pela SPA. Lida em tempo de **build** (o Vite inlina no bundle), então mudá-la exige `docker compose up -d --build web` — restart não basta. Fica na raiz porque é de lá que o `docker-compose.yml` a lê como build arg; `web/.env` só vale pro `vite dev` |
 
 > ⚠️ **`TZ` é obrigatória, inclusive no deploy.** `sessoes.data_hora` é wall-clock sem fuso: o
 > organizador escolhe "20:00" e é isso que vai pro banco. API, banco e navegador precisam concordar
@@ -167,9 +185,33 @@ npm run dev                   # SPA em http://localhost:5173
 | `V2__seed.sql` | Dados de teste versionados (4 usuários, 3 salas, 1 sessão publicada) |
 | `V3__indice_sessoes_sala_data_hora.sql` | Índice composto que serve a query de conflito de horário |
 | `V4__indices_ingressos_por_cliente.sql` | Índices de `reservas.cliente_id` e `ingressos.reserva_id` para "Meus ingressos" |
+| `V5__indice_assento_sessao_reserva.sql` | Índice de `assento_sessao.reserva_id` para retomar o checkout |
+| `V6__turno_portaria.sql` | Tabela `turno_portaria` (sessão ativa por operador) |
+| `V7__indice_ingressos_por_sessao.sql` | Índice de `ingressos.sessao_id` para o painel do turno |
+| `V8__backstops_ingressos.sql` | FK composta de `ingressos` contra `assento_sessao` e `UNIQUE (reserva_id, assento_id)` |
+| `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3` |
+| `V10__seed_mais_sessoes.sql` | Mais 5 sessões publicadas, com dois filmes em mais de um horário |
+| `V11__codigo_curto_ingresso.sql` | Coluna `codigo_curto` do ingresso, única e indexada |
+| `V12__horario_redondo_sessao_do_seed.sql` | Arredonda a sessão da `V2`, que nascia no minuto exato do boot |
+| `V13__seed_mais_tres_sessoes.sql` | Mais 3 sessões publicadas, uma por sala, na segunda semana |
 
 - `spring.jpa.hibernate.ddl-auto=validate`: o Hibernate **nunca** cria nem altera tabela. O schema
   é do Flyway; a aplicação só valida se o mapeamento casa.
+- **Se a API não subir na `V8`**, o motivo é ela adicionar constraint a uma tabela que já tem
+  linha: `ADD CONSTRAINT ... FOREIGN KEY` valida `ingressos` inteira, e um ingresso órfão (assento
+  que não está mais no mapa daquela sessão) faz o Flyway abortar o boot. Volume novo nunca cai
+  nisso — é cenário de volume de desenvolvimento antigo. A migration não limpa sozinha de
+  propósito: apagar ingresso em silêncio é pior que a falha, que pelo menos é visível e
+  reversível. Para achar os culpados antes de decidir o que fazer com eles:
+
+```sql
+SELECT i.* FROM ingressos i
+WHERE NOT EXISTS (
+  SELECT 1 FROM assento_sessao a
+  WHERE a.sessao_id = i.sessao_id AND a.assento_id = i.assento_id);
+```
+
+  Em ambiente de desenvolvimento o caminho curto é o `down -v` logo abaixo, que recomeça do seed.
 - Zerar tudo e recomeçar do seed:
 
 ```bash
@@ -192,20 +234,39 @@ cd web && npm test        # front-end (Vitest + Testing Library)
 Os testes de integração sobem um Postgres real via Testcontainers, com `withReuse(true)` para não
 recriar o container em cada rodada.
 
-### 3.7 Deploy e limitações do plano free
+### 3.7 Deploy e notas de operação
 
-Alvo planejado: **API + Postgres no Render** (plano free) e **front na Vercel**. A infraestrutura
-está pronta pra isso (`api/Dockerfile` multi-stage, variáveis todas externalizadas, CORS por
-allow-list), mas **a aplicação não está publicada no momento desta escrita** — o Docker Compose é o
-caminho garantido de execução.
+`render.yaml` na raiz é um **blueprint** que sobe os três serviços numa conta só — Static Site pro
+front, Web Service (Docker) pra API e Postgres gerenciado — em *Blueprints → New Blueprint
+Instance*, apontando pro repositório. Substituiu o arranjo anterior de API no Render + front na
+Vercel: duas contas, dois deploys e duas origens pra manter em sincronia por CORS.
 
-Limitações conhecidas do plano free, para quando a publicação acontecer:
+**A aplicação não está publicada no momento desta escrita** — o Docker Compose ([3.2](#32-subir-a-aplicação-inteira))
+é o caminho garantido de execução.
 
-- O serviço dorme após ~15 min sem tráfego e leva cerca de 1 min pra acordar no próximo request. A
-  primeira chamada da avaliação pode parecer lenta; a segunda é normal.
+Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard, depois dele):
+
+- `TMDB_API_TOKEN` — segredo, nunca versionado.
+- `CORS_ALLOWED_ORIGINS` na API e `VITE_API_URL` no front: cada um precisa da URL do outro. São
+  previsíveis (`https://<nome-do-serviço>.onrender.com`), mas o Render sufixa o nome quando ele já
+  está em uso, então chutar no arquivo seria pior do que preencher com a URL real. `VITE_API_URL` é
+  lida em tempo de build (o Vite inlina no bundle), então trocá-la exige redeploy do front.
+
+Notas de operação, para quando a publicação acontecer:
+
+- **A API roda no plano `starter`, não no free, e a diferença é de CPU.** Medido num container com
+  as restrições do free (0.1 vCPU, 512 MB), o Spring Boot leva **179s** pra subir: o trabalho de
+  startup é quase todo CPU-bound e single-thread — carga de classes em modo interpretado, metamodel
+  do Hibernate, springdoc varrendo os controllers —, então a 10% de um core cada etapa custa dezenas
+  de vezes o normal. Somado ao fato de o serviço free dormir após 15 min sem tráfego, a primeira
+  requisição depois de qualquer pausa estourava o timeout de 90s do cliente HTTP do front. O
+  `starter` dá 0.5 vCPU (~36s de boot) e **não dorme**, então o cold start deixa de existir em vez
+  de só encurtar. A RAM é a mesma (512 MB) e já era folgada: o teste estabilizou em 318 MB.
+- **O front não dorme em nenhum plano**: Static Site é CDN, então a aplicação abre na hora.
 - O Postgres free expira depois de um período — o prazo aparece no dashboard ao criar o banco.
-- `TZ=America/Sao_Paulo` precisa ser configurada no serviço, senão o container roda em UTC e rejeita
-  horários válidos (ver [3.4](#34-variáveis-de-ambiente)).
+- `TZ=America/Sao_Paulo` já vai fixada no blueprint. Ela não é cosmética: além do wall-clock de
+  `sessoes.data_hora`, o `now()` que a listagem pública e o guard de reserva comparam vem do fuso da
+  sessão JDBC, que o driver deriva do fuso da JVM (ver [3.4](#34-variáveis-de-ambiente)).
 
 ---
 
@@ -222,10 +283,25 @@ pra avaliação):
 | Portaria | `portaria@rolo35.com.br` | `portaria123` |
 
 Também vêm semeadas **3 salas** de tamanhos diferentes — Sala 1 (8×10 = 80 assentos), Sala 2
-(5×6 = 30) e Sala 3 (10×14 = 140) — e **1 sessão publicada** na Sala 1: *Clube da Luta* (1999), com
-pôster e sinopse reais buscados uma vez no TMDb e congelados no SQL, e os 80 assentos dessa sessão
-livres. Salas 2 e 3 ficam sem sessão de propósito, pro organizador criar sessão durante a avaliação
-sem cair em conflito de horário.
+(5×6 = 30) e Sala 3 (10×14 = 140) — e **9 sessões publicadas**, espalhadas pelas três salas nas
+próximas duas semanas, com todos os assentos livres:
+
+| Filme | Sessões | Onde |
+|---|---|---|
+| *Clube da Luta* (1999) | 2 | Sala 1 e Sala 3 |
+| *Matrix* (1999) | 2 | Sala 1 e Sala 2 |
+| *Cidade de Deus* (2002) | 1 | Sala 2 |
+| *A Origem* (2010) | 1 | Sala 3 |
+| *De Volta para o Futuro* (1985) | 1 | Sala 1 |
+| *Obsessão* (2026) | 1 | Sala 2 |
+| *Psicopata Americano* (2000) | 1 | Sala 3 |
+
+Pôster, sinopse e data de estreia são reais, buscados uma vez no TMDb e congelados no SQL — não se
+atualizam se o catálogo mudar depois. Dois filmes em mais de um horário existem pra que a tela de
+filme mostre o que ela faz: lista de horários, "a partir de" quando os preços divergem e o resumo
+de salas. Os horários deixam folga de sobra dentro de cada sala, então ainda dá pra criar sessão
+durante a avaliação sem esbarrar em conflito — e `SeedSessoesRepositoryTest` garante que o próprio
+seed respeita o buffer de 4h que a aplicação aplica.
 
 ---
 
@@ -248,8 +324,9 @@ recarga de página e tentativa de acessar o que é de outro usuário.
    é emitido, os assentos voltam a *livre* na hora (confira no mapa) e a tela oferece volta para a
    sessão. Nada é cobrado — não existe cobrança.
 5. **Caminho da aprovação:** reserve de novo, escolha **aprovar** e confirme. Sai **um canhoto por
-   assento**, cada um com seu código assinado e um **QR escaneável** que aponta para o link público
-   daquele ingresso. Aponte a câmera do celular para o QR: ele abre a página pública do ingresso.
+   assento**, cada um com um **QR escaneável** e o **código curto de 8 caracteres** impresso ao
+   lado. O QR carrega o código assinado do ingresso, não uma URL — ele serve à leitura da portaria,
+   não a abrir página. Para compartilhar, use o botão **↗ COMPARTILHAR**, que copia o link público.
 6. **Resiliência do checkout:** com o checkout aberto, dê F5 — a tela se reconstrói inteira a partir
    de `GET /api/reservas/{id}`, sem depender de nada guardado no navegador. Reserva já paga
    redireciona para a carteira; reserva de outro cliente responde `403`, igual a um `reservaId` que
@@ -261,6 +338,16 @@ recarga de página e tentativa de acessar o que é de outro usuário.
    inexistente.
 8. **Trava pós-venda:** volte como **organizador** e tente editar a sessão que acabou de vender
    ingresso — `409 SESSAO_COM_INGRESSO_CONFIRMADO`, em todos os campos, sem exceção.
+9. **Portaria:** entre como **portaria**, selecione a sessão do ingresso que você acabou de comprar
+   e valide — pela câmera, apontando pro QR, ou digitando os 8 caracteres impressos no canhoto.
+   Repita a mesma leitura: `JA_UTILIZADO`, sem validar duas vezes.
+
+> ℹ️ **Sobre o passo 9.** A portaria só ativa como "sessão do turno" uma sessão perto do horário
+> dela — a janela real é de 30 min antes a 2h depois, porque ativar a sessão errada faz a fila
+> inteira ser recusada com ingresso legítimo na mão. Como todo o seed nasce com data futura, com
+> essa janela nenhuma sessão semeada seria selecionável. Por isso o `docker-compose.yml` sobe com
+> `PORTARIA_JANELA_ANTES_MINUTOS=20160` (14 dias): a regra continua existindo e testada nos
+> defaults, e o fluxo fica exercitável sem esperar o relógio. Em produção, deixe o default.
 
 Duas provas que só aparecem no protocolo, se você quiser conferir:
 
@@ -297,8 +384,9 @@ local: `http://localhost:8080`. Autenticação via `Authorization: Bearer <token
 | `GET` | `/api/salas` | autenticado | Salas disponíveis para criar sessão |
 | `POST` | `/api/sessoes` | `ORGANIZADOR` | Cria sessão (valida data futura e conflito de sala) |
 | `GET` | `/api/sessoes` | **público** | Sessões futuras publicadas, com marcação de esgotada |
-| `GET` | `/api/sessoes/minhas` | `ORGANIZADOR` | Sessões do próprio organizador |
-| `GET` | `/api/sessoes/{id}` | `ORGANIZADOR` | Sessão para gestão (só do dono) |
+| `GET` | `/api/sessoes/gestao` | `ORGANIZADOR` | Agenda de gestão do cinema (todas as sessões) |
+| `GET` | `/api/sessoes/ocupacao?salaId=` | `ORGANIZADOR` | Janelas bloqueadas da sala, com buffer aplicado (só o intervalo, sem título nem autor) |
+| `GET` | `/api/sessoes/{id}` | `ORGANIZADOR` | Sessão para gestão |
 | `PUT` | `/api/sessoes/{id}` | `ORGANIZADOR` | Edita sessão (bloqueado após venda) |
 | `GET` | `/api/sessoes/{id}/mapa-assentos` | **público** | Mapa com status por assento, sem identidade |
 | `POST` | `/api/reservas` | `CLIENTE` | Cria hold de 1–6 assentos por 10 min |
@@ -307,18 +395,25 @@ local: `http://localhost:8080`. Autenticação via `Authorization: Bearer <token
 | `GET` | `/api/ingressos/minhas` | `CLIENTE` | Ingressos do cliente autenticado |
 | `GET` | `/api/ingressos/{codigo}` | **público** | Leitura pública do ingresso (não consome) |
 | `GET` | `/actuator/health` | **público** | Health check |
+| `GET` | `/swagger-ui.html`, `/v3/api-docs` | **público** | Documentação da API (springdoc) |
 
-Envelope de erro: `{ "codigo": "SESSAO_CONFLITANTE", "mensagem": "..." }`.
+Documentação interativa em **`/swagger-ui.html`** (JSON em `/v3/api-docs`), pública como a
+documentação que é. Use *Authorize* com o `token` de `POST /api/auth/login` pra exercitar as rotas
+autenticadas direto de lá.
+
+Envelope de erro: `{ "codigo": "SESSAO_CONFLITANTE", "mensagem": "..." }` — a tabela abaixo é a
+fonte única desses códigos; eles não são repetidos endpoint a endpoint no OpenAPI.
 
 | Código | HTTP | Quando |
 |---|---|---|
 | `CREDENCIAIS_INVALIDAS` | 401 | E-mail ou senha inválidos |
 | `NAO_AUTENTICADO` | 401 | Token ausente/inválido, ou usuário do token não existe mais |
-| `NAO_AUTORIZADO` | 403 | Papel errado, ou recurso de outro dono |
+| `NAO_AUTORIZADO` | 403 | Papel errado, ou reserva/ingresso de outro cliente |
 | `PARAMETRO_INVALIDO` / `CORPO_INVALIDO` | 400 | Validação de entrada |
 | `DATA_HORA_NO_PASSADO` | 400 | Sessão no passado |
 | `SESSAO_NAO_ENCONTRADA` / `SALA_NAO_ENCONTRADA` / `INGRESSO_NAO_ENCONTRADO` | 404 | Recurso inexistente (ou assinatura inválida, no caso do ingresso) |
 | `SESSAO_CONFLITANTE` | 409 | Outra sessão na mesma sala dentro do buffer de 4h |
+| `SESSAO_JA_COMECOU` | 409 | Reserva ou pagamento de sessão cujo horário já passou |
 | `SESSAO_COM_INGRESSO_CONFIRMADO` | 409 | Edição após venda |
 | `SESSAO_COM_HOLD_ATIVO` | 409 | Troca de sala com hold ativo |
 | `SALA_SEM_ASSENTOS` | 409 | Sala sem mapa de assentos |
@@ -348,6 +443,20 @@ nome vem do rolo de película 35mm.
 Tipografia: **Bungee** (display), **Archivo** (corpo/UI) e **VT323** (monospace retrô — códigos,
 contadores, texto de terminal), servidas localmente via `@fontsource` em vez de CDN.
 
+<!-- PENDENTE: prosa final desta subseção é do autor. O que está aqui é o esboço factual do que
+     aconteceu, pra não perder o registro — a versão autoral substitui este bloco. -->
+
+**Como o nome e o tema chegaram aqui** (esboço factual, ainda a ser reescrito com a voz do autor):
+o nome saiu do rolo de película de 35mm, a bitola padrão do cinema comercial durante o século XX —
+"rolo 35" é como o material era chamado na cabine, e carrega tanto o objeto quanto a gíria de
+"deu um rolo". A partir do nome veio a época: se a referência é a película, a interface é a do
+cinema de bairro que ainda projetava — daí a TV de tubo, a fita VHS e o cartaz de locadora. A
+paleta seguiu a mesma pista: o gradiente chama (vermelho → laranja → amarelo) é a cor de cartaz de
+sessão dupla e de letreiro de marquise; o roxo-preto do fundo é a sala escura; o ciano é o fósforo
+do tubo, e por isso é ele que marca foco de teclado. A direção foi materializada numa sessão de
+**Claude Design**, que produziu o protótipo `Rolo 35.dc.html` — as escolhas de cor e tipografia
+saíram de lá e viraram tokens antes da primeira tela existir.
+
 Decisões de tema que não são enfeite:
 
 - **Textura faz parte do sistema**, não é polimento opcional: scanline fixa sobre a viewport, grão e
@@ -360,6 +469,11 @@ Decisões de tema que não são enfeite:
 
 O protótipo que fixou essa direção (`Rolo 35.dc.html`) veio de uma sessão de design assistida por
 IA, e isso está declarado em [16. Uso de IA](#16-uso-de-ia).
+
+A prévia no topo deste README é o tema montado, nos dois extremos de largura: no desktop o destaque
+tem coluna de texto à esquerda do cartaz; no mobile o texto passa a se sobrepor à imagem e a
+listagem encolhe para duas colunas — mas o tubo continua sendo a moldura do destaque nos dois,
+porque é ele que fecha a metáfora.
 
 ---
 
@@ -427,11 +541,14 @@ Constraints que expressam domínio, não só validação de aplicação:
 
 - `CHECK` em `usuarios.papel`, `reservas.status`, `assento_sessao.status`, `ingressos.status` — não
   existe papel ou status livre, nem via `psql`.
-- `UNIQUE (email)` em `usuarios`; `UNIQUE (sala_id, fileira, numero)` em `assentos`.
-- FKs coerentes em todas as relações acima.
+- `UNIQUE (email)` em `usuarios`; `UNIQUE (sala_id, fileira, numero)` em `assentos`;
+  `UNIQUE (reserva_id, assento_id)` em `ingressos` — uma reserva não emite dois canhotos pra mesma
+  poltrona.
+- FKs coerentes em todas as relações acima, incluindo a composta de `ingressos (sessao_id,
+  assento_id)` contra `assento_sessao`: ingresso aponta pra uma linha real do mapa daquela sessão,
+  não pra um par (sessão, assento) que só existe separado.
 
-O que **falta** no schema está declarado em [17](#17-o-que-não-funciona--ficou-de-fora) — inclusive
-duas constraints de integridade que eu reconheço como dívida, não como decisão.
+O que **falta** no schema está declarado em [17](#17-o-que-não-funciona--ficou-de-fora).
 
 ---
 
@@ -448,7 +565,7 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | Três papéis fixos por conta (`ORGANIZADOR`, `CLIENTE`, `PORTARIA`), garantidos por `CHECK` no banco | Papel é dado de domínio, não string livre; o `CHECK` impede papel inventado mesmo por escrita direta no banco |
 | JWT assinado (HMAC) carregando `sub` e `papel`, com expiração de 8h | Stateless: a API não guarda sessão, o que casa com o deploy em serviço free que reinicia sozinho |
 | **Papel checado por `@PreAuthorize` no método do controller**, não por matcher de path | Uma rota nova sem anotação simplesmente não passa. Com autorização por prefixo de path, esquecer um matcher significa herdar permissão por acidente — o modo de falha é invertido, e isso importa mais que a economia de anotações |
-| Superfície pública é **allow-list explícita**: `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos`, `GET /api/ingressos/{codigo}` | Liberar `/api/sessoes/**` de uma vez vazaria `GET /api/sessoes/{id}` (gestão) e `/api/sessoes/minhas`. O matcher do mapa é por path exato justamente por isso |
+| Superfície pública é **allow-list explícita**: `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos`, `GET /api/ingressos/{codigo}` | Liberar `/api/sessoes/**` de uma vez vazaria `GET /api/sessoes/{id}` (gestão) e `/api/sessoes/gestao`. O matcher do mapa é por path exato justamente por isso |
 | `POST /api/auth/cadastro` é a **única rota pública que escreve**, e tem teto por endereço de origem | As outras rotas públicas são de leitura, onde abusar custa banda. Esta cria conta com o papel que o corpo pedir, inclusive `PORTARIA` — abusar custa conta privilegiada. O teto é atrito contra mineração casual, não fronteira de segurança: quem tem muitos endereços passa, e a contagem vive na memória de um processo só |
 | Login com e-mail inexistente roda BCrypt contra um hash dummy antes de recusar | Sem isso, o tempo de resposta diferencia "e-mail não existe" de "senha errada" — enumeração de contas por *timing* |
 | E-mail é normalizado no service (`trim` + `toLowerCase(Locale.ROOT)`) antes do lookup | `=` no Postgres é case-sensitive: sem isso, o teclado do celular que capitaliza a primeira letra derruba o login com "credencial inválida". `Locale.ROOT` porque em turco `"I".toLowerCase()` vira `ı` e quebraria e-mail com I maiúsculo. No service, não no front, porque a rota atende qualquer cliente HTTP |
@@ -471,7 +588,7 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | Sala sem assento cadastrado não pode virar sessão (`409 SALA_SEM_ASSENTOS`) | Sessão sem mapa é sessão que não pode ser reservada — falha cedo, não na primeira compra |
 | Data/hora no passado é rejeitada, na criação e na edição | Regra óbvia de domínio; virou teste porque o bug de fuso a fazia disparar em horário válido |
 | **Conflito de horário na sala com buffer de 4h**, checado nos dois sentidos | Sessão de cinema ocupa a sala por um tempo, e o domínio não tem coluna de duração. Um buffer fixo de 4h aproxima "filme + limpeza + intervalo" sem inventar campo. O intervalo é aberto: exatamente 4h depois **não** conflita, e há teste na fronteira |
-| Edição só pelo organizador dono, e o *ownership* é checado **antes** de validar o corpo | ID certo com corpo malformado ainda responde `403`. Validar corpo primeiro contaria, pelo código do erro, que aquele ID existe |
+| **Sessão é recurso do cinema, não do organizador que a criou**: qualquer `ORGANIZADOR` autenticado vê e edita qualquer sessão | O enunciado especifica um organizador seedado, sem isolamento entre contas. `sessoes.organizador_id` continua registrando a autoria e volta na resposta da edição, mas não restringe mais quem edita — a equipe é compartilhada, como numa bilheteria de verdade |
 | Sessão com ≥1 ingresso confirmado **trava todos os campos**, sem exceção | Preço, horário e sala são o contrato de quem já comprou. Permitir editar "só o pôster" abre a discussão de qual campo é inofensivo; a trava total não abre |
 | Trocar de sala numa edição reconstrói o mapa de assentos do zero | Só é seguro porque o passo anterior já provou que não há ingresso confirmado — nenhum estado de venda real se perde |
 | Listagem pública mostra só sessões futuras, e **sessão esgotada continua aparecendo**, marcada | Esgotado é informação, não ausência: sumir da lista faz o usuário achar que a sessão não existe |
@@ -519,8 +636,9 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | O link público **não** valida nem consome o ingresso | Ninguém pode "gastar" seu ingresso abrindo o link, e a portaria não é bypassável por leitura |
 | A assinatura é verificada **antes** de qualquer consulta ao banco na rota pública | Código com HMAC inválido nunca toca o repositório: sem isso, a diferença entre "não existe" e "assinatura errada" seria um oráculo pra enumerar UUIDs |
 | "Não existe" e "assinatura inválida" devolvem o mesmo `404 INGRESSO_NAO_ENCONTRADO` | Mesmo motivo acima, agora no nível da resposta |
-| O **QR é renderizado no front** a partir do código assinado, não servido por um endpoint de imagem | O QR é só uma representação visual de uma URL que o cliente já tem em mãos. Um endpoint de imagem adicionaria uma rota, um content-type e um cache para gerar zero informação nova — e a autenticidade continua vindo do HMAC, não do desenho |
-| O QR carrega exatamente o **código assinado** (`uuid.assinatura`), não o link público | É o payload que `POST /api/portaria/validacoes` espera — o QR existe para ser validado na porta, e a digitação manual precisa produzir a mesma string. O link público continua sendo montado num único lugar (`lib/ingressos.ts`) e serve o botão de compartilhar. Já divergiu uma vez: com o QR carregando a URL, toda leitura por câmera devolvia `INVALIDO`; hoje a travessia entre as duas pontas é coberta por `ContratoQrPortaria.test.tsx` |
+| O **QR é renderizado no front** a partir do código assinado, não servido por um endpoint de imagem | O QR é só uma representação visual de um código que o cliente já tem em mãos. Um endpoint de imagem adicionaria uma rota, um content-type e um cache para gerar zero informação nova — e a autenticidade continua vindo do HMAC, não do desenho |
+| O QR carrega exatamente o **código assinado** (`uuid.assinatura`), não o link público | É um dos dois payloads que `POST /api/portaria/validacoes` aceita — o QR existe para ser validado na porta, não para abrir página. O link público continua sendo montado num único lugar (`lib/ingressos.ts`) e serve o botão de compartilhar. Já divergiu uma vez: com o QR carregando a URL, toda leitura por câmera devolvia `INVALIDO`; hoje a travessia entre as duas pontas é coberta por `ContratoQrPortaria.test.tsx` |
+| O canhoto imprime **só o código curto**; o assinado nunca aparece em tela | Imprimir ~80 caracteres num canhoto de cinema não servia a ninguém: não dá para ditar na fila nem selecionar com o dedo no celular. O assinado continua vivo dentro do QR e na URL do link público — só deixou de ser texto |
 
 ### 10.7 Portaria
 
@@ -575,6 +693,17 @@ Dois detalhes que só aparecem lendo o código:
   controle de acesso: o front só decide o que desenhar.
 - **Mapa de assentos não revela identidade**: mostra `LIVRE`/`RESERVADO`/`VENDIDO`, nunca quem
   reservou.
+- **Código curto do ingresso é credencial de balcão, não de internet** — e é uma redução de
+  segurança assumida de propósito: 8 caracteres Base32 Crockford são 40 bits **sem assinatura**,
+  mais fracos que o HMAC por construção. Ele vale exclusivamente em
+  `POST /api/portaria/validacoes`, que exige papel `PORTARIA`, então força bruta ali pressupõe uma
+  conta de operador; e só serve código da sessão do turno, o que deixa a chance por tentativa na
+  ordem de 1 em bilhões. O que se compra com isso é a regra de negócio existir: sem código curto a
+  portaria não tem plano B quando a câmera falha — tela riscada, celular sem bateria, luz ruim — e
+  a validação manual vira letra morta. O QR e o identificador do link público continuam usando o
+  código assinado; o que mudou é que o curto passou a ser o único impresso no canhoto e o que o
+  botão de copiar entrega. Mitigação pendente, declarada em `deferred-work.md`: essa rota ainda
+  não tem rate limit.
 - **Respostas que não viram oráculo**: reserva de outro cliente ≡ reserva inexistente; ingresso
   inexistente ≡ assinatura inválida; login de e-mail inexistente equalizado em tempo com senha
   errada.
@@ -599,6 +728,12 @@ Dois detalhes que só aparecem lendo o código:
 | `idx_sessoes_sala_id_data_hora` | Query de conflito de horário — o par `(sala, data_hora)` é exatamente o predicado |
 | `idx_reservas_cliente_id`, `idx_ingressos_reserva_id` | "Meus ingressos" (`ingressos` → `reservas` por cliente) |
 | `idx_assento_sessao_reserva_id` | Retomada do checkout: `reserva_id` deixou de ser só coluna gravada e virou critério de busca quando a tela de pagamento se reconstrói |
+| `idx_ingressos_sessao_id` | Painel do turno da portaria: conta e lista ingressos por sessão a cada validação |
+
+E o que **não** existe, pelo mesmo critério: `sessoes.organizador_id` não tem índice, porque nenhuma
+query filtra por ele — depois do CAP-1 a listagem de gestão traz o cinema inteiro e a coluna virou só
+registro de autoria. `idx_sessoes_sala_id` foi removido na `V9` por ser prefixo à esquerda do
+composto da `V3`: mesma cobertura, custo de manutenção a mais.
 
 Sobre N+1: as três listagens que juntam dado relacionado — sessões publicadas (com filme e sala),
 sessões do organizador e ingressos do cliente (com assento, sessão e sala) — usam uma query só, com
@@ -681,6 +816,15 @@ esta seção documenta.
 | **BMAD Method 6.10** (skills de analista, PM, arquiteto, dev e revisão) | Fluxo de planejamento e execução: brief → PRD → arquitetura → épicos/stories → implementação por story → code review |
 | **Claude Design** | Sessão de design que gerou o protótipo `Rolo 35.dc.html`, de onde saiu a direção visual (paleta, tipografia, textura de tubo) |
 | **ai-memory** (MCP local) | Continuidade entre sessões de trabalho ao longo da semana |
+
+### Sobre a ausência de pull requests
+
+Não há PR neste repositório, e isso é decisão, não esquecimento. PR existe pra pedir revisão de
+outra pessoa e pra gatear merge por CI; aqui não há outra pessoa, e o gate roda antes de cada
+commit — teste primeiro, suíte inteira verde. O que substitui a revisão de terceiro são os ciclos
+de code review adversarial registrados em `_bmad-output/implementation-artifacts/`, com achados
+aplicados ou explicitamente recusados, e o `docs/decisions.md`, que deixa cada decisão auditável
+depois do fato. Registrado em `docs/decisions.md`.
 
 ### O ciclo de cada story: RED → GREEN → REFACTOR → COMMIT
 
@@ -810,21 +954,17 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 
 | Item | Situação |
 |---|---|
-| **Janela de seleção da sessão do turno** | A portaria escolhe a sessão do turno a partir da mesma listagem pública, que filtra `data_hora >= now()`. Sessões já iniciadas não aparecem na lista; a sessão ativa continua selecionável (é reinjetada no seletor), mas não existe uma janela dedicada do tipo "sessões em andamento agora". Simplificação consciente de escopo, não bug |
-| **Validação server-side da sessão do turno** | `POST /api/portaria/turno` aceita qualquer `sessaoId` existente, incluindo sessões passadas. A restrição a sessões futuras vive só na lista do front. Sem impacto de segurança sobre ingressos de terceiros (o operador só consegue transformar as próprias leituras em `EVENTO_ERRADO`), mas é validação que devia estar no servidor |
-| **Autocadastro de cliente** | Fora do sprint original; as contas vêm do seed. A rota `/cadastro` é um *placeholder* honesto, não um formulário que finge funcionar |
-| **Aplicação publicada** | Não publicada no momento desta escrita — ver [3.7 Deploy e limitações do plano free](#37-deploy-e-limitações-do-plano-free) |
+| **Janela de seleção da sessão do turno** | Resolvido: `PortariaService.selecionarSessao()` agora recusa sessão fora da janela `-30min/+2h` em volta do horário, com `SESSAO_FORA_DA_JANELA_DO_TURNO`. A constante é própria, separada do buffer de 4h de conflito de sala — são conceitos diferentes. O que continua fora é uma tela dedicada de "sessões em andamento agora": o seletor ainda parte da listagem pública |
+| **Autocadastro com papel selecionável** | Entregue, e com uma consequência que prefiro declarar a esconder: `POST /api/auth/cadastro` é público (quem cria conta ainda não tem token) e aceita o papel no corpo, então qualquer visitante pode criar uma conta `ORGANIZADOR` ou `PORTARIA`. Foi escolha consciente — é o que torna as três telas avaliáveis sem seed manual — mas o CAP-1 tirou o *ownership* de sessão, que era o que limitava o estrago de uma conta dessas às sessões que ela própria tivesse criado. Num produto real o cadastro público criaria só `CLIENTE`, e staff viria por convite |
+| **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e notas de operação](#37-deploy-e-notas-de-operação) |
 
 ### Dívida técnica que eu reconheço como dívida
 
 | Item | Impacto real |
 |---|---|
-| `ingressos` sem `UNIQUE (reserva_id, assento_id)` e sem FK composta contra `assento_sessao` | Hoje inalcançável pela aplicação (o service sempre deriva sessão e assento da mesma linha, sob lock), mas é o único dos invariantes de duplicação sem *backstop* no banco. Inconsistente com o critério que eu mesmo apliquei nos outros dois |
 | Conflito de horário garantido por lock de aplicação, sem `EXCLUDE USING gist` | Escrita que não passe por `SessaoService` não é protegida pelo schema |
-| Reserva e pagamento não checam se a sessão já passou de horário | É possível criar hold — e pagar — para sessão que já ocorreu, se a listagem for contornada por chamada direta à API |
+| Pacotes do back-end organizados só por subdomínio, sem camada | `sessoes` mistura entidade, exceção, DTO e serviço no mesmo pacote, e `portaria` vive dentro de `ingressos` apesar de ser outro subdomínio. Reorganizar agora seria um diff enorme em cima de código verde, no último dia de prazo — decisão explícita de **não** mexer, e não descuido |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
-| Organizador não vê ocupação da sala ao criar sessão | `salas` é pool compartilhado, `sessoes` é isolada por dono: o organizador só descobre conflito ao submeter. Não é falha de segurança (o back valida sempre), é fricção de UX |
-| Emissão de ingresso faz `INSERT` por assento | Irrelevante com o limite de 6 assentos, mas inconsistente com o padrão de escrita em lote do resto da classe |
 | Cadastro de salas pela interface | Salas vêm do seed; criar sala pela UI foi adiado por falta de design, e o organizador tem 3 salas prontas pra usar |
 
 ### Fora de escopo por decisão (o enunciado dispensa)
@@ -856,7 +996,7 @@ web/src/
 docs/
 ├── decisions.md            Registro de decisões, com o motivo de cada uma
 ├── regras-de-negocio.md    Regras em código, com arquivo e linha
-└── assets/                 Banner deste README
+└── assets/                 Banner, diagramas e prévia da interface deste README
 ```
 
 <p align="center">

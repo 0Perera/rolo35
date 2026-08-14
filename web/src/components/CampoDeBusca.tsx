@@ -38,13 +38,20 @@ export function CampoDeBusca({
 }: CampoDeBuscaProps) {
   const [texto, setTexto] = useState(valor);
 
-  // Ressincroniza quando o termo muda por fora (voltar do navegador, link colado, limpar filtro).
+  // Quem aplica o termo o normaliza antes de guardá-lo na URL, então comparar cru dizia "diferente"
+  // pra coisas que já estão aplicadas. Comparar pelo texto normalizado é o que responde a pergunta
+  // que os dois efeitos abaixo realmente fazem: "o que está escrito já é o filtro que está no ar?"
+  const jaAplicado = texto.trim() === valor;
+
+  // Ressincroniza quando o termo muda por fora (voltar do navegador, link colado, limpar filtro) —
+  // mas não quando a única diferença é o `trim`, senão o espaço recém-digitado sumia do campo no
+  // meio da digitação e o cursor pulava junto.
   useEffect(() => {
-    setTexto(valor);
+    setTexto((atual) => (atual.trim() === valor ? atual : valor));
   }, [valor]);
 
   useEffect(() => {
-    if (texto === valor) {
+    if (jaAplicado) {
       return;
     }
     const timer = setTimeout(() => onBuscar(texto), ESPERA_MS);
@@ -52,18 +59,27 @@ export function CampoDeBusca({
     // `onBuscar` fica fora das dependências de propósito: se o pai recriar a função a cada render,
     // incluí-la reinicia o timer sem parar e a busca nunca dispara.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [texto, valor]);
+  }, [texto, jaAplicado]);
+
+  // Enter é como se pede uma busca — esperar o debounce depois disso é esperar por nada. Não há
+  // requisição em dobro: aplicar o termo muda `valor`, o efeito acima roda de novo e a limpeza dele
+  // cancela o timer que estava pendente.
+  function aoTeclar(evento: React.KeyboardEvent<HTMLInputElement>) {
+    if (evento.key === 'Enter' && !jaAplicado) {
+      onBuscar(texto);
+    }
+  }
 
   return (
     <div className={className}>
-      <label className="sr-only" htmlFor="campo-de-busca">
-        {label}
-      </label>
+      {/* `aria-label` no campo é o rótulo que os leitores de tela anunciam; um `<label>` escondido
+          ao lado só repetiria a mesma informação e obrigaria um `id` — que, sendo constante do
+          módulo, se repetia quando dois campos dividiam a mesma tela. */}
       <input
-        id="campo-de-busca"
         type="search"
         value={texto}
         onChange={(evento) => setTexto(evento.target.value)}
+        onKeyDown={aoTeclar}
         placeholder={placeholder ?? label}
         aria-label={label}
         className={`w-full border-[3px] px-[14px] py-2.5 font-body text-sm font-bold ${tones[tone]}`}

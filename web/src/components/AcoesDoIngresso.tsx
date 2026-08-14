@@ -3,7 +3,10 @@ import { useCopiar } from '../lib/copiar';
 import { urlPublicaDoIngresso } from '../lib/ingressos';
 
 interface AcoesDoIngressoProps {
+  /** Token assinado do link público. Só o botão de compartilhar usa — não vai pro clipboard. */
   codigo: string;
+  /** Credencial ditável: é o que o botão copiar entrega e o que a portaria aceita digitado. */
+  codigoCurto: string;
   className?: string;
 }
 
@@ -20,18 +23,19 @@ const ROTULOS_CODIGO = {
 } as const;
 
 /**
- * O rodapé de ações do canhoto: compartilhar o link público e copiar o código assinado.
+ * O rodapé de ações do canhoto: compartilhar o link público e copiar o código do ingresso.
  *
  * <p>São duas coisas diferentes e trocar uma pela outra quebra o fluxo — link colado no campo da
  * portaria não valida, e código colado no WhatsApp não abre página nenhuma. Daí os dois botões
  * conviverem, com o compartilhar em destaque (é a ação frequente) e o copiar código em segundo
  * plano (é contingência pra quando a câmera da portaria falha).
  *
- * <p>Copiar código existe porque selecionar `uuid.assinatura` com o dedo é inviável: uma palavra
- * só, longa, quebrada em várias linhas. No desktop dá pra arrastar o mouse; no celular, não — e é
- * no celular que o cliente abre o ingresso.
+ * <p>Copiar entrega o código curto, não o assinado: é o curto que está impresso no canhoto e o
+ * que a portaria aceita digitado. Com 8 caracteres dá pra transcrever à mão — só que quem
+ * transcreve troca um caractere, e o outro lado chega na porta com um ingresso que não existe. O
+ * alfabeto já evita I, L, O e U por isso; o botão fecha o resto do buraco.
  */
-export function AcoesDoIngresso({ codigo, className = '' }: AcoesDoIngressoProps) {
+export function AcoesDoIngresso({ codigo, codigoCurto, className = '' }: AcoesDoIngressoProps) {
   const link = useCopiar();
   const codigoCopia = useCopiar();
 
@@ -47,7 +51,7 @@ export function AcoesDoIngresso({ codigo, className = '' }: AcoesDoIngressoProps
 
       <button
         type="button"
-        onClick={() => codigoCopia.copiar(codigo)}
+        onClick={() => codigoCopia.copiar(codigoCurto)}
         className={buttonClass('ticket', 'bg-none bg-paper-50 text-ink-950 hover:bg-paper-100 hover:text-ink-950')}
       >
         {ROTULOS_CODIGO[codigoCopia.estado]}

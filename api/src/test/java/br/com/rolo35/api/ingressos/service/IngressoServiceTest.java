@@ -3,12 +3,15 @@ package br.com.rolo35.api.ingressos.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import br.com.rolo35.api.auth.Usuario;
 import br.com.rolo35.api.auth.repository.UsuarioRepository;
+import br.com.rolo35.api.common.Paginacao;
+import br.com.rolo35.api.common.PaginaDto;
 import br.com.rolo35.api.ingressos.Ingresso;
 import br.com.rolo35.api.ingressos.IngressoNaoEncontradoException;
 import br.com.rolo35.api.ingressos.StatusIngresso;
@@ -26,6 +29,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -33,6 +39,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class IngressoServiceTest {
+
+    /**
+     * Código curto de fixture. A emissão real usa SecureRandom; aqui o valor só precisa ser
+     * único (a coluna é UNIQUE) e caber no alfabeto Base32 Crockford de 8 caracteres.
+     */
+    private static String codigoCurtoDeTeste() {
+        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+    }
 
     private static final String CLIENTE_EMAIL = "cliente1@rolo35.com.br";
     private static final Long CLIENTE_ID = 7L;
@@ -72,6 +86,10 @@ class IngressoServiceTest {
                 return id;
             }
 
+            public String getCodigoCurto() {
+                return "7ZK3QW9M";
+            }
+
             public StatusIngresso getStatus() {
                 return StatusIngresso.VALIDO;
             }
@@ -107,26 +125,47 @@ class IngressoServiceTest {
         setUp();
         stubCliente();
         UUID ingressoId = UUID.randomUUID();
-        given(ingressoRepository.buscarPorCliente(CLIENTE_ID)).willReturn(List.of(projecao(ingressoId)));
+        given(ingressoRepository.buscarPorCliente(eq(CLIENTE_ID), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(projecao(ingressoId))));
         given(codigoIngressoService.gerar(ingressoId)).willReturn("codigo-gerado");
 
-        List<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL);
+        PaginaDto<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL, 0, 12);
 
-        assertThat(resultado).hasSize(1);
-        assertThat(resultado.get(0).id()).isEqualTo(ingressoId);
-        assertThat(resultado.get(0).codigo()).isEqualTo("codigo-gerado");
-        assertThat(resultado.get(0).status()).isEqualTo(StatusIngresso.VALIDO);
+        assertThat(resultado.conteudo()).hasSize(1);
+        assertThat(resultado.conteudo().get(0).id()).isEqualTo(ingressoId);
+        assertThat(resultado.conteudo().get(0).codigo()).isEqualTo("codigo-gerado");
+        // O curto vem da coluna, não é derivado do id nem regerado a cada leitura.
+        assertThat(resultado.conteudo().get(0).codigoCurto()).isEqualTo("7ZK3QW9M");
+        assertThat(resultado.conteudo().get(0).status()).isEqualTo(StatusIngresso.VALIDO);
+    }
+
+    // Teto de servidor: sem ele, `tamanho=1000000` faria a carteira assinar o histórico inteiro a
+    // cada abertura — o custo que a paginação existe pra evitar.
+    @Test
+    void listarMinhasLimitaTamanhoDePaginaPedidoPeloCliente() {
+        setUp();
+        stubCliente();
+        given(ingressoRepository.buscarPorCliente(eq(CLIENTE_ID), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of()));
+
+        ingressoService.listarMinhas(CLIENTE_EMAIL, 0, 1_000_000);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(ingressoRepository).buscarPorCliente(eq(CLIENTE_ID), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(Paginacao.TAMANHO_MAXIMO);
     }
 
     @Test
     void listarMinhasDevolveListaVaziaQuandoClienteNaoTemIngresso() {
         setUp();
         stubCliente();
-        given(ingressoRepository.buscarPorCliente(CLIENTE_ID)).willReturn(List.of());
+        given(ingressoRepository.buscarPorCliente(eq(CLIENTE_ID), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of()));
 
-        List<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL);
+        PaginaDto<IngressoResumoDto> resultado = ingressoService.listarMinhas(CLIENTE_EMAIL, 0, 12);
 
-        assertThat(resultado).isEmpty();
+        assertThat(resultado.conteudo()).isEmpty();
+        assertThat(resultado.total()).isZero();
     }
 
     @Test
@@ -161,7 +200,8 @@ class IngressoServiceTest {
         String codigo = id + ".assinatura-valida";
         given(codigoIngressoService.extrairId(codigo)).willReturn(Optional.of(id));
         given(codigoIngressoService.validar(id, codigo)).willReturn(true);
-        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, StatusIngresso.VALIDO, null, Instant.now());
+        // Código curto fixo, não o aleatório do helper: este teste afirma sobre o valor.
+        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, "SB68XVZG", StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findById(id)).willReturn(Optional.of(ingresso));
         Sessao sessao = Sessao.builder()
                 .id(1L)
@@ -183,6 +223,10 @@ class IngressoServiceTest {
         assertThat(dto.sessaoTitulo()).isEqualTo("Sessão fixture");
         assertThat(dto.salaNome()).isEqualTo("Sala 1");
         assertThat(dto.status()).isEqualTo(StatusIngresso.VALIDO);
+        // Quem recebeu o link compartilhado é quem vai entrar na sala: sem o código curto, a
+        // página pública não tem o que ditar na portaria quando a câmera falha. Não é exposição
+        // nova — a própria URL do link já carrega o código assinado, que a portaria também aceita.
+        assertThat(dto.codigoCurto()).isEqualTo("SB68XVZG");
     }
 
     // AC4/AD-9: leitura pública nunca muta estado como efeito colateral, nem hoje nem em
@@ -196,7 +240,7 @@ class IngressoServiceTest {
         String codigo = id + ".assinatura-valida";
         given(codigoIngressoService.extrairId(codigo)).willReturn(Optional.of(id));
         given(codigoIngressoService.validar(id, codigo)).willReturn(true);
-        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, StatusIngresso.VALIDO, null, Instant.now());
+        Ingresso ingresso = new Ingresso(id, 50L, 10L, 1L, codigoCurtoDeTeste(), StatusIngresso.VALIDO, null, Instant.now());
         given(ingressoRepository.findById(id)).willReturn(Optional.of(ingresso));
         Sessao sessao = Sessao.builder()
                 .id(1L)
