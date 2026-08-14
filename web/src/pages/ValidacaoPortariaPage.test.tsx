@@ -37,13 +37,88 @@ async function validarCodigo(codigo: string) {
   await user.click(screen.getByRole('button', { name: /^validar$/i }));
 }
 
+const painelVazio: portariaApi.PainelTurno = { validados: 0, emitidos: 0, leituras: [] };
+
 describe('ValidacaoPortariaPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // A tela busca o painel do turno no mount; sem este stub cada teste bateria na rede de
+    // verdade e o histórico entraria em estado de erro por motivo alheio ao que se testa.
+    vi.spyOn(portariaApi, 'buscarPainelTurno').mockResolvedValue(painelVazio);
     startMock.mockClear().mockResolvedValue(undefined);
     stopMock.mockClear();
     destroyMock.mockClear();
     scanner.aoDecodificar = null;
+  });
+
+  it('shows the shift counter over tickets issued, not over room capacity', async () => {
+    vi.spyOn(portariaApi, 'buscarPainelTurno').mockResolvedValue({
+      validados: 37,
+      emitidos: 62,
+      leituras: [],
+    });
+
+    renderPagina();
+
+    expect(await screen.findByText(/validados 37 \/ 62/i)).toBeInTheDocument();
+  });
+
+  it('lists the released entries with seat, short code and time', async () => {
+    vi.spyOn(portariaApi, 'buscarPainelTurno').mockResolvedValue({
+      validados: 1,
+      emitidos: 3,
+      leituras: [
+        { codigoCurto: 'A3F91C', assentoFileira: 'D', assentoNumero: 7, validadoEm: '2026-08-13T20:14:22' },
+      ],
+    });
+
+    renderPagina();
+
+    expect(await screen.findByText('A3F91C')).toBeInTheDocument();
+    expect(screen.getByText('D7')).toBeInTheDocument();
+    expect(screen.getByText('ENTROU')).toBeInTheDocument();
+  });
+
+  it('says out loud that refused attempts are not recorded', async () => {
+    renderPagina();
+
+    expect(await screen.findByText(/apenas entradas liberadas/i)).toBeInTheDocument();
+  });
+
+  it('refreshes the shift panel after a released entry', async () => {
+    const painelSpy = vi.spyOn(portariaApi, 'buscarPainelTurno').mockResolvedValue(painelVazio);
+    vi.spyOn(portariaApi, 'validarIngresso').mockResolvedValue({
+      resultado: 'VALIDO',
+      assentoFileira: 'A',
+      assentoNumero: 1,
+      sessaoTitulo: 'Clube da Luta',
+    });
+
+    renderPagina();
+    await screen.findByText(/nenhuma entrada liberada/i);
+    await validarCodigo('codigo-valido');
+
+    await screen.findByText(/válido/i);
+    expect(painelSpy).toHaveBeenCalledTimes(2);
+  });
+
+  // Recusa não muda contador nem histórico — recarregar seria uma requisição a mais na frente da
+  // fila pra redesenhar exatamente os mesmos números.
+  it('does not refresh the panel when the ticket is refused', async () => {
+    const painelSpy = vi.spyOn(portariaApi, 'buscarPainelTurno').mockResolvedValue(painelVazio);
+    vi.spyOn(portariaApi, 'validarIngresso').mockResolvedValue({
+      resultado: 'JA_UTILIZADO',
+      assentoFileira: 'B',
+      assentoNumero: 2,
+      sessaoTitulo: 'Clube da Luta',
+    });
+
+    renderPagina();
+    await screen.findByText(/nenhuma entrada liberada/i);
+    await validarCodigo('codigo-usado');
+
+    await screen.findByText(/já utilizado/i);
+    expect(painelSpy).toHaveBeenCalledTimes(1);
   });
 
   it('shows VALIDO with seat and session info for a valid ticket', async () => {
@@ -60,8 +135,8 @@ describe('ValidacaoPortariaPage', () => {
     expect(await screen.findByText(/válido/i)).toBeInTheDocument();
     // Rotulado: o título é o da sessão do turno, não a do ingresso — sem o rótulo, o operador
     // lê o valor de EVENTO_ERRADO como se fosse o filme do ingresso na mão.
-    expect(screen.getByText(/sessão do turno: clube da luta/i)).toBeInTheDocument();
-    expect(screen.getByText(/assento a1/i)).toBeInTheDocument();
+    expect(screen.getByText(/sessão do turno:/i)).toHaveTextContent(/clube da luta/i);
+    expect(screen.getByText(/^assento/i)).toHaveTextContent(/a1/i);
   });
 
   it('shows INVALIDO for a malformed or forged code', async () => {

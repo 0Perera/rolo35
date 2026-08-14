@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -23,12 +23,38 @@ const sessaoA: SessaoPublicada = {
 
 const sessaoB: SessaoPublicada = { ...sessaoA, id: 2, titulo: 'Matrix' };
 
+const turnoClubeDaLuta = {
+  sessaoId: 1,
+  titulo: 'Clube da Luta',
+  salaNome: 'Sala 1',
+  dataHora: '2030-01-01T20:00:00',
+};
+
+function pagina(
+  conteudo: SessaoPublicada[],
+  extras: Partial<sessoesApi.Pagina<SessaoPublicada>> = {},
+): sessoesApi.Pagina<SessaoPublicada> {
+  return {
+    conteudo,
+    pagina: 0,
+    tamanho: 8,
+    total: conteudo.length,
+    totalPaginas: conteudo.length === 0 ? 0 : 1,
+    ...extras,
+  };
+}
+
 function renderPagina() {
   return render(
     <MemoryRouter>
       <SelecaoTurnoPortariaPage />
     </MemoryRouter>,
   );
+}
+
+/** A lista de sessões, sem o card de sessão ativa que fica acima dela. */
+async function listaDeSessoes() {
+  return within(await screen.findByRole('list'));
 }
 
 describe('SelecaoTurnoPortariaPage', () => {
@@ -46,7 +72,7 @@ describe('SelecaoTurnoPortariaPage', () => {
   });
 
   it('shows an empty-list message when there are no sessions', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([]);
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([]));
     vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(null);
 
     renderPagina();
@@ -63,34 +89,36 @@ describe('SelecaoTurnoPortariaPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar as sessões/i);
   });
 
-  it('lets the portaria user select an active session', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoA, sessaoB]);
+  it('lists the sessions with sala and horário so the operator can tell them apart', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
     vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(null);
-    const selecionarSpy = vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockResolvedValue({
-      sessaoId: 1,
-      titulo: 'Clube da Luta',
-      salaNome: 'Sala 1',
-      dataHora: '2030-01-01T20:00:00',
-    });
+
+    renderPagina();
+
+    expect(await screen.findByText(/2 sessões encontradas/i)).toBeInTheDocument();
+    const lista = await listaDeSessoes();
+    expect(lista.getByText('Clube da Luta')).toBeInTheDocument();
+    expect(lista.getByText('Matrix')).toBeInTheDocument();
+    expect(lista.getAllByText(/Sala 1/)).toHaveLength(2);
+  });
+
+  it('lets the portaria user select an active session straight from the list', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(null);
+    const selecionarSpy = vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockResolvedValue(turnoClubeDaLuta);
     const user = userEvent.setup();
 
     renderPagina();
 
-    await user.click(await screen.findByRole('button', { name: /selecionar sessão do turno/i }));
-    await user.click(await screen.findByRole('option', { name: /clube da luta/i }));
+    await user.click((await listaDeSessoes()).getByRole('button', { name: /clube da luta/i }));
 
     expect(selecionarSpy).toHaveBeenCalledWith(1);
-    expect(await screen.findByText('SESSÃO ATIVA')).toBeInTheDocument();
+    expect(await screen.findByText(/sessão ativa do turno/i)).toBeInTheDocument();
   });
 
   it('lets the portaria user swap the active session without an extra step', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoA, sessaoB]);
-    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue({
-      sessaoId: 1,
-      titulo: 'Clube da Luta',
-      salaNome: 'Sala 1',
-      dataHora: '2030-01-01T20:00:00',
-    });
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
     const selecionarSpy = vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockResolvedValue({
       sessaoId: 2,
       titulo: 'Matrix',
@@ -101,9 +129,7 @@ describe('SelecaoTurnoPortariaPage', () => {
 
     renderPagina();
 
-    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /trocar sessão do turno/i }));
-    await user.click(await screen.findByRole('option', { name: /matrix/i }));
+    await user.click((await listaDeSessoes()).getByRole('button', { name: /matrix/i }));
 
     expect(selecionarSpy).toHaveBeenCalledWith(2);
     expect(await screen.findByText('Matrix')).toBeInTheDocument();
@@ -112,21 +138,14 @@ describe('SelecaoTurnoPortariaPage', () => {
   // Sem tratamento, a falha some e o painel segue mostrando a sessão anterior: a portaria acredita
   // que trocou de turno e passa a ver EVENTO_ERRADO em ingressos legítimos.
   it('reports a failed session swap instead of silently keeping the old one', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([sessaoA, sessaoB]);
-    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue({
-      sessaoId: 1,
-      titulo: 'Clube da Luta',
-      salaNome: 'Sala 1',
-      dataHora: '2030-01-01T20:00:00',
-    });
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([sessaoA, sessaoB]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
     vi.spyOn(portariaApi, 'selecionarSessaoTurno').mockRejectedValue(new Error('falha de rede'));
     const user = userEvent.setup();
 
     renderPagina();
 
-    expect(await screen.findByText('Clube da Luta')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /trocar sessão do turno/i }));
-    await user.click(await screen.findByRole('option', { name: /matrix/i }));
+    await user.click((await listaDeSessoes()).getByRole('button', { name: /matrix/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível trocar a sessão/i);
     // E o painel continua honesto sobre qual sessão está de fato ativa.
@@ -134,9 +153,10 @@ describe('SelecaoTurnoPortariaPage', () => {
   });
 
   // A lista pública filtra `data_hora >= now()`, então a sessão sai dela no instante em que começa
-  // — justamente quando a portaria trabalha. O turno ativo não pode sumir do seletor por isso.
-  it('keeps the active session selectable after it has started and left the public list', async () => {
-    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue([]);
+  // — justamente quando a portaria trabalha. Por isso o card do turno vive fora da lista: se
+  // dependesse dela, sumiria da tela no pior momento possível.
+  it('keeps the active session on screen after it started and left the public list', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([]));
     vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue({
       sessaoId: 7,
       titulo: 'Clube da Luta',
@@ -146,8 +166,49 @@ describe('SelecaoTurnoPortariaPage', () => {
 
     renderPagina();
 
-    expect(await screen.findByText('SESSÃO ATIVA')).toBeInTheDocument();
+    expect(await screen.findByText(/sessão ativa do turno/i)).toBeInTheDocument();
+    expect(screen.getByText('Clube da Luta')).toBeInTheDocument();
+    // A lista vazia não pode dizer "nenhuma sessão disponível" com um turno rodando.
     expect(screen.queryByText(/nenhuma sessão disponível/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /trocar sessão do turno/i })).toHaveTextContent(/clube da luta/i);
+    expect(screen.getByText(/o turno acima segue ativo/i)).toBeInTheDocument();
+  });
+
+  // A busca também não pode apagar o turno ativo da tela: ele não vem da listagem.
+  it('keeps the active session visible when a search returns nothing', async () => {
+    vi.spyOn(sessoesApi, 'listarSessoesPublicadas').mockResolvedValue(pagina([]));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(turnoClubeDaLuta);
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByText(/sessão ativa do turno/i);
+
+    await user.type(screen.getByRole('searchbox', { name: /buscar sessão/i }), 'xyz');
+
+    expect(await screen.findByText(/nenhuma sessão encontrada para/i)).toBeInTheDocument();
+    expect(screen.getByText(/sessão ativa do turno/i)).toBeInTheDocument();
+  });
+
+  it('asks the server for the search term and the page', async () => {
+    const listarSpy = vi
+      .spyOn(sessoesApi, 'listarSessoesPublicadas')
+      .mockResolvedValue(pagina([sessaoA], { total: 20, totalPaginas: 3 }));
+    vi.spyOn(portariaApi, 'buscarSessaoAtiva').mockResolvedValue(null);
+    const user = userEvent.setup();
+
+    renderPagina();
+    await screen.findByText(/20 sessões encontradas/i);
+
+    expect(listarSpy).toHaveBeenCalledWith(expect.objectContaining({ pagina: 0, tamanho: 8 }));
+
+    await user.click(screen.getByRole('button', { name: /página 2/i }));
+    expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ pagina: 1 }));
+
+    await user.type(screen.getByRole('searchbox', { name: /buscar sessão/i }), 'matrix');
+    // Termo novo volta pra primeira página: manter a página 2 costuma cair num vazio que parece
+    // "não encontrei nada" quando o resultado tem uma página só. O waitFor cobre o debounce da
+    // busca — sem ele a asserção corre antes da requisição sair.
+    await waitFor(() =>
+      expect(listarSpy).toHaveBeenLastCalledWith(expect.objectContaining({ busca: 'matrix', pagina: 0 })),
+    );
   });
 });

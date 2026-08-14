@@ -32,6 +32,25 @@ export async function buscarSessaoAtiva(): Promise<SessaoAtiva | null> {
   }
 }
 
+export interface LeituraTurno {
+  /** Prefixo pra conferência visual. O código assinado inteiro nunca sai do servidor por aqui. */
+  codigoCurto: string;
+  assentoFileira: string;
+  assentoNumero: number;
+  validadoEm: string;
+}
+
+export interface PainelTurno {
+  validados: number;
+  /** Ingressos emitidos pra sessão — o denominador honesto, não a capacidade da sala. */
+  emitidos: number;
+  leituras: LeituraTurno[];
+}
+
+export function buscarPainelTurno(): Promise<PainelTurno> {
+  return apiFetch<PainelTurno>('/api/portaria/turno/painel');
+}
+
 export function validarIngresso(codigo: string): Promise<ResultadoValidacao> {
   return apiFetch<ResultadoValidacao>('/api/portaria/validacoes', {
     method: 'POST',
