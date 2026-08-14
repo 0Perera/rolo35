@@ -20,8 +20,17 @@ services:
     name: rolo35-api
     runtime: docker
     plan: free
-    rootDir: api
-    dockerfilePath: ./Dockerfile
+    # Sem `rootDir` de propósito: a documentação do Render se contradiz sobre a base de
+    # `dockerfilePath` quando há root dir (o blueprint spec diz "relative to the repo root", a
+    # página de monorepo diz relativo ao root dir), e errar isso quebra o build com "Dockerfile not
+    # found". Caminhos a partir da raiz do repo valem nas duas leituras. O que o `rootDir` dava de
+    # útil aqui — não rebuildar a API num commit que só mexe no front — o `buildFilter` abaixo faz
+    # explicitamente.
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    buildFilter:
+      paths:
+        - api/**
     healthCheckPath: /actuator/health
     envVars:
       # A URL JDBC é montada em application.properties a partir destas três: o Render expõe o banco
