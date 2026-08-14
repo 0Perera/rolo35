@@ -22,7 +22,6 @@ import br.com.rolo35.api.sessoes.SalaSemAssentosException;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.catalogo.CatalogoIndisponivelException;
 import br.com.rolo35.api.sessoes.catalogo.ParametroInvalidoException;
 import org.slf4j.Logger;
@@ -163,14 +162,6 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("SESSAO_NAO_ENCONTRADA", "Sessão não encontrada"));
     }
 
-    // Ownership: distinto do NAO_AUTORIZADO de papel errado (@PreAuthorize) — este é lançado pelo
-    // service quando o organizador autenticado não é dono da sessão, mesmo sabendo o ID.
-    @ExceptionHandler(SessaoNaoPertenceAoOrganizadorException.class)
-    public ResponseEntity<ApiError> handleSessaoNaoPertenceAoOrganizador() {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiError("NAO_AUTORIZADO", "Você não tem permissão para acessar este recurso"));
-    }
-
     @ExceptionHandler(SessaoComIngressoConfirmadoException.class)
     public ResponseEntity<ApiError> handleSessaoComIngressoConfirmado() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
@@ -218,10 +209,9 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("ASSENTO_EM_DISPUTA", "Assento em disputa no momento — tente novamente"));
     }
 
-    // Mesmo codigo/status de handleSessaoNaoPertenceAoOrganizador — é o mesmo conceito de negação
-    // de acesso, sem o significado de domínio que o nome daquela exceção carrega no throw site.
-    // Mora em common porque já atende pagamentos e reservas: uma cópia por domínio seria a
-    // terceira classe Java pro mesmo par 403/NAO_AUTORIZADO.
+    // Único 403 de domínio depois do CAP-1: mora em common porque atende pagamentos e reservas
+    // (recurso de outro cliente), e uma cópia por domínio seria mais uma classe Java pro mesmo par
+    // 403/NAO_AUTORIZADO. Sessão saiu daqui — não há mais dono por sessão a comparar.
     @ExceptionHandler(NaoAutorizadoException.class)
     public ResponseEntity<ApiError> handleNaoAutorizado() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)

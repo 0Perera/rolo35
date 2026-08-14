@@ -57,10 +57,14 @@ public class SessaoController {
         return ResponseEntity.ok(sessaoService.listarPublicadas(busca, tmdbId, salaId, pagina, tamanho));
     }
 
-    @GetMapping("/minhas")
+    /**
+     * Agenda de gestão do cinema: qualquer ORGANIZADOR vê e edita qualquer sessão. Era
+     * {@code /minhas} até CAP-1 — o nome antigo prometia um recorte por dono que não existe mais.
+     */
+    @GetMapping("/gestao")
     @PreAuthorize("hasRole('ORGANIZADOR')")
-    public ResponseEntity<List<SessaoGestaoDto>> listarMinhas(Authentication authentication) {
-        return ResponseEntity.ok(sessaoService.listarMinhas(authentication.getName()));
+    public ResponseEntity<List<SessaoGestaoDto>> listarParaGestao(Authentication authentication) {
+        return ResponseEntity.ok(sessaoService.listarParaGestao(authentication.getName()));
     }
 
     @GetMapping("/{id}")

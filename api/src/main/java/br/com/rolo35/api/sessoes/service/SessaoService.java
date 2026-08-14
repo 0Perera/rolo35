@@ -18,7 +18,6 @@ import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
@@ -126,19 +125,13 @@ public class SessaoService {
 
     @Transactional
     public SessaoResponse editar(Long id, EditarSessaoRequest request, String organizadorEmail) {
-        Usuario organizador = usuarioRepository
-                .findByEmail(organizadorEmail)
-                .orElseThrow(OrganizadorNaoEncontradoException::new);
+        // A conta ainda precisa existir — um JWT válido de usuário já removido não edita nada. O
+        // que não existe mais é comparar essa conta com a que criou a sessão (CAP-1).
+        usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
 
         entityManager.createNativeQuery("SET LOCAL lock_timeout = '3s'").executeUpdate();
         Sessao sessao = sessaoRepository.findByIdForUpdate(id).orElseThrow(SessaoNaoEncontradaException::new);
 
-        // Ownership vem antes de qualquer validação de corpo (AC2): tentar editar sessão de outro
-        // organizador é sempre 403, mesmo sabendo o ID e mesmo com corpo malformado — não pode
-        // vazar um 400 antes de confirmar o dono.
-        if (!sessao.getOrganizadorId().equals(organizador.getId())) {
-            throw new SessaoNaoPertenceAoOrganizadorException();
-        }
         if (!request.dataHora().isAfter(LocalDateTime.now())) {
             throw new DataHoraNoPassadoException();
         }
@@ -196,14 +189,16 @@ public class SessaoService {
                 sessaoSalva.getId(), sala.getId(), sala.getNome(), sessaoSalva.getTmdbId(), sessaoSalva.getTitulo(),
                 sessaoSalva.getPosterUrl(), sessaoSalva.getSinopse(),
                 sessaoSalva.getDataEstreia() == null ? null : sessaoSalva.getDataEstreia().toString(),
-                sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, organizador.getId());
+                sessaoSalva.getDataHora(), sessaoSalva.getPreco(), capacidade, sessaoSalva.getOrganizadorId());
     }
 
-    public List<SessaoGestaoDto> listarMinhas(String organizadorEmail) {
-        Usuario organizador = usuarioRepository
-                .findByEmail(organizadorEmail)
-                .orElseThrow(OrganizadorNaoEncontradoException::new);
-        return sessaoRepository.findByOrganizadorId(organizador.getId()).stream()
+    /**
+     * Gestão lista o cinema inteiro, não a agenda pessoal de quem chamou (CAP-1). O e-mail continua
+     * na assinatura só pra exigir uma conta viva por trás do token.
+     */
+    public List<SessaoGestaoDto> listarParaGestao(String organizadorEmail) {
+        usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
+        return sessaoRepository.findParaGestao().stream()
                 .map(projecao -> new SessaoGestaoDto(
                         projecao.getId(), projecao.getSalaId(), projecao.getSalaNome(), projecao.getTitulo(),
                         projecao.getSinopse(), projecao.getDataHora(), projecao.getPreco(), projecao.getCapacidade(),
@@ -212,13 +207,8 @@ public class SessaoService {
     }
 
     public SessaoGestaoDto buscarPorId(Long id, String organizadorEmail) {
-        Usuario organizador = usuarioRepository
-                .findByEmail(organizadorEmail)
-                .orElseThrow(OrganizadorNaoEncontradoException::new);
+        usuarioRepository.findByEmail(organizadorEmail).orElseThrow(OrganizadorNaoEncontradoException::new);
         Sessao sessao = sessaoRepository.findById(id).orElseThrow(SessaoNaoEncontradaException::new);
-        if (!sessao.getOrganizadorId().equals(organizador.getId())) {
-            throw new SessaoNaoPertenceAoOrganizadorException();
-        }
         Sala sala = salaRepository.findById(sessao.getSalaId()).orElseThrow(SalaNaoEncontradaException::new);
         int capacidade = assentoSessaoRepository.findByIdSessaoId(id).size();
         boolean editavel = !sessaoRepository.existeIngressoConfirmado(id);

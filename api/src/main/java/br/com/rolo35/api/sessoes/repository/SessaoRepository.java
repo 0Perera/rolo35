@@ -44,6 +44,12 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
     @Query(value = "SELECT EXISTS (SELECT 1 FROM ingressos WHERE sessao_id = :sessaoId)", nativeQuery = true)
     boolean existeIngressoConfirmado(@Param("sessaoId") Long sessaoId);
 
+    /**
+     * Listagem de gestão: todas as sessões do cinema, sem filtro por organizador. A coluna
+     * {@code organizador_id} continua registrando quem criou cada sessão, mas não restringe mais
+     * quem a vê ou edita — a equipe de organizadores é compartilhada (CAP-1, ver
+     * {@code docs/decisions.md}).
+     */
     @Query(value = """
         SELECT s.id AS id, s.sala_id AS salaId, sa.nome AS salaNome, s.titulo AS titulo,
                s.sinopse AS sinopse, s.data_hora AS dataHora, s.preco AS preco,
@@ -52,11 +58,10 @@ public interface SessaoRepository extends JpaRepository<Sessao, Long> {
         FROM sessoes s
         JOIN salas sa ON sa.id = s.sala_id
         JOIN assentos a ON a.sala_id = s.sala_id
-        WHERE s.organizador_id = :organizadorId
         GROUP BY s.id, s.sala_id, sa.nome
         ORDER BY s.data_hora
         """, nativeQuery = true)
-    List<SessaoGestaoProjection> findByOrganizadorId(@Param("organizadorId") Long organizadorId);
+    List<SessaoGestaoProjection> findParaGestao();
 
     /**
      * Listagem pública paginada, com busca por título do filme, nome da sala ou data/hora escrita

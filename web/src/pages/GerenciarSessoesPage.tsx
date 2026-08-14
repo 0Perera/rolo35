@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listarMinhasSessoes, listarSalas, type Sala, type SessaoGestao } from '../api/sessoes';
+import { listarSessoesParaGestao, listarSalas, type Sala, type SessaoGestao } from '../api/sessoes';
 import { buttonClass } from '../components/Button';
 import { FormSessao } from '../components/FormSessao';
 import { PageShell } from '../components/PageShell';
@@ -21,7 +21,7 @@ export function GerenciarSessoesPage() {
   useEffect(() => {
     let ativo = true;
     setEstado('loading');
-    listarMinhasSessoes()
+    listarSessoesParaGestao()
       .then((resultado) => {
         if (!ativo) {
           return;
@@ -96,16 +96,16 @@ export function GerenciarSessoesPage() {
 
           <div className="min-w-0 flex-[3_1_460px]">
             <div className="mb-3 inline-block border-b-[3px] border-flame-600 pb-3 font-mono text-lg tracking-wide">
-              MINHAS SESSÕES
+              SESSÕES DO CINEMA
             </div>
 
             {estado === 'loading' && <p className="font-mono text-lg text-ink-950/60">Carregando sessões…</p>}
             {estado === 'vazio' && (
-              <p className="font-mono text-lg text-ink-950/60">Você ainda não criou nenhuma sessão.</p>
+              <p className="font-mono text-lg text-ink-950/60">Nenhuma sessão cadastrada ainda.</p>
             )}
             {estado === 'erro' && (
               <p role="alert" className="font-mono text-lg text-flame-600">
-                Não foi possível carregar suas sessões agora.
+                Não foi possível carregar as sessões agora.
               </p>
             )}
 

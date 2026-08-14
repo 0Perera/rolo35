@@ -19,7 +19,6 @@ import br.com.rolo35.api.sessoes.DataHoraNoPassadoException;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
@@ -288,13 +287,13 @@ class SessaoControllerTest {
     }
 
     @Test
-    void returns200WithSessaoGestaoArrayForGetMinhas() throws Exception {
+    void returns200WithSessaoGestaoArrayForGetGestao() throws Exception {
         SessaoGestaoDto dto = new SessaoGestaoDto(
                 100L, 1L, "Sala 1", "Clube da Luta", "sinopse", LocalDateTime.now().plusDays(7),
                 new BigDecimal("25.00"), 40, true);
-        given(sessaoService.listarMinhas(anyString())).willReturn(List.of(dto));
+        given(sessaoService.listarParaGestao(anyString())).willReturn(List.of(dto));
 
-        mockMvc.perform(get("/api/sessoes/minhas")
+        mockMvc.perform(get("/api/sessoes/gestao")
                         .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(100))
@@ -323,16 +322,6 @@ class SessaoControllerTest {
                         .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("SESSAO_NAO_ENCONTRADA"));
-    }
-
-    @Test
-    void returns403WithNaoAutorizadoEnvelopeForGetByIdOfAnotherOrganizador() throws Exception {
-        given(sessaoService.buscarPorId(anyLong(), anyString())).willThrow(new SessaoNaoPertenceAoOrganizadorException());
-
-        mockMvc.perform(get("/api/sessoes/100")
-                        .principal(new UsernamePasswordAuthenticationToken("organizador@rolo35.com.br", null)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }
 
     @Test

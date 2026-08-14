@@ -21,7 +21,7 @@ describe('GerenciarSessoesPage', () => {
   });
 
   it('shows a loading state while sessions are being fetched', () => {
-    vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockReturnValue(new Promise(() => {}));
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockReturnValue(new Promise(() => {}));
 
     renderPage();
 
@@ -29,23 +29,23 @@ describe('GerenciarSessoesPage', () => {
   });
 
   it('shows an empty-list message when the organizador has no sessions', async () => {
-    vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockResolvedValue([]);
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([]);
 
     renderPage();
 
-    expect(await screen.findByText(/ainda não criou nenhuma sessão/i)).toBeInTheDocument();
+    expect(await screen.findByText(/nenhuma sessão cadastrada ainda/i)).toBeInTheDocument();
   });
 
   it('shows an error message when sessions fail to load', async () => {
-    vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockRejectedValue(new Error('falha de rede'));
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockRejectedValue(new Error('falha de rede'));
 
     renderPage();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar suas sessões/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível carregar as sessões/i);
   });
 
   it('opens the inline edit form for editable sessions and keeps locked ones out of reach', async () => {
-    vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockResolvedValue([
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([
       {
         id: 1,
         salaId: 1,
@@ -84,7 +84,7 @@ describe('GerenciarSessoesPage', () => {
   });
 
   it('leaves the edit form after cancelling, back to the creation form', async () => {
-    vi.spyOn(sessoesApi, 'listarMinhasSessoes').mockResolvedValue([
+    vi.spyOn(sessoesApi, 'listarSessoesParaGestao').mockResolvedValue([
       {
         id: 1,
         salaId: 1,
@@ -108,7 +108,7 @@ describe('GerenciarSessoesPage', () => {
 
   it('retries loading sessions when the retry button is clicked', async () => {
     const spy = vi
-      .spyOn(sessoesApi, 'listarMinhasSessoes')
+      .spyOn(sessoesApi, 'listarSessoesParaGestao')
       .mockRejectedValueOnce(new Error('falha de rede'))
       .mockResolvedValueOnce([]);
     const user = userEvent.setup();
@@ -118,7 +118,7 @@ describe('GerenciarSessoesPage', () => {
     await screen.findByRole('alert');
     await user.click(screen.getByRole('button', { name: /tentar novamente/i }));
 
-    expect(await screen.findByText(/ainda não criou nenhuma sessão/i)).toBeInTheDocument();
+    expect(await screen.findByText(/nenhuma sessão cadastrada ainda/i)).toBeInTheDocument();
     expect(spy).toHaveBeenCalledTimes(2);
   });
 });

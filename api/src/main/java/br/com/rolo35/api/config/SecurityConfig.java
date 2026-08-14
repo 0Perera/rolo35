@@ -57,7 +57,7 @@ public class SecurityConfig {
                         .permitAll()
                         // Matcher próprio (não amplia o path exato acima): libera só o mapa de
                         // assentos de uma sessão específica. Ampliar pra /api/sessoes/** vazaria
-                        // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/minhas.
+                        // GET /api/sessoes/{id} (gestão, ORGANIZADOR) e /api/sessoes/gestao.
                         .requestMatchers(HttpMethod.GET, "/api/sessoes/*/mapa-assentos")
                         .permitAll()
                         // O filtro de sala da vitrine é tão público quanto a vitrine: é esta rota

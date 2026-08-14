@@ -121,38 +121,49 @@ class SessaoGestaoRepositoryTest {
         assertThat(sessaoRepository.existeIngressoConfirmado(sessao.id())).isTrue();
     }
 
+    // CAP-1: a listagem de gestão é do cinema, não de quem criou a sessão. A sessão criada aqui é
+    // reatribuída a um segundo organizador justamente pra provar que ela continua aparecendo — com
+    // o filtro antigo por organizador_id, este teste falharia.
     @Test
-    void findByOrganizadorIdTrazSoAsProprias() {
+    void findParaGestaoTrazSessaoDeQualquerOrganizador() {
         Long salaId = salaRepository.findAll().get(0).getId();
-        var propria = sessaoService.criar(
+        var sessao = sessaoService.criar(
                 requestEm(salaId, TITULO, LocalDateTime.now().plusDays(153).withNano(0)), ORGANIZADOR);
+        jdbcTemplate.update(
+                "UPDATE sessoes SET organizador_id = ? WHERE id = ?", outroOrganizadorId(), sessao.id());
 
-        List<SessaoGestaoProjection> minhas = sessaoRepository.findByOrganizadorId(usuarioRepository
-                .findByEmail(ORGANIZADOR)
-                .orElseThrow()
-                .getId());
+        List<SessaoGestaoProjection> gestao = sessaoRepository.findParaGestao();
 
-        assertThat(minhas).anySatisfy(p -> {
-            assertThat(p.getId()).isEqualTo(propria.id());
+        assertThat(gestao).anySatisfy(p -> {
+            assertThat(p.getId()).isEqualTo(sessao.id());
             assertThat(p.getTitulo()).isEqualTo(TITULO);
             assertThat(p.getEditavel()).isTrue();
         });
     }
 
     @Test
-    void findByOrganizadorIdMarcaEditavelFalseQuandoHaIngressoConfirmado() {
+    void findParaGestaoMarcaEditavelFalseQuandoHaIngressoConfirmado() {
         Long salaId = salaRepository.findAll().get(0).getId();
         var sessao = sessaoService.criar(
                 requestEm(salaId, TITULO_COM_INGRESSO, LocalDateTime.now().plusDays(154).withNano(0)), ORGANIZADOR);
         confirmaIngressoPara(sessao.id());
 
-        List<SessaoGestaoProjection> minhas = sessaoRepository.findByOrganizadorId(usuarioRepository
-                .findByEmail(ORGANIZADOR)
-                .orElseThrow()
-                .getId());
+        List<SessaoGestaoProjection> gestao = sessaoRepository.findParaGestao();
 
-        assertThat(minhas)
+        assertThat(gestao)
                 .filteredOn(p -> TITULO_COM_INGRESSO.equals(p.getTitulo()))
                 .allSatisfy(p -> assertThat(p.getEditavel()).isFalse());
+    }
+
+    /**
+     * Segundo organizador criado sob demanda: o seed traz um só, e sem um segundo não dá pra
+     * distinguir "traz todas" de "traz as minhas". Fica no banco depois do teste — é uma linha em
+     * {@code usuarios} com e-mail único, sem efeito sobre os outros casos.
+     */
+    private Long outroOrganizadorId() {
+        String email = "organizador-" + UUID.randomUUID() + "@rolo35.com.br";
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO usuarios (nome, email, senha_hash, papel) VALUES (?, ?, 'x', 'ORGANIZADOR') RETURNING id",
+                Long.class, "Outro Organizador", email);
     }
 }

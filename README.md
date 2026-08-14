@@ -297,8 +297,8 @@ local: `http://localhost:8080`. Autenticação via `Authorization: Bearer <token
 | `GET` | `/api/salas` | autenticado | Salas disponíveis para criar sessão |
 | `POST` | `/api/sessoes` | `ORGANIZADOR` | Cria sessão (valida data futura e conflito de sala) |
 | `GET` | `/api/sessoes` | **público** | Sessões futuras publicadas, com marcação de esgotada |
-| `GET` | `/api/sessoes/minhas` | `ORGANIZADOR` | Sessões do próprio organizador |
-| `GET` | `/api/sessoes/{id}` | `ORGANIZADOR` | Sessão para gestão (só do dono) |
+| `GET` | `/api/sessoes/gestao` | `ORGANIZADOR` | Agenda de gestão do cinema (todas as sessões) |
+| `GET` | `/api/sessoes/{id}` | `ORGANIZADOR` | Sessão para gestão |
 | `PUT` | `/api/sessoes/{id}` | `ORGANIZADOR` | Edita sessão (bloqueado após venda) |
 | `GET` | `/api/sessoes/{id}/mapa-assentos` | **público** | Mapa com status por assento, sem identidade |
 | `POST` | `/api/reservas` | `CLIENTE` | Cria hold de 1–6 assentos por 10 min |
@@ -314,7 +314,7 @@ Envelope de erro: `{ "codigo": "SESSAO_CONFLITANTE", "mensagem": "..." }`.
 |---|---|---|
 | `CREDENCIAIS_INVALIDAS` | 401 | E-mail ou senha inválidos |
 | `NAO_AUTENTICADO` | 401 | Token ausente/inválido, ou usuário do token não existe mais |
-| `NAO_AUTORIZADO` | 403 | Papel errado, ou recurso de outro dono |
+| `NAO_AUTORIZADO` | 403 | Papel errado, ou reserva/ingresso de outro cliente |
 | `PARAMETRO_INVALIDO` / `CORPO_INVALIDO` | 400 | Validação de entrada |
 | `DATA_HORA_NO_PASSADO` | 400 | Sessão no passado |
 | `SESSAO_NAO_ENCONTRADA` / `SALA_NAO_ENCONTRADA` / `INGRESSO_NAO_ENCONTRADO` | 404 | Recurso inexistente (ou assinatura inválida, no caso do ingresso) |
@@ -448,7 +448,7 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | Três papéis fixos por conta (`ORGANIZADOR`, `CLIENTE`, `PORTARIA`), garantidos por `CHECK` no banco | Papel é dado de domínio, não string livre; o `CHECK` impede papel inventado mesmo por escrita direta no banco |
 | JWT assinado (HMAC) carregando `sub` e `papel`, com expiração de 8h | Stateless: a API não guarda sessão, o que casa com o deploy em serviço free que reinicia sozinho |
 | **Papel checado por `@PreAuthorize` no método do controller**, não por matcher de path | Uma rota nova sem anotação simplesmente não passa. Com autorização por prefixo de path, esquecer um matcher significa herdar permissão por acidente — o modo de falha é invertido, e isso importa mais que a economia de anotações |
-| Superfície pública é **allow-list explícita**: `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos`, `GET /api/ingressos/{codigo}` | Liberar `/api/sessoes/**` de uma vez vazaria `GET /api/sessoes/{id}` (gestão) e `/api/sessoes/minhas`. O matcher do mapa é por path exato justamente por isso |
+| Superfície pública é **allow-list explícita**: `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos`, `GET /api/ingressos/{codigo}` | Liberar `/api/sessoes/**` de uma vez vazaria `GET /api/sessoes/{id}` (gestão) e `/api/sessoes/gestao`. O matcher do mapa é por path exato justamente por isso |
 | Login com e-mail inexistente roda BCrypt contra um hash dummy antes de recusar | Sem isso, o tempo de resposta diferencia "e-mail não existe" de "senha errada" — enumeração de contas por *timing* |
 | E-mail é normalizado no service (`trim` + `toLowerCase(Locale.ROOT)`) antes do lookup | `=` no Postgres é case-sensitive: sem isso, o teclado do celular que capitaliza a primeira letra derruba o login com "credencial inválida". `Locale.ROOT` porque em turco `"I".toLowerCase()` vira `ı` e quebraria e-mail com I maiúsculo. No service, não no front, porque a rota atende qualquer cliente HTTP |
 | Todas as demais rotas exigem autenticação (`anyRequest().authenticated()`) | Default seguro: o que não foi liberado explicitamente está fechado |

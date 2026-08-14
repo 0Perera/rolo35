@@ -148,24 +148,24 @@ class SessaoSecurityTest {
     // Regressão explícita do risco descrito no comentário de SecurityConfig: o permitAll()
     // novo de /api/sessoes/*/mapa-assentos (Story 3.1) não pode vazar pra essa rota de gestão.
     @Test
-    void returns401WithNaoAutenticadoEnvelopeForGetMinhasWithoutAnyToken() throws Exception {
-        mockMvc.perform(get("/api/sessoes/minhas")).andExpect(status().isUnauthorized());
+    void returns401WithNaoAutenticadoEnvelopeForGetGestaoWithoutAnyToken() throws Exception {
+        mockMvc.perform(get("/api/sessoes/gestao")).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void returns200ForGetMinhasWithOrganizadorToken() throws Exception {
-        given(sessaoService.listarMinhas(anyString())).willReturn(List.of());
+    void returns200ForGetGestaoWithOrganizadorToken() throws Exception {
+        given(sessaoService.listarParaGestao(anyString())).willReturn(List.of());
         String token = jwtService.generateToken("organizador@rolo35.com.br", "ORGANIZADOR");
 
-        mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/sessoes/gestao").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void returns403WithNaoAutorizadoEnvelopeForGetMinhasWithClienteToken() throws Exception {
+    void returns403WithNaoAutorizadoEnvelopeForGetGestaoWithClienteToken() throws Exception {
         String token = jwtService.generateToken("cliente1@rolo35.com.br", "CLIENTE");
 
-        mockMvc.perform(get("/api/sessoes/minhas").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/sessoes/gestao").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("NAO_AUTORIZADO"));
     }

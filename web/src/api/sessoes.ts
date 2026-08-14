@@ -136,8 +136,9 @@ export function listarSessoesPublicadas(consulta: ConsultaSessoes = {}): Promise
   return apiFetch<Pagina<SessaoPublicada>>(`/api/sessoes${query ? `?${query}` : ''}`);
 }
 
-export function listarMinhasSessoes(): Promise<SessaoGestao[]> {
-  return apiFetch<SessaoGestao[]>('/api/sessoes/minhas');
+/** Agenda do cinema inteiro: qualquer organizador gerencia qualquer sessão. */
+export function listarSessoesParaGestao(): Promise<SessaoGestao[]> {
+  return apiFetch<SessaoGestao[]>('/api/sessoes/gestao');
 }
 
 export function buscarSessao(id: number): Promise<SessaoGestao> {

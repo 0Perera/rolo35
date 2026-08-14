@@ -29,7 +29,6 @@ import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
-import br.com.rolo35.api.sessoes.SessaoNaoPertenceAoOrganizadorException;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
@@ -506,18 +505,25 @@ class SessaoServiceTest {
                 .isInstanceOf(SessaoNaoEncontradaException.class);
     }
 
+    // CAP-1: sessão é recurso do cinema, não do organizador que a criou — qualquer ORGANIZADOR
+    // autenticado edita qualquer sessão. O campo organizador_id continua registrando a autoria, e
+    // é ele (não quem editou) que volta na resposta.
     @Test
-    void rejeitaEdicaoDeSessaoDeOutroOrganizadorSemChecarTravaOuConflito() {
+    void editaSessaoCriadaPorOutroOrganizadorPreservandoAAutoria() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         stubOrganizador();
         Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
         given(sessaoRepository.findByIdForUpdate(5L)).willReturn(Optional.of(deOutroOrganizador));
+        given(sessaoRepository.existeIngressoConfirmado(5L)).willReturn(false);
+        given(sessaoRepository.existeConflitanteExcluindo(anyLong(), any(LocalDateTime.class), any(Integer.class), anyLong()))
+                .willReturn(false);
+        given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(salaRepository.findByIdForUpdate(1L)).willReturn(Optional.of(salaCom(1L, "Sala 1", 5, 8)));
 
-        assertThatThrownBy(() -> sessaoService.editar(5L, editarRequestValido(1L), "organizador@rolo35.com.br"))
-                .isInstanceOf(SessaoNaoPertenceAoOrganizadorException.class);
+        var resposta = sessaoService.editar(5L, editarRequestValido(1L), "organizador@rolo35.com.br");
 
-        verify(sessaoRepository, never()).existeIngressoConfirmado(any());
-        verify(sessaoRepository, never()).save(any());
+        assertThat(resposta.titulo()).isEqualTo("Clube da Luta (editado)");
+        assertThat(resposta.organizadorId()).isEqualTo(99L);
     }
 
     @Test
@@ -551,12 +557,10 @@ class SessaoServiceTest {
         verify(sessaoRepository, never()).save(any());
     }
 
-    // Ownership precisa ser checado antes de validar o corpo (AC2: tentativa de editar sessão de
-    // outro organizador é sempre 403, mesmo com corpo inválido) — então a sessão já foi carregada
-    // (e o dono conferido) quando o erro de data no passado é lançado; só o lock da *sala* segue
-    // evitado, porque nada até aqui depende dela.
+    // A sessão já foi carregada (e travada) quando o erro de data no passado é lançado; só o lock
+    // da *sala* segue evitado, porque nada até aqui depende dela.
     @Test
-    void rejeitaEdicaoComDataHoraNoPassadoAposConfirmarQueSessaoEDoOrganizador() {
+    void rejeitaEdicaoComDataHoraNoPassadoSemTravarSala() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         stubOrganizador();
         Sessao existente = sessaoCom(5L, 10L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
@@ -570,11 +574,10 @@ class SessaoServiceTest {
         verify(salaRepository, never()).findByIdForUpdate(any());
     }
 
-    // AC2: tentativa de editar sessão de outro organizador é rejeitada com 403 — "mesmo sabendo o
-    // ID" e independentemente do resto do corpo estar malformado. Prova o fix: sem essa ordem, um
-    // corpo com dataHora no passado mirando sessão alheia devolveria 400 em vez de 403.
+    // Sessão de outro organizador não tem mais tratamento próprio (CAP-1): o corpo é validado
+    // igual ao de uma sessão criada por quem está editando.
     @Test
-    void rejeitaEdicaoDeSessaoDeOutroOrganizadorMesmoComDataHoraNoPassado() {
+    void rejeitaEdicaoComDataHoraNoPassadoTambemEmSessaoDeOutroOrganizador() {
         given(entityManager.createNativeQuery(any(String.class))).willReturn(query);
         stubOrganizador();
         Sessao deOutroOrganizador = sessaoCom(5L, 99L, 1L, "Clube da Luta", LocalDateTime.now().plusDays(10));
@@ -583,7 +586,7 @@ class SessaoServiceTest {
                 1L, "Clube da Luta", "sinopse", LocalDateTime.now().minusDays(1), new BigDecimal("30.00"));
 
         assertThatThrownBy(() -> sessaoService.editar(5L, request, "organizador@rolo35.com.br"))
-                .isInstanceOf(SessaoNaoPertenceAoOrganizadorException.class);
+                .isInstanceOf(DataHoraNoPassadoException.class);
     }
 
     @Test
