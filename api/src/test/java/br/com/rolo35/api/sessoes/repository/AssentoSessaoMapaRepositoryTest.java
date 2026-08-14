@@ -7,6 +7,7 @@ import br.com.rolo35.api.auth.repository.UsuarioRepository;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import java.math.BigDecimal;
@@ -109,12 +110,12 @@ class AssentoSessaoMapaRepositoryTest {
         LocalDateTime expiresPassado = LocalDateTime.now().minusMinutes(5).withNano(0);
 
         assentoSessaoRepository.saveAll(List.of(
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null),
                 new AssentoSessao(
-                        new AssentoSessaoId(sessao.getId(), a2.getId()), "RESERVADO", null, expiresFuturo),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), "VENDIDO", null, null),
+                        new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.RESERVADO, null, expiresFuturo),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), StatusAssento.VENDIDO, null, null),
                 new AssentoSessao(
-                        new AssentoSessaoId(sessao.getId(), a4.getId()), "RESERVADO", null, expiresPassado)));
+                        new AssentoSessaoId(sessao.getId(), a4.getId()), StatusAssento.RESERVADO, null, expiresPassado)));
 
         List<AssentoMapaProjection> mapa = assentoSessaoRepository.buscarMapaPorSessao(sessao.getId());
 

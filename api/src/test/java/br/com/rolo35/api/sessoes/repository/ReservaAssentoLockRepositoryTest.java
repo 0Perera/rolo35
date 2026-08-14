@@ -10,6 +10,7 @@ import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import java.math.BigDecimal;
@@ -121,10 +122,10 @@ class ReservaAssentoLockRepositoryTest {
         sessaoCriadaId = sessao.getId();
 
         assentoSessaoRepository.saveAll(List.of(
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a4.getId()), "LIVRE", null, null)));
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a4.getId()), StatusAssento.LIVRE, null, null)));
 
         List<Long> idsFornaOrdemDecrescente = List.of(a3.getId(), a1.getId());
         List<AssentoSessao> travados =
@@ -150,9 +151,9 @@ class ReservaAssentoLockRepositoryTest {
         sessaoCriadaId = sessao.getId();
 
         assentoSessaoRepository.saveAll(List.of(
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), "LIVRE", null, null)));
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), StatusAssento.LIVRE, null, null)));
 
         LocalDateTime expiraEm = LocalDateTime.now().plusMinutes(10).withNano(0);
         Reserva reserva = reservaRepository.save(
@@ -177,15 +178,15 @@ class ReservaAssentoLockRepositoryTest {
                 .findFirst()
                 .orElseThrow();
 
-        assertThat(linhaA1.getStatus()).isEqualTo("RESERVADO");
+        assertThat(linhaA1.getStatus()).isEqualTo(StatusAssento.RESERVADO);
         assertThat(linhaA1.getReservaId()).isEqualTo(reserva.getId());
         assertThat(linhaA1.getExpiresAt()).isEqualTo(expiraEm);
 
-        assertThat(linhaA2.getStatus()).isEqualTo("RESERVADO");
+        assertThat(linhaA2.getStatus()).isEqualTo(StatusAssento.RESERVADO);
         assertThat(linhaA2.getReservaId()).isEqualTo(reserva.getId());
         assertThat(linhaA2.getExpiresAt()).isEqualTo(expiraEm);
 
-        assertThat(linhaA3.getStatus()).isEqualTo("LIVRE");
+        assertThat(linhaA3.getStatus()).isEqualTo(StatusAssento.LIVRE);
         assertThat(linhaA3.getReservaId()).isNull();
         assertThat(linhaA3.getExpiresAt()).isNull();
     }
@@ -210,8 +211,8 @@ class ReservaAssentoLockRepositoryTest {
                 null, organizadorId, sessao.getId(), StatusReserva.CONFIRMADA, Instant.now(),
                 LocalDateTime.now().minusMinutes(30)));
         assentoSessaoRepository.saveAll(List.of(
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "VENDIDO", reservaVendida.getId(), null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null)));
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.VENDIDO, reservaVendida.getId(), null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.LIVRE, null, null)));
 
         LocalDateTime expiraEm = LocalDateTime.now().plusMinutes(10).withNano(0);
         Reserva reservaNova = reservaRepository.save(
@@ -229,7 +230,7 @@ class ReservaAssentoLockRepositoryTest {
                 .filter(a -> a.getId().getAssentoId().equals(a1.getId()))
                 .findFirst()
                 .orElseThrow();
-        assertThat(linhaA1.getStatus()).isEqualTo("VENDIDO");
+        assertThat(linhaA1.getStatus()).isEqualTo(StatusAssento.VENDIDO);
         assertThat(linhaA1.getReservaId()).isEqualTo(reservaVendida.getId());
     }
 
@@ -253,9 +254,9 @@ class ReservaAssentoLockRepositoryTest {
         // Salvos fora de ordem de assento_id de propósito, pra provar que o ORDER BY da query
         // é quem garante a ordem, não a ordem de inserção.
         assentoSessaoRepository.saveAll(List.of(
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null),
-                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), "LIVRE", null, null)));
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a3.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null),
+                new AssentoSessao(new AssentoSessaoId(sessao.getId(), a2.getId()), StatusAssento.LIVRE, null, null)));
 
         List<AssentoSessao> travados = assentoSessaoRepository.travarPorSessao(sessao.getId());
 

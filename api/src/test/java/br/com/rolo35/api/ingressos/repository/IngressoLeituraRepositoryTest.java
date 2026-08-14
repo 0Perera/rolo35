@@ -12,6 +12,7 @@ import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -231,7 +232,7 @@ class IngressoLeituraRepositoryTest {
     private void mapeiaNaSessao(Long sessaoId, Assento... assentos) {
         for (Assento assento : assentos) {
             assentoSessaoRepository.save(
-                    new AssentoSessao(new AssentoSessaoId(sessaoId, assento.getId()), "VENDIDO", null, null));
+                    new AssentoSessao(new AssentoSessaoId(sessaoId, assento.getId()), StatusAssento.VENDIDO, null, null));
         }
     }
 

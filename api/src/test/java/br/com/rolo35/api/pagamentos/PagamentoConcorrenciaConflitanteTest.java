@@ -16,6 +16,7 @@ import br.com.rolo35.api.reservas.service.ReservaService;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -129,7 +130,7 @@ class PagamentoConcorrenciaConflitanteTest {
         sessao = sessaoRepository.save(sessao);
         sessaoCriadaId = sessao.getId();
 
-        assentoSessaoRepository.save(new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null));
+        assentoSessaoRepository.save(new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null));
 
         ReservaDto reservaCriada =
                 reservaService.reservar(new ReservarAssentosRequest(sessao.getId(), List.of(a1.getId())), CLIENTE);
@@ -166,10 +167,10 @@ class PagamentoConcorrenciaConflitanteTest {
 
         if (resultado1.status() == br.com.rolo35.api.reservas.StatusReserva.CONFIRMADA) {
             assertThat(ingressosDaReserva).hasSize(1);
-            assertThat(linhas).allSatisfy(linha -> assertThat(linha.getStatus()).isEqualTo("VENDIDO"));
+            assertThat(linhas).allSatisfy(linha -> assertThat(linha.getStatus()).isEqualTo(StatusAssento.VENDIDO));
         } else {
             assertThat(ingressosDaReserva).isEmpty();
-            assertThat(linhas).allSatisfy(linha -> assertThat(linha.getStatus()).isEqualTo("LIVRE"));
+            assertThat(linhas).allSatisfy(linha -> assertThat(linha.getStatus()).isEqualTo(StatusAssento.LIVRE));
         }
     }
 }

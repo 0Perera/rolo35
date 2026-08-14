@@ -146,9 +146,9 @@ public class ReservaService {
     // Duplica a regra de TTL lazy já usada em SessaoService.statusEfetivo (AD-4) em vez de
     // importar o método privado de lá — reservas depende de sessoes, nunca o inverso (AD-1).
     private boolean statusEfetivoLivre(AssentoSessao assento, LocalDateTime agora) {
-        boolean holdVencido = StatusAssento.RESERVADO.name().equals(assento.getStatus())
+        boolean holdVencido = assento.getStatus() == StatusAssento.RESERVADO
                 && assento.getExpiresAt() != null
                 && assento.getExpiresAt().isBefore(agora);
-        return holdVencido || StatusAssento.LIVRE.name().equals(assento.getStatus());
+        return holdVencido || assento.getStatus() == StatusAssento.LIVRE;
     }
 }

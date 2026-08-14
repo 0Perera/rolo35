@@ -26,6 +26,7 @@ import br.com.rolo35.api.reservas.dto.ReservarAssentosRequest;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.ReservaCheckoutProjection;
@@ -86,11 +87,11 @@ class ReservaServiceTest {
     }
 
     private AssentoSessao assentoLivre(Long assentoId) {
-        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), "LIVRE", null, null);
+        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), StatusAssento.LIVRE, null, null);
     }
 
     private AssentoSessao assentoReservado(Long assentoId, LocalDateTime expiresAt) {
-        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), "RESERVADO", 42L, expiresAt);
+        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), StatusAssento.RESERVADO, 42L, expiresAt);
     }
 
     private void stubEntityManager() {

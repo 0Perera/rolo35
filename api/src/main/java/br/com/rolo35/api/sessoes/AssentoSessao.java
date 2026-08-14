@@ -3,6 +3,8 @@ package br.com.rolo35.api.sessoes;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
@@ -21,8 +23,12 @@ public class AssentoSessao implements Persistable<AssentoSessaoId> {
     @EmbeddedId
     private AssentoSessaoId id;
 
+    // O enum já existia (StatusAssento) e a coluna já é CHECK-ada pros mesmos três valores no
+    // schema — só o campo continuava String, então cada comparação virava .name().equals() e
+    // qualquer literal errado passava batido até o banco recusar. Agora o compilador cobra.
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String status;
+    private StatusAssento status;
 
     @Column(name = "reserva_id")
     private Long reservaId;
@@ -37,7 +43,7 @@ public class AssentoSessao implements Persistable<AssentoSessaoId> {
     @Transient
     private boolean novo;
 
-    public AssentoSessao(AssentoSessaoId id, String status, Long reservaId, LocalDateTime expiresAt) {
+    public AssentoSessao(AssentoSessaoId id, StatusAssento status, Long reservaId, LocalDateTime expiresAt) {
         this.id = id;
         this.status = status;
         this.reservaId = reservaId;

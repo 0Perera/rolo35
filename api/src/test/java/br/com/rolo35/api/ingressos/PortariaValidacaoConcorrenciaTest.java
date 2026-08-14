@@ -19,6 +19,7 @@ import br.com.rolo35.api.reservas.service.ReservaService;
 import br.com.rolo35.api.sessoes.Assento;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.Sala;
 import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.repository.AssentoRepository;
@@ -146,7 +147,7 @@ class PortariaValidacaoConcorrenciaTest {
         sessao = sessaoRepository.save(sessao);
         sessaoCriadaId = sessao.getId();
 
-        assentoSessaoRepository.save(new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), "LIVRE", null, null));
+        assentoSessaoRepository.save(new AssentoSessao(new AssentoSessaoId(sessao.getId(), a1.getId()), StatusAssento.LIVRE, null, null));
 
         ReservaDto reservaCriada =
                 reservaService.reservar(new ReservarAssentosRequest(sessao.getId(), List.of(a1.getId())), CLIENTE);

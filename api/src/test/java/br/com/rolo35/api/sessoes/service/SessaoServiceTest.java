@@ -31,6 +31,7 @@ import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
 import br.com.rolo35.api.sessoes.repository.AssentoMapaProjection;
@@ -159,7 +160,7 @@ class SessaoServiceTest {
         ArgumentCaptor<List<br.com.rolo35.api.sessoes.AssentoSessao>> captor = ArgumentCaptor.forClass(List.class);
         verify(assentoSessaoRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(40);
-        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo("LIVRE"));
+        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo(StatusAssento.LIVRE));
     }
 
     // A capacidade anunciada tem que sair do mapa de assentos de fato cadastrado (AC1), não do
@@ -433,7 +434,7 @@ class SessaoServiceTest {
                 .willReturn(false);
         given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
-        AssentoSessao linhaAntiga = new AssentoSessao(new AssentoSessaoId(5L, 1L), "LIVRE", null, null);
+        AssentoSessao linhaAntiga = new AssentoSessao(new AssentoSessaoId(5L, 1L), StatusAssento.LIVRE, null, null);
         given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(linhaAntiga));
 
         var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");
@@ -444,7 +445,7 @@ class SessaoServiceTest {
         ArgumentCaptor<List<AssentoSessao>> captor = ArgumentCaptor.forClass(List.class);
         verify(assentoSessaoRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(12);
-        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo("LIVRE"));
+        assertThat(captor.getValue()).allSatisfy(as -> assertThat(as.getStatus()).isEqualTo(StatusAssento.LIVRE));
     }
 
     // Dívida obrigatória do review da Story 2.2 (deferred-work.md): trocar de sala com um hold
@@ -461,7 +462,7 @@ class SessaoServiceTest {
         given(sessaoRepository.existeConflitanteExcluindo(eq(2L), any(LocalDateTime.class), any(Integer.class), eq(5L)))
                 .willReturn(false);
         AssentoSessao holdAtivo =
-                new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().plusMinutes(5));
+                new AssentoSessao(new AssentoSessaoId(5L, 1L), StatusAssento.RESERVADO, 42L, LocalDateTime.now().plusMinutes(5));
         given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(holdAtivo));
 
         assertThatThrownBy(() -> sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br"))
@@ -486,7 +487,7 @@ class SessaoServiceTest {
         given(sessaoRepository.save(any(Sessao.class))).willAnswer(invocation -> invocation.getArgument(0));
         given(assentoRepository.findBySalaId(2L)).willReturn(mapaDeAssentos(3, 4));
         AssentoSessao holdVencido =
-                new AssentoSessao(new AssentoSessaoId(5L, 1L), "RESERVADO", 42L, LocalDateTime.now().minusMinutes(1));
+                new AssentoSessao(new AssentoSessaoId(5L, 1L), StatusAssento.RESERVADO, 42L, LocalDateTime.now().minusMinutes(1));
         given(assentoSessaoRepository.travarPorSessao(5L)).willReturn(List.of(holdVencido));
 
         var resposta = sessaoService.editar(5L, editarRequestValido(2L), "organizador@rolo35.com.br");

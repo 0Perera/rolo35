@@ -27,6 +27,7 @@ import br.com.rolo35.api.reservas.StatusReserva;
 import br.com.rolo35.api.reservas.repository.ReservaRepository;
 import br.com.rolo35.api.sessoes.AssentoSessao;
 import br.com.rolo35.api.sessoes.AssentoSessaoId;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.SessaoJaComecouException;
 import br.com.rolo35.api.sessoes.repository.AssentoSessaoRepository;
 import br.com.rolo35.api.sessoes.repository.SessaoRepository;
@@ -101,7 +102,7 @@ class PagamentoServiceTest {
     }
 
     private AssentoSessao assentoDaReserva(Long assentoId) {
-        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), "RESERVADO", RESERVA_ID, LocalDateTime.now().plusMinutes(5));
+        return new AssentoSessao(new AssentoSessaoId(SESSAO_ID, assentoId), StatusAssento.RESERVADO, RESERVA_ID, LocalDateTime.now().plusMinutes(5));
     }
 
     @Test

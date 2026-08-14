@@ -18,6 +18,7 @@ import br.com.rolo35.api.sessoes.Sessao;
 import br.com.rolo35.api.sessoes.SessaoComIngressoConfirmadoException;
 import br.com.rolo35.api.sessoes.SessaoConflitanteException;
 import br.com.rolo35.api.sessoes.SessaoNaoEncontradaException;
+import br.com.rolo35.api.sessoes.StatusAssento;
 import br.com.rolo35.api.sessoes.dto.AssentoMapaDto;
 import br.com.rolo35.api.sessoes.dto.CriarSessaoRequest;
 import br.com.rolo35.api.sessoes.dto.EditarSessaoRequest;
@@ -45,8 +46,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class SessaoService {
 
     private static final int BUFFER_MINUTOS = 240;
-    private static final String STATUS_LIVRE = "LIVRE";
-    private static final String STATUS_RESERVADO = "RESERVADO";
 
     private final SalaRepository salaRepository;
     private final AssentoRepository assentoRepository;
@@ -113,7 +112,7 @@ public class SessaoService {
 
         List<AssentoSessao> assentoSessoes = assentos.stream()
                 .map(assento -> new AssentoSessao(
-                        new AssentoSessaoId(sessaoSalva.getId(), assento.getId()), STATUS_LIVRE, null, null))
+                        new AssentoSessaoId(sessaoSalva.getId(), assento.getId()), StatusAssento.LIVRE, null, null))
                 .toList();
         assentoSessaoRepository.saveAll(assentoSessoes);
 
@@ -168,7 +167,7 @@ public class SessaoService {
                 throw new SalaSemAssentosException();
             }
             List<AssentoSessao> assentoSessoes = assentos.stream()
-                    .map(assento -> new AssentoSessao(new AssentoSessaoId(id, assento.getId()), STATUS_LIVRE, null, null))
+                    .map(assento -> new AssentoSessao(new AssentoSessaoId(id, assento.getId()), StatusAssento.LIVRE, null, null))
                     .toList();
             assentoSessaoRepository.saveAll(assentoSessoes);
             capacidade = assentos.size();
@@ -270,16 +269,18 @@ public class SessaoService {
     }
 
     private String statusEfetivo(AssentoMapaProjection projecao, LocalDateTime agora) {
-        boolean holdVencido = STATUS_RESERVADO.equals(projecao.getStatus())
+        // A projeção vem de query nativa, então aqui o status ainda é o texto cru da coluna — o
+        // enum entra na borda, comparando pelo name().
+        boolean holdVencido = StatusAssento.RESERVADO.name().equals(projecao.getStatus())
                 && projecao.getExpiresAt() != null
                 && projecao.getExpiresAt().isBefore(agora);
-        return holdVencido ? STATUS_LIVRE : projecao.getStatus();
+        return holdVencido ? StatusAssento.LIVRE.name() : projecao.getStatus();
     }
 
     // Mesma regra de TTL lazy (AD-4) de statusEfetivo, aplicada a AssentoSessao em vez da
     // projeção de leitura: hold vencido não é hold ativo, uma nova reserva pode reivindicar.
     private boolean holdAtivo(AssentoSessao assento, LocalDateTime agora) {
-        return STATUS_RESERVADO.equals(assento.getStatus())
+        return assento.getStatus() == StatusAssento.RESERVADO
                 && assento.getExpiresAt() != null
                 && !assento.getExpiresAt().isBefore(agora);
     }
