@@ -362,6 +362,12 @@ Decisões de tema que não são enfeite:
 
 - **Textura faz parte do sistema**, não é polimento opcional: scanline fixa sobre a viewport, grão e
   *flicker* de tubo. É o que separa "tema aplicado" de "cor trocada".
+- **Só a portaria é escura, e isso é sobre onde ela é usada.** As telas de público rodam sobre papel
+  claro; as duas telas de portaria usam `PageShell variant="terminal"`, com fundo `ink-950` e sem a
+  grade de papel. A validação acontece na entrada da sala, com a luz já baixa e o filme começando:
+  jogar uma tela clara na cara de quem confere ingresso ali machuca o olho e ainda estoura a visão
+  adaptada ao escuro. Fundo escuro também deixa o veredito (`VALIDO`, `JA_UTILIZADO`) ser a coisa
+  mais brilhante em cena, que é a única informação que importa naquele momento.
 - **Cartões em "painel de quadrinho"**: borda preta de 3px com sombra deslocada, sem blur, decisão
   estética que também dá contraste alto de graça.
 - **Cor de acento por filme derivada de hash do `tmdbId`**, não de um campo no banco: cada filme
