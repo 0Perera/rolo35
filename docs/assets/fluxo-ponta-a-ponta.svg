@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" width="920" height="600" role="img" aria-label="Fluxo ponta a ponta: organizador busca filme e cria sessão; cliente vê em cartaz, abre o mapa de assentos, cria hold de 10 minutos, paga de forma simulada e recebe ingresso com QR e link público; portaria seleciona a sessão do turno e valida o código (ainda não implementado)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 600" width="920" height="600" role="img" aria-label="Fluxo ponta a ponta: organizador busca filme e cria sessão; cliente vê em cartaz, abre o mapa de assentos, cria hold de 10 minutos, paga de forma simulada e recebe ingresso com QR e link público; portaria seleciona a sessão do turno e valida o código">
   <defs>
     <linearGradient id="chama" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#E32B21"/>
@@ -115,19 +115,19 @@
   <rect x="28" y="482" width="864" height="80" rx="4" fill="#171219" stroke="#F4E9D4" stroke-opacity="0.08"/>
   <rect x="40" y="448" width="132" height="24" fill="#7ED9F2"/>
   <text x="52" y="465" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="2" fill="#0C0910">PORTARIA</text>
-  <rect x="182" y="448" width="286" height="24" fill="none" stroke="#E32B21" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="194" y="465" font-family="'Courier New', monospace" font-size="14" font-weight="700" letter-spacing="1" fill="#E32B21">AINDA NÃO IMPLEMENTADO</text>
 
-  <g opacity="0.62">
-    <rect x="40" y="494" width="250" height="56" fill="#F4E9D4" fill-opacity="0.28" stroke="#F4E9D4" stroke-width="3" stroke-dasharray="8 5"/>
-    <text x="165" y="516" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#F4E9D4">SESSÃO DO TURNO</text>
-    <text x="165" y="536" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.8">selecionada antes de validar</text>
+  <g>
+    <rect x="45" y="499" width="250" height="56" fill="#7ED9F2"/>
+    <rect x="40" y="494" width="250" height="56" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="165" y="516" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">SESSÃO DO TURNO</text>
+    <text x="165" y="536" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">selecionada antes de validar</text>
   </g>
-  <line x1="296" y1="522" x2="334" y2="522" stroke="#7ED9F2" stroke-width="3" stroke-dasharray="6 4" marker-end="url(#setaCiano)"/>
-  <g opacity="0.62">
-    <rect x="340" y="494" width="280" height="56" fill="#F4E9D4" fill-opacity="0.28" stroke="#F4E9D4" stroke-width="3" stroke-dasharray="8 5"/>
-    <text x="480" y="516" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#F4E9D4">VALIDA O CÓDIGO</text>
-    <text x="480" y="536" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#F4E9D4" fill-opacity="0.8">válido · usado · evento errado</text>
+  <line x1="296" y1="522" x2="334" y2="522" stroke="#7ED9F2" stroke-width="3" marker-end="url(#setaCiano)"/>
+  <g>
+    <rect x="345" y="499" width="280" height="56" fill="#7ED9F2"/>
+    <rect x="340" y="494" width="280" height="56" fill="#F4E9D4" stroke="#0C0910" stroke-width="3"/>
+    <text x="480" y="516" text-anchor="middle" font-family="'Archivo', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#0C0910">VALIDA O CÓDIGO</text>
+    <text x="480" y="536" text-anchor="middle" font-family="'Courier New', monospace" font-size="13" fill="#171219" fill-opacity="0.7">válido · usado · evento errado</text>
   </g>
 
   <!-- ingresso -> portaria -->
