@@ -69,7 +69,7 @@ export function CardDeFilme({ filme }: { filme: FilmeAgrupado }) {
       </p>
 
       <Link to={`/filmes/${filme.tmdbId}`} className={buttonClass('ticket', 'mt-auto w-full')}>
-        🎟 {esgotado ? 'VER SESSÕES' : 'COMPRAR INGRESSO'}
+        {esgotado ? 'VER SESSÕES' : 'COMPRAR INGRESSO'}
       </Link>
     </article>
   );
