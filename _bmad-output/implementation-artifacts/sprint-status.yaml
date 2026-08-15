@@ -1,5 +1,5 @@
 # generated: 2026-08-10
-# last_updated: 2026-08-10 (Story 2.3 → done, code review concluído)
+# last_updated: 2026-08-15 (fechamento: todas as stories dos 5 épicos em done)
 # project: rolo35
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,25 +41,37 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-08-10
-last_updated: '2026-08-14 (Story 1.3 → review, implementada no branch story-1-3-cadastro-de-usuario a partir de main — cadastro multi-papel ponta a ponta, back-end e tela. Code review concluído: 8 achados corrigidos (o crítico era e-mail duplicado em corrida devolvendo 500 em vez de 409) e 7 deferidos. Suítes completas verdes, 300 testes no back e 160 no front. Epic 5 fechado: corrigido o único action item crítico restante — selecionarSessao() sem janela de tempo server-side, non-negotiable de autorização — e descartados os demais como [Review][Defer] em deferred-work.md. Story 5.3 marcada done sem story file/code review formal próprios; ver nota em deferred-work.md. correct-course adicionou FR-21 e Story 5.3 ao Epic 5 e a Story 2.4 ao Epic 2 — paginação e busca server-side revisam o contrato de GET /api/sessoes fechado pela 2.3.)'
+last_updated: >-
+  2026-08-15. Fechamento do sprint: os 5 épicos e todas as suas stories em done.
+  As duas últimas pendências viraram código e foram verificadas nesta data.
+  Story 1.3, cadastro multi-papel ponta a ponta, back-end e tela; o code review
+  corrigiu 8 achados (o crítico era e-mail duplicado em corrida devolvendo 500 em
+  vez de 409) e deferiu 7. Story 2.4, paginação e busca server-side em
+  GET /api/sessoes e /api/sessoes/gestao, com os parâmetros q, tmdbId, salaId,
+  pagina e tamanho, e a listagem do front consumindo PaginaDto.
+  Ressalva de processo mantida por honestidade: as Stories 2.4 e 5.3 foram
+  implementadas sem story file nem code review formal próprios, sob pressão de
+  prazo; ver nota em deferred-work.md. Elas entraram pelo correct-course de
+  2026-08-13, que também adicionou FR-21 ao PRD.
 project: rolo35
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 
 development_status:
-  epic-1: in-progress
-  1-1-fundacao-e-login-com-papel-fixo: in-progress
+  epic-1: done
+  1-1-fundacao-e-login-com-papel-fixo: done
   1-2-busca-de-filmes-via-proxy-tmdb: done
-  1-3-cadastro-de-usuario: review
+  1-3-cadastro-de-usuario: done
   epic-1-retrospective: optional
 
-  # Reaberto pela Story 2.4 — a paginação revisa o contrato de GET /api/sessoes fechado na 2.3.
-  epic-2: in-progress
+  # Reaberto pela Story 2.4 (paginação revisa o contrato de GET /api/sessoes fechado na 2.3) e
+  # fechado de novo quando ela entrou. A 2.4 não tem story file próprio: ver deferred-work.md.
+  epic-2: done
   2-1-criacao-de-sessao-com-bloqueio-de-conflito-de-horario: done
   2-2-edicao-de-sessao-com-trava-pos-venda: done
   2-3-listagem-publica-de-sessoes: done
-  2-4-listagem-publica-paginada-e-com-busca: review
+  2-4-listagem-publica-paginada-e-com-busca: done
   epic-2-retrospective: optional
 
   epic-3: done

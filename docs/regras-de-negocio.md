@@ -35,12 +35,15 @@ implementadas estão marcadas explicitamente como pendentes.
   comentário no código).
 - **Superfície pública é allowlist explícita, não por prefixo amplo**:
   `POST /api/auth/login`, `POST /api/auth/cadastro`, `GET /actuator/health`,
-  `GET /api/sessoes` e `GET /api/sessoes/{id}/mapa-assentos` são as rotas sem
-  autenticação (`POST /api/auth/cadastro` é público porque quem cria conta ainda
-  não tem token, e a Story 1.3 decidiu não gatear a escolha de papel);
+  `GET /api/salas`, `GET /api/sessoes`, `GET /api/sessoes/{id}/mapa-assentos` e
+  `GET /api/ingressos/{codigo}` são as rotas sem autenticação (`POST
+  /api/auth/cadastro` é público porque quem cria conta ainda não tem token, e a
+  Story 1.3 decidiu não gatear a escolha de papel; `GET /api/salas` é público
+  porque monta o filtro de sala da vitrine, e `SalaResumoDto` só traz id, nome e
+  capacidade — nada que já não apareça em cada card da listagem pública);
   o matcher do mapa de assentos é por path exato (`/api/sessoes/*/mapa-assentos`)
   para não vazar `GET /api/sessoes/{id}` (gestão, só ORGANIZADOR) nem
-  `GET /api/sessoes/gestao` (`SecurityConfig.java:48-57`).
+  `GET /api/sessoes/gestao` (`SecurityConfig.java:62-68`).
 - **Toda outra rota exige autenticação** (`anyRequest().authenticated()`,
   `SecurityConfig.java:57-58`).
 - **`POST /api/auth/cadastro` tem teto por endereço de origem**: 5 tentativas por
@@ -116,6 +119,14 @@ implementadas estão marcadas explicitamente como pendentes.
   reportado como `LIVRE` no mapa de assentos, calculado on-read a cada
   chamada — não existe job que reescreve o status no banco
   (`SessaoService.statusEfetivo`, `SessaoService.java:246-251`).
+- **O mapa de assentos reconhece o hold de quem pergunta**: quando a rota é
+  chamada com um token válido, o assento `RESERVADO` pelo próprio cliente
+  autenticado volta como `MEU_HOLD` em vez de `RESERVADO` — status de leitura
+  só, a coluna `assento_sessao.status` continua restrita por `CHECK` a
+  `LIVRE`/`RESERVADO`/`VENDIDO` e nada persiste o valor novo. A ordem importa:
+  hold vencido vira `LIVRE` antes de checar de quem ele é, senão um hold já
+  derrubado pelo TTL lazy continuaria parecendo do dono (`SessaoService.mapaAssentos`,
+  `SessaoService.statusEfetivo`, `SessaoService.java:283-332`).
 
 ## Reservas (`reservas`)
 
@@ -153,6 +164,15 @@ implementadas estão marcadas explicitamente como pendentes.
   status/`expires_at` no `WHERE` e devolve linhas afetadas, mesmo o service já
   tendo checado — um call site futuro que pule a checagem não sobrescreve
   assento vendido em silêncio (`AssentoSessaoRepository.java:41-58`).
+- **Reservar de novo na mesma sessão cancela o hold anterior do próprio
+  cliente**: antes de travar os assentos novos, `recolherHoldAnterior` libera
+  os assentos de qualquer reserva `ATIVA` que esse cliente já tinha naquela
+  sessão e marca a reserva antiga como `CANCELADA` — estado próprio,
+  `V14__reserva_cancelada.sql`, distinto de `RECUSADA` (que é desfecho de
+  pagamento com tentativa de verdade). Sem isso, quem voltava do checkout pra
+  trocar de assento saía segurando dois conjuntos, e o abandonado ficava
+  bloqueado pra todo mundo até o TTL de 10min vencer
+  (`ReservaService.recolherHoldAnterior`, `ReservaService.java:124-130`).
 
 ### Leitura da reserva para o checkout (Story 4.3)
 
@@ -280,6 +300,19 @@ implementadas estão marcadas explicitamente como pendentes.
   `uq_ingressos_reserva_assento UNIQUE (reserva_id, assento_id)`
   (`V8__backstops_ingressos.sql`) — backstop de banco pro mesmo invariante que
   `PagamentoService.confirmar()` já garante por construção.
+- **Código curto de portaria é único e indexado**: `ingressos.codigo_curto`,
+  `UNIQUE INDEX idx_ingressos_codigo_curto` (`V11__codigo_curto_ingresso.sql`) —
+  é o critério de busca da validação manual; dois iguais liberariam a poltrona
+  errada.
+- **Sessão ativa do turno é tabela própria, não coluna em `usuarios`**:
+  `turno_portaria (usuario_id PK/FK usuarios, sessao_id FK sessoes,
+  selecionado_em)` (`V6__turno_portaria.sql`) — uma linha por operador de
+  portaria, reselecionar é `UPDATE` na mesma linha; ausência de linha é o
+  estado natural "nenhuma sessão selecionada ainda", sem precisar de coluna
+  nullable em `usuarios`.
+- **Reserva abandonada tem status próprio**: `CHECK` de `reservas.status`
+  ganhou `CANCELADA` (`V14__reserva_cancelada.sql`), ao lado de
+  `ATIVA`/`CONFIRMADA`/`RECUSADA` — ver regra em Reservas acima.
 
 ## Portaria (épico 5, implementado)
 
@@ -321,6 +354,13 @@ abaixo:
   `JANELA_TURNO_DEPOIS_HORAS`), separadas do buffer de 4h do conflito de sala —
   conceitos diferentes. A tela repete o motivo da recusa em
   `SelecaoTurnoPortariaPage`, senão o operador tenta a mesma sessão pra sempre.
+  **A regra em si não muda entre ambientes** — só o valor operacional: local
+  (`docker-compose.yml`) e produção (`render.yaml`) sobem com
+  `PORTARIA_JANELA_ANTES_MINUTOS=20160` (14 dias) em vez do default `30`,
+  porque o seed nasce com sessões vários dias no futuro e, no default, nenhuma
+  seria selecionável — o fluxo da portaria ficaria inexercitável sem esperar o
+  relógio. A suíte de testes continua cobrindo os defaults de produção real
+  (`30`/`2`), não o valor alargado.
 
 Os achados de revisão adversarial sobre as regras **já implementadas** estão em
 `_bmad-output/implementation-artifacts/business-rules-gaps.md`. Todos foram
