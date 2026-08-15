@@ -23,6 +23,19 @@ Resposta ao **Desafio Elite Dev** da Verzel. O enunciado deixou explícito que o
 volume de tela, e sim como as decisões foram tomadas: este README existe pra isso. Cada regra de
 negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
 
+## Aplicação publicada
+
+| | |
+|---|---|
+| **Aplicação** | **https://rolo35-web.onrender.com** |
+| API | https://rolo35-api.onrender.com |
+| Documentação da API (Swagger UI) | https://rolo35-api.onrender.com/swagger-ui/index.html |
+
+As credenciais dos quatro perfis semeados estão em [4. Dados de teste](#4-dados-de-teste) — o banco
+já sobe com organizador, dois clientes, portaria e nove sessões em cartaz, então dá pra percorrer o
+fluxo inteiro sem cadastrar nada. Detalhes de infraestrutura e limites do plano contratado em
+[3.7](#37-deploy-e-notas-de-operação).
+
 ---
 
 ## Sumário
@@ -164,7 +177,7 @@ local.
 | `TMDB_API_TOKEN` | raiz | Token v4 do TMDb, usado só pelo back-end |
 | `CORS_ALLOWED_ORIGINS` | raiz | Allow-list de origens da API (default: `http://localhost:5173`) |
 | `TZ` | raiz | Fuso da JVM e do Postgres — **obrigatória**, veja o aviso abaixo |
-| `PORTARIA_JANELA_ANTES_MINUTOS` / `PORTARIA_JANELA_DEPOIS_HORAS` | raiz | Janela em que a portaria pode ativar uma sessão como turno (defaults: `30` e `2`). O compose já sobe alargado — sem isso nenhuma sessão do seed é selecionável, veja abaixo |
+| `PORTARIA_JANELA_ANTES_MINUTOS` / `PORTARIA_JANELA_DEPOIS_HORAS` | raiz | Janela em que a portaria pode ativar uma sessão como turno (defaults: `30` e `2`). O compose já sobe alargado — sem isso nenhuma sessão do seed é selecionável, veja abaixo. O blueprint do Render fixa o mesmo valor, pelo mesmo motivo ([3.7](#37-deploy-e-notas-de-operação)) |
 | `VITE_API_URL` | raiz | URL da API consumida pela SPA. Lida em tempo de **build** (o Vite inlina no bundle), então mudá-la exige `docker compose up -d --build web` — restart não basta. Fica na raiz porque é de lá que o `docker-compose.yml` a lê como build arg; `web/.env` só vale pro `vite dev` |
 
 > ⚠️ **`TZ` é obrigatória, inclusive no deploy.** `sessoes.data_hora` é wall-clock sem fuso: o
@@ -241,8 +254,9 @@ front, Web Service (Docker) pra API e Postgres gerenciado — em *Blueprints →
 Instance*, apontando pro repositório. Substituiu o arranjo anterior de API no Render + front na
 Vercel: duas contas, dois deploys e duas origens pra manter em sincronia por CORS.
 
-**A aplicação não está publicada no momento desta escrita** — o Docker Compose ([3.2](#32-subir-a-aplicação-inteira))
-é o caminho garantido de execução.
+**A aplicação está no ar** — front em <https://rolo35-web.onrender.com>, API em
+<https://rolo35-api.onrender.com>. O Docker Compose ([3.2](#32-subir-a-aplicação-inteira)) continua
+sendo o caminho de execução local, e não depende de nada disso.
 
 Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard, depois dele):
 
@@ -252,7 +266,7 @@ Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard,
   está em uso, então chutar no arquivo seria pior do que preencher com a URL real. `VITE_API_URL` é
   lida em tempo de build (o Vite inlina no bundle), então trocá-la exige redeploy do front.
 
-Notas de operação, para quando a publicação acontecer:
+Notas de operação:
 
 - **A API roda no plano `starter`, não no free, e a diferença é de CPU.** Medido num container com
   as restrições do free (0.1 vCPU, 512 MB), o Spring Boot leva **179s** pra subir: o trabalho de
@@ -267,6 +281,15 @@ Notas de operação, para quando a publicação acontecer:
 - `TZ=America/Sao_Paulo` já vai fixada no blueprint. Ela não é cosmética: além do wall-clock de
   `sessoes.data_hora`, o `now()` que a listagem pública e o guard de reserva comparam vem do fuso da
   sessão JDBC, que o driver deriva do fuso da JVM (ver [3.4](#34-variáveis-de-ambiente)).
+- **`PORTARIA_JANELA_ANTES_MINUTOS=20160` também vai fixada**, pelo mesmo motivo que o compose a
+  alarga — e aqui ela é ainda mais necessária. A portaria só ativa como sessão do turno uma sessão
+  dentro da janela em volta do horário dela, e o default é `-30min/+2h`; como todo o seed nasce
+  entre 7 e 13 dias à frente, com o default **nenhuma sessão semeada é selecionável e o fluxo da
+  portaria fica inacessível na aplicação publicada**. Isso não é hipótese: o primeiro deploy subiu
+  sem a variável e respondia `SESSAO_FORA_DA_JANELA_DO_TURNO` pra qualquer sessão do seed. A regra
+  continua existindo no código e continua testada nos defaults pela suíte — o que muda é o valor de
+  operação deste ambiente, que é uma demonstração, e regra que ninguém consegue exercitar não
+  demonstra nada.
 
 ---
 
@@ -956,7 +979,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 |---|---|
 | **Janela de seleção da sessão do turno** | Resolvido: `PortariaService.selecionarSessao()` agora recusa sessão fora da janela `-30min/+2h` em volta do horário, com `SESSAO_FORA_DA_JANELA_DO_TURNO`. A constante é própria, separada do buffer de 4h de conflito de sala — são conceitos diferentes. O que continua fora é uma tela dedicada de "sessões em andamento agora": o seletor ainda parte da listagem pública |
 | **Autocadastro com papel selecionável** | Entregue, e com uma consequência que prefiro declarar a esconder: `POST /api/auth/cadastro` é público (quem cria conta ainda não tem token) e aceita o papel no corpo, então qualquer visitante pode criar uma conta `ORGANIZADOR` ou `PORTARIA`. Foi escolha consciente — é o que torna as três telas avaliáveis sem seed manual — mas o CAP-1 tirou o *ownership* de sessão, que era o que limitava o estrago de uma conta dessas às sessões que ela própria tivesse criado. Num produto real o cadastro público criaria só `CLIENTE`, e staff viria por convite |
-| **Aplicação publicada** | Não publicada no momento desta escrita. O blueprint `render.yaml` está pronto e sobe os três serviços — ver [3.7 Deploy e notas de operação](#37-deploy-e-notas-de-operação) |
+| **Aplicação publicada** | Entregue: os três serviços estão no ar pelo blueprint `render.yaml`, endereços no topo deste README. Uma ressalva que prefiro declarar — o Postgres é do plano free e **expira** numa data fixada pelo Render, então o link tem prazo de validade que não depende do código. Quando isso acontecer, o Docker Compose ([3.2](#32-subir-a-aplicação-inteira)) continua subindo tudo com um comando |
 
 ### Dívida técnica que eu reconheço como dívida
 
@@ -966,6 +989,7 @@ Declarado com honestidade, como o enunciado pede. Nada aqui é surpresa: tudo es
 | Pacotes do back-end organizados só por subdomínio, sem camada | `sessoes` mistura entidade, exceção, DTO e serviço no mesmo pacote, e `portaria` vive dentro de `ingressos` apesar de ser outro subdomínio. Reorganizar agora seria um diff enorme em cima de código verde, no último dia de prazo — decisão explícita de **não** mexer, e não descuido |
 | Sem rotação do secret HMAC | Se o secret precisar trocar, todo ingresso emitido (inclusive links públicos, que não expiram) vira inválido de uma vez, sem janela de migração. Secret versionado com validação dupla é o fix correto e não caberia no prazo |
 | Cadastro de salas pela interface | Salas vêm do seed; criar sala pela UI foi adiado por falta de design, e o organizador tem 3 salas prontas pra usar |
+| Telas sem *skeleton*: cada uma nasce em `loading` e pinta um "Carregando…" até o dado chegar | Não se vê rodando local, onde a resposta chega em ~10ms — o quadro de carregamento existe, mas nunca é desenhado. Em produção o TTFB medido de `GET /api/sessoes` ficou entre 271ms e 758ms, então esse quadro passa a ser sempre desenhado e cada troca de tela dá uma piscada. Não é lentidão de consulta: é o custo normal de SPA falando com API remota (rede, TLS, proxy), e as chamadas da listagem já são paralelas, sem waterfall a remover. A `ListagemSessoesPage` faz o certo — mantém hero e grade na tela e só escurece a grade enquanto recarrega; replicar isso nas outras telas é refatoração página a página, que eu não faço em cima de código verde no último dia |
 
 ### Fora de escopo por decisão (o enunciado dispensa)
 

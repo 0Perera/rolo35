@@ -80,6 +80,20 @@ services:
       # URL do rolo35-web, preenchida depois do primeiro apply.
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      # Mesmo alargamento que o docker-compose usa, e pelo mesmo motivo — aqui ele é ainda mais
+      # necessário. A portaria só ativa como "sessão do turno" uma sessão dentro da janela em volta
+      # do horário dela, e o default é -30min/+2h; como todo o seed nasce entre 7 e 13 dias à
+      # frente, com o default nenhuma sessão semeada é selecionável e o fluxo da portaria fica
+      # inacessível na aplicação publicada — verificado no primeiro deploy, que respondia
+      # SESSAO_FORA_DA_JANELA_DO_TURNO pra qualquer sessão do seed.
+      #
+      # A regra não deixa de existir: ela continua no código e continua testada nos defaults pela
+      # suíte. O que muda é o valor de operação deste ambiente, que é uma demonstração — e regra
+      # que ninguém consegue exercitar não demonstra nada.
+      - key: PORTARIA_JANELA_ANTES_MINUTOS
+        value: "20160"
+      - key: PORTARIA_JANELA_DEPOIS_HORAS
+        value: "2"
 
   - type: web
     name: rolo35-web
