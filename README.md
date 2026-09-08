@@ -18,9 +18,21 @@ sessões a partir do catálogo do TMDb, o cliente escolhe o assento num mapa de 
 simulada e recebe um ingresso com código assinado e link público de compartilhamento, e a portaria
 valida esse ingresso na entrada.
 
-Resposta ao **Desafio Elite Dev** da Verzel. O enunciado deixou explícito que o que interessa não é
-volume de tela, e sim como as decisões foram tomadas: este README existe pra isso. Cada regra de
-negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
+Este projeto demonstra:
+
+- **Concorrência resolvida no banco**: locks pessimistas garantem que nenhum assento é vendido duas
+  vezes nem nenhum ingresso é validado duas vezes, provado sob concorrência real com threads.
+- **Autorização por papéis**: organizador, cliente e portaria, cada rota checada por
+  `@PreAuthorize` no controller.
+- **Testes de integração com Testcontainers**: os cenários de concorrência sobem um Postgres real,
+  não mock.
+- **Deploy em nuvem**: front, API e banco rodaram juntos no Render, publicados via blueprint. A demo
+  não está mais no ar hoje; o que ficou é o aprendizado de infraestrutura, registrado em
+  [3.6](#36-deploy-histórico).
+
+Construído em **7 dias corridos**, como exercício de decisão sob prazo apertado: o que interessa não
+é volume de tela, e sim como as decisões foram tomadas, e é isso que este README documenta. Cada
+regra de negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
 
 ## Sumário
 
@@ -32,7 +44,7 @@ negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
   - [3.3 Variáveis de ambiente](#33-variáveis-de-ambiente)
   - [3.4 Banco de dados, migrations e seed](#34-banco-de-dados-migrations-e-seed)
   - [3.5 Rodar os testes](#35-rodar-os-testes)
-  - [3.6 Deploy e notas de operação](#36-deploy-e-notas-de-operação)
+  - [3.6 Deploy (histórico)](#36-deploy-histórico)
 - [4. Dados de teste](#4-dados-de-teste)
 - [5. Identidade visual](#5-identidade-visual)
 - [6. Arquitetura](#6-arquitetura)
@@ -53,22 +65,8 @@ negócio abaixo vem com o *por quê* e com o arquivo onde ela mora.
 - [14. Principais decisões técnicas e trade-offs](#14-principais-decisões-técnicas-e-trade-offs)
 - [15. Uso de IA](#15-uso-de-ia)
 - [16. Dívida técnica e o que ficou de fora](#16-dívida-técnica-e-o-que-ficou-de-fora)
-- [17. Mapa do repositório](#17-mapa-do-repositório)
-
----
-
-## Aplicação publicada
-
-| | |
-|---|---|
-| **Aplicação** | **https://rolo35-web.onrender.com** |
-| API | https://rolo35-api.onrender.com |
-| Documentação da API (Swagger UI) | https://rolo35-api.onrender.com/swagger-ui/index.html |
-
-As credenciais dos quatro perfis semeados estão em [4. Dados de teste](#4-dados-de-teste): o banco
-já sobe com organizador, dois clientes, portaria e nove sessões em cartaz, então dá pra percorrer o
-fluxo inteiro sem cadastrar nada. Detalhes de infraestrutura e limites do plano contratado em
-[3.6](#36-deploy-e-notas-de-operação).
+- [17. Autoavaliação após os 7 dias](#17-autoavaliação-após-os-7-dias)
+- [18. Mapa do repositório](#18-mapa-do-repositório)
 
 ---
 
@@ -79,27 +77,28 @@ em cartaz, abre o mapa de assentos, cria um hold de 10 minutos, paga de forma si
 ingresso com código HMAC e link público; a portaria seleciona a sessão do turno e valida o
 código](docs/assets/fluxo-ponta-a-ponta.svg)
 
-A escolha de domínio dentro do enunciado foi **cinema com mapa de assentos** (não pista por
-quantidade): é o caminho onde os dois invariantes difíceis do desafio (não vender o mesmo lugar
-duas vezes e não validar o mesmo ingresso duas vezes) ficam realmente expostos, em vez de virarem
-um decremento de contador.
+A escolha de domínio foi **cinema com mapa de assentos** (não pista por quantidade): é o caminho
+onde os dois invariantes difíceis de concorrência (não vender o mesmo lugar duas vezes e não
+validar o mesmo ingresso duas vezes) ficam realmente expostos, em vez de virarem um decremento de
+contador.
 
 O TMDb entra só como **catálogo de metadado do filme** (título, pôster, sinopse, estreia). Sessão,
 sala, mapa de assentos, preço e capacidade são modelo de domínio próprio: o TMDb não tem esse
 conceito.
 
 O escopo também ficou restrito a **um cinema único, com várias salas**, em vez de uma plataforma
-multi-cinema com vários endereços. Foi corte deliberado, não limitação técnica: modelar múltiplos
-cinemas abriria uma segunda dimensão de autorização (organizador × cinema × sala) sem agregar valor
-real ao que o enunciado pede, só multiplicando a superfície de bugs de posse numa área que já exige
-cuidado. Reduzir esse escopo foi o que sobrou de tempo pra investir de propósito na arquitetura e no
-desenvolvimento do sistema em si, e não em generalizar pra um caso que ninguém pediu.
+multi-cinema com vários endereços. Foi corte deliberado para caber em 7 dias, não limitação técnica:
+modelar múltiplos cinemas abriria uma segunda dimensão de autorização (organizador × cinema × sala)
+sem agregar valor real ao problema que o projeto se propõe a resolver, só multiplicando a superfície
+de bugs de posse numa área que já exige cuidado. Esse foi o corte certo porque manteve o tempo
+disponível investido de propósito na arquitetura e no desenvolvimento do sistema em si, e não em
+generalizar pra um caso que ninguém ia usar.
 
 ---
 
 ## 2. Estado da entrega
 
-O desafio tem prazo de 7 dias e foi construído em fatias verticais testadas, épico por épico. Este
+O prazo era de 7 dias corridos; o projeto foi construído em fatias verticais testadas, épico por épico. Este
 é o estado real do código nesta branch. **O fluxo fecha ponta a ponta pela interface: buscar sessão →
 escolher assento → pagar → receber o ingresso com QR → compartilhar o link → validar na portaria.**
 
@@ -163,7 +162,7 @@ manual de banco.
 | `TMDB_API_TOKEN` | raiz | Token v4 do TMDb, usado só pelo back-end |
 | `CORS_ALLOWED_ORIGINS` | raiz | Allow-list de origens da API (default: `http://localhost:5173`) |
 | `TZ` | raiz | Fuso da JVM e do Postgres. **Obrigatória**, veja o aviso abaixo |
-| `PORTARIA_JANELA_ANTES_MINUTOS` / `PORTARIA_JANELA_DEPOIS_HORAS` | raiz | Janela em que a portaria pode ativar uma sessão como turno (defaults: `30` e `2`). O compose já sobe alargado: sem isso nenhuma sessão do seed é selecionável, veja abaixo. O blueprint do Render fixa o mesmo valor, pelo mesmo motivo ([3.6](#36-deploy-e-notas-de-operação)) |
+| `PORTARIA_JANELA_ANTES_MINUTOS` / `PORTARIA_JANELA_DEPOIS_HORAS` | raiz | Janela em que a portaria pode ativar uma sessão como turno (defaults: `30` e `2`). O compose já sobe alargado: sem isso nenhuma sessão do seed é selecionável, veja abaixo. O blueprint do Render fixava o mesmo valor, pelo mesmo motivo ([3.6](#36-deploy-histórico)) |
 | `VITE_API_URL` | raiz | URL da API consumida pela SPA. Lida em tempo de **build** (o Vite inlina no bundle), então mudá-la exige `docker compose up -d --build web`; restart não basta. Fica na raiz porque é de lá que o `docker-compose.yml` a lê como build arg; `web/.env` só vale pro `vite dev` |
 
 > ⚠️ **`TZ` é obrigatória, inclusive no deploy.** `sessoes.data_hora` é wall-clock sem fuso: o
@@ -188,7 +187,7 @@ manual de banco.
 | `V6__turno_portaria.sql` | Tabela `turno_portaria` (sessão ativa por operador) |
 | `V7__indice_ingressos_por_sessao.sql` | Índice de `ingressos.sessao_id` para o painel do turno |
 | `V8__backstops_ingressos.sql` | FK composta de `ingressos` contra `assento_sessao` e `UNIQUE (reserva_id, assento_id)` |
-| `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3` |
+| `V9__remove_indice_sessoes_sala_id.sql` | Remove índice redundante desde a `V3`, pelo critério de [12. Performance: índices e N+1](#12-performance-índices-e-n1) |
 | `V10__seed_mais_sessoes.sql` | Mais 5 sessões publicadas, com dois filmes em mais de um horário |
 | `V11__codigo_curto_ingresso.sql` | Coluna `codigo_curto` do ingresso, única e indexada |
 | `V12__horario_redondo_sessao_do_seed.sql` | Arredonda a sessão da `V2`, que nascia no minuto exato do boot |
@@ -223,18 +222,20 @@ cd web && npm test        # front-end (Vitest + Testing Library)
 Os testes de integração sobem um Postgres real via Testcontainers, com `withReuse(true)` para não
 recriar o container em cada rodada.
 
-### 3.6 Deploy e notas de operação
+### 3.6 Deploy (histórico)
 
-`render.yaml` na raiz é um **blueprint** que sobe os três serviços numa conta só (Static Site pro
-front, Web Service (Docker) pra API e Postgres gerenciado), em *Blueprints → New Blueprint
-Instance*, apontando pro repositório. Substituiu o arranjo anterior de API no Render + front na
-Vercel: duas contas, dois deploys e duas origens pra manter em sincronia por CORS.
+O projeto foi publicado no Render durante o desenvolvimento, para ser avaliado sem exigir setup
+local: um `render.yaml` na raiz funcionava como **blueprint**, subindo os três serviços numa conta
+só (Static Site pro front, Web Service (Docker) pra API e Postgres gerenciado), em *Blueprints →
+New Blueprint Instance*, apontando pro repositório. Substituiu o arranjo anterior de API no Render +
+front na Vercel: duas contas, dois deploys e duas origens pra manter em sincronia por CORS.
 
-**A aplicação está no ar**: front em <https://rolo35-web.onrender.com>, API em
-<https://rolo35-api.onrender.com>. O Docker Compose ([3.2](#32-subir-a-aplicação-inteira)) continua
-sendo o caminho de execução local, e não depende de nada disso.
+**A demo não está mais no ar**, e o `render.yaml` foi removido do repositório junto com a saída de
+ar. O caminho de execução é o Docker Compose ([3.2](#32-subir-a-aplicação-inteira)), que nunca
+dependeu do deploy. As notas abaixo ficam registradas porque são aprendizado de infraestrutura, não
+porque descrevem um ambiente ativo.
 
-Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard, depois dele):
+Valores que o blueprint não tinha como derivar e pedia no apply (ou no dashboard, depois dele):
 
 - `TMDB_API_TOKEN`: segredo, nunca versionado.
 - `CORS_ALLOWED_ORIGINS` na API e `VITE_API_URL` no front: cada um precisa da URL do outro. São
@@ -242,9 +243,9 @@ Dois valores o blueprint não tem como derivar e pede no apply (ou no dashboard,
   está em uso, então chutar no arquivo seria pior do que preencher com a URL real. `VITE_API_URL` é
   lida em tempo de build (o Vite inlina no bundle), então trocá-la exige redeploy do front.
 
-Notas de operação:
+Notas de operação, do período em que a aplicação esteve no ar:
 
-- **A API roda no plano `starter`, não no free, e a diferença é de CPU.** Medido num container com
+- **A API rodava no plano `starter`, não no free, e a diferença é de CPU.** Medido num container com
   as restrições do free (0.1 vCPU, 512 MB), o Spring Boot leva **179s** pra subir: o trabalho de
   startup é quase todo CPU-bound e single-thread (carga de classes em modo interpretado, metamodel
   do Hibernate, springdoc varrendo os controllers), então a 10% de um core cada etapa custa dezenas
@@ -252,18 +253,18 @@ Notas de operação:
   requisição depois de qualquer pausa estourava o timeout de 90s do cliente HTTP do front. O
   `starter` dá 0.5 vCPU (~36s de boot) e **não dorme**, então o cold start deixa de existir em vez
   de só encurtar. A RAM é a mesma (512 MB) e já era folgada: o teste estabilizou em 318 MB.
-- **O front não dorme em nenhum plano**: Static Site é CDN, então a aplicação abre na hora.
+- **O front não dormia em nenhum plano**: Static Site é CDN, então a aplicação abria na hora.
 - O Postgres free expira depois de um período; o prazo aparece no dashboard ao criar o banco.
-- `TZ=America/Sao_Paulo` já vai fixada no blueprint. Ela não é cosmética: além do wall-clock de
+- `TZ=America/Sao_Paulo` estava fixada no blueprint. Não era cosmético: além do wall-clock de
   `sessoes.data_hora`, o `now()` que a listagem pública e o guard de reserva comparam vem do fuso da
   sessão JDBC, que o driver deriva do fuso da JVM (ver [3.3](#33-variáveis-de-ambiente)).
-- **`PORTARIA_JANELA_ANTES_MINUTOS=20160` também vai fixada**, pelo mesmo motivo que o compose a
+- **`PORTARIA_JANELA_ANTES_MINUTOS=20160` também estava fixada**, pelo mesmo motivo que o compose a
   alarga. Todo o seed nasce entre 7 e 13 dias à frente, então com o default de `-30min/+2h` (a regra
   e o porquê dela estão em [9.7](#97-portaria)) **nenhuma sessão semeada seria selecionável e o fluxo
-  da portaria ficaria inacessível na aplicação publicada**. Não é hipótese: o primeiro deploy subiu
+  da portaria ficaria inacessível na aplicação publicada**. Não foi hipótese: o primeiro deploy subiu
   sem a variável e respondia `SESSAO_FORA_DA_JANELA_DO_TURNO` pra qualquer sessão do seed. A regra
-  continua no código e continua testada nos defaults pela suíte; o que muda é o valor de operação
-  deste ambiente, que é uma demonstração, e regra que ninguém consegue exercitar não demonstra nada.
+  continua no código e continua testada nos defaults pela suíte; o que mudava era só o valor de
+  operação daquele ambiente, e regra que ninguém consegue exercitar não demonstra nada.
 
 ---
 
@@ -304,14 +305,14 @@ seed respeita o buffer de 4h que a aplicação aplica.
 
 ## 5. Identidade visual
 
-O enunciado pediu explicitamente pra fugir da interface genérica que sai pronta de qualquer prompt.
-A direção escolhida é **cinema de rua dos anos 80/90**: TV de tubo, fita VHS, cartaz de locadora. O
-nome vem do rolo de película 35mm.
+Fugir da interface genérica que sai pronta de qualquer prompt foi decisão deliberada. A direção
+escolhida é **cinema de rua dos anos 80/90**: TV de tubo, fita VHS, cartaz de locadora. O nome vem
+do rolo de película 35mm.
 
 **Como o nome e o tema chegaram aqui**
 
-Como o enunciado pedia para fugir do AI Slop, decidi sair da minha zona de conforto e investir meu
-tempo no design para criar algo único. Todo o processo de criação deu início através da busca por um
+Decidi sair da minha zona de conforto e investir meu tempo no design para fugir do AI Slop e criar
+algo único. Todo o processo de criação deu início através da busca por um
 nome: eu queria algo que carregasse uma identidade e pudesse servir de inspiração para um tema
 futuro. Depois de várias sugestões de IA e pesquisas por referências, me vi em um impasse entre dois
 nomes com identidades distintas e únicas: **Kineo** e **Rolo 35**.
@@ -390,7 +391,6 @@ rolo35/
 ├── api/                  Spring Boot 4.1 · Java 21 · JPA · Flyway · Spring Security
 ├── web/                  Vite + React 19 + TypeScript estrito + Tailwind 4
 ├── docker-compose.yml    Postgres + API + front (execução local, um comando)
-├── render.yaml           Blueprint do deploy: os mesmos três serviços no Render
 ├── docs/                 decisions.md · regras-de-negocio.md · assets/
 └── _bmad-output/         Artefatos de processo: brief, PRD, arquitetura, épicos, stories
 ```
@@ -568,11 +568,11 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 | Sala sem assento cadastrado não pode virar sessão (`409 SALA_SEM_ASSENTOS`) | Sessão sem mapa é sessão que não pode ser reservada: falha cedo, não na primeira compra |
 | Data/hora no passado é rejeitada, na criação e na edição | Regra óbvia de domínio; virou teste porque o bug de fuso a fazia disparar em horário válido |
 | **Conflito de horário na sala com buffer de 4h**, checado nos dois sentidos | Sessão de cinema ocupa a sala por um tempo, e o domínio não tem coluna de duração. Um buffer fixo de 4h aproxima "filme + limpeza + intervalo" sem inventar campo. O intervalo é aberto: exatamente 4h depois **não** conflita, e há teste na fronteira |
-| **Sessão é recurso do cinema, não do organizador que a criou**: qualquer `ORGANIZADOR` autenticado vê e edita qualquer sessão | O enunciado especifica um organizador seedado, sem isolamento entre contas. `sessoes.organizador_id` continua registrando a autoria e volta na resposta da edição, mas não restringe mais quem edita: a equipe é compartilhada, como numa bilheteria de verdade |
+| **Sessão é recurso do cinema, não do organizador que a criou**: qualquer `ORGANIZADOR` autenticado vê e edita qualquer sessão | Modelo escolhido é de equipe compartilhada, não de contas isoladas, como numa bilheteria de verdade. `sessoes.organizador_id` continua registrando a autoria e volta na resposta da edição, mas não restringe mais quem edita |
 | Sessão com ≥1 ingresso confirmado **trava todos os campos**, sem exceção | Preço, horário e sala são o contrato de quem já comprou. Permitir editar "só o pôster" abre a discussão de qual campo é inofensivo; a trava total não abre |
 | Trocar de sala numa edição reconstrói o mapa de assentos do zero | Só é seguro porque o passo anterior já provou que não há ingresso confirmado: nenhum estado de venda real se perde |
 | Listagem pública mostra só sessões futuras, e **sessão esgotada continua aparecendo**, marcada | Esgotado é informação, não ausência: sumir da lista faz o usuário achar que a sessão não existe |
-| Sem coluna `publicada`/rascunho | Publicar viraria um segundo estado a manter e testar por um ganho que o desafio não pede. Sessão criada já é sessão publicada |
+| Sem coluna `publicada`/rascunho | Publicar viraria um segundo estado a manter e testar sem ganho real para o escopo do projeto. Sessão criada já é sessão publicada |
 
 ### 9.4 Reserva de assentos
 
@@ -596,12 +596,12 @@ motivo de existir. O levantamento vivo, com número de linha, fica em
 
 | Regra | Por quê |
 |---|---|
-| Endpoint interno determinístico: `resultadoSimulado: APROVADO \| RECUSADO` no corpo | O enunciado pede confirmação **e** recusa. Um parâmetro no corpo torna os dois caminhos testáveis sem depender de sandbox de terceiro, e sem query string que vaze em log de acesso |
+| Endpoint interno determinístico: `resultadoSimulado: APROVADO \| RECUSADO` no corpo | O fluxo de pagamento precisa cobrir os dois desfechos, confirmação **e** recusa. Um parâmetro no corpo torna os dois caminhos testáveis sem depender de sandbox de terceiro, e sem query string que vaze em log de acesso |
 | Aprovado: reserva vira `CONFIRMADA`, assentos viram `VENDIDO`, sai 1 ingresso por assento | `VENDIDO` é estado final: não expira, não volta a `LIVRE` |
 | Recusado: reserva vira `RECUSADA` e os assentos são liberados **na hora**, sem esperar o TTL | Recusa é informação definitiva. Deixar o assento preso 10 min depois de uma recusa é desperdiçar estoque por preguiça de escrever |
 | Confirmar reserva de outro cliente e confirmar reserva inexistente devolvem **a mesma resposta** | Diferenciar os dois transformaria o endpoint em oráculo de existência de `reservaId` |
 | Reserva expirada responde `409 RESERVA_EXPIRADA` | O hold é uma promessa com prazo; honrar depois do prazo é vender um assento que já pode ter sido vendido |
-| Os campos de cartão existem na tela, são obrigatórios e validados no cliente, e **nenhum dado deles sai do navegador** | O corpo enviado é só `{reservaId, resultadoSimulado}`: nada de cartão em requisição, storage, cookie ou log. A simulação precisa parecer real para o avaliador sem criar um dado sensível que o sistema não tem por que guardar |
+| Os campos de cartão existem na tela, são obrigatórios e validados no cliente, e **nenhum dado deles sai do navegador** | O corpo enviado é só `{reservaId, resultadoSimulado}`: nada de cartão em requisição, storage, cookie ou log. A simulação precisa exercitar o fluxo de pagamento por inteiro, tela e validação incluídas, sem criar um dado sensível que o sistema não tem por que guardar |
 | Confirmação é **idempotente**: reserva que não está mais `ATIVA` devolve `200` com o estado que já é verdade, sem reprocessar | Duplo clique e retry de rede são normais. Reprocessar o parâmetro simulado deixaria o resultado depender de quem chegou por último |
 
 ### 9.6 Ingresso, QR e link público
@@ -631,7 +631,7 @@ Requisitos FR-17 a FR-20, **implementados**. As regras que valem:
 - A sessão só pode ser ativada como turno dentro de uma janela em volta do próprio horário
   (`-30min/+2h`, `409 SESSAO_FORA_DA_JANELA_DO_TURNO` fora dela): ativar a sessão errada faria a
   fila inteira ser recusada com ingresso legítimo na mão. Detalhes de operação em
-  [3.6](#36-deploy-e-notas-de-operação).
+  [3.6](#36-deploy-histórico).
 - A validação devolve **exatamente um** de: `VALIDO`, `INVALIDO`, `JA_UTILIZADO`, `EVENTO_ERRADO`,
   como `200` com campo `resultado`, não como erro HTTP, pelo mesmo raciocínio do pagamento: os
   quatro são respostas de negócio, e a tela precisa tratar as quatro igual.
@@ -646,7 +646,7 @@ Requisitos FR-17 a FR-20, **implementados**. As regras que valem:
 
 ## 10. Concorrência: os invariantes que não podem quebrar
 
-O enunciado pede duas garantias de unicidade. Elas foram tratadas como problema de banco, não de
+O domínio exige duas garantias de unicidade. Elas foram tratadas como problema de banco, não de
 aplicação, e cada uma tem teste com **threads reais** contra Postgres via Testcontainers.
 
 | Invariante | Mecanismo | Teste |
@@ -673,12 +673,10 @@ Dois detalhes que só aparecem lendo o código:
 - **Segredos só em variável de ambiente**, sem fallback no código: `JWT_SECRET`,
   `TICKET_HMAC_SECRET`, `TMDB_API_TOKEN`, credenciais de banco. `.env` está no `.gitignore`;
   `.env.example` versionado tem só placeholders.
-- **Nenhuma resposta serializa entidade JPA**: DTO explícito por endpoint. `senha_hash` não tem por
-  onde escapar.
+- **Nenhum dado sensível escapa por resposta**: DTO explícito por endpoint (sem `senha_hash`) e mapa
+  de assentos sem identidade de quem reservou, ambos detalhados em [6. Arquitetura](#6-arquitetura).
 - **Autorização sempre no back-end**, em toda requisição. Esconder botão ou rota no front nunca é
   controle de acesso: o front só decide o que desenhar.
-- **Mapa de assentos não revela identidade**: mostra `LIVRE`/`RESERVADO`/`VENDIDO`, nunca quem
-  reservou.
 - **Código curto do ingresso é credencial de balcão, não de internet**, e é uma redução de
   segurança assumida de propósito: 8 caracteres Base32 Crockford são 40 bits **sem assinatura**,
   mais fracos que o HMAC por construção. Ele vale exclusivamente em
@@ -690,16 +688,17 @@ Dois detalhes que só aparecem lendo o código:
   código assinado; o que mudou é que o curto passou a ser o único impresso no canhoto e o que o
   botão de copiar entrega. Mitigação pendente, declarada em `deferred-work.md`: essa rota ainda
   não tem rate limit.
-- **Respostas que não viram oráculo**: reserva de outro cliente ≡ reserva inexistente; ingresso
-  inexistente ≡ assinatura inválida; login de e-mail inexistente equalizado em tempo com senha
-  errada.
-- **Dado de cartão não existe no sistema**: os campos do checkout são validados no cliente e
-  descartados ali. O corpo do pagamento é só `{reservaId, resultadoSimulado}`: nada de cartão em
-  requisição, `localStorage`, cookie ou log.
+- **Respostas que não viram oráculo**, princípio aplicado em várias rotas (detalhes em
+  [9.1](#91-autenticação-e-autorização), [9.4](#94-reserva-de-assentos),
+  [9.5](#95-pagamento-simulado) e [9.6](#96-ingresso-qr-e-link-público)): existência de recurso
+  alheio, e-mail cadastrado e assinatura de ingresso nunca são diferenciáveis de "não encontrado" ou
+  "inválido".
+- **Dado de cartão não existe no sistema** (ver [9.5](#95-pagamento-simulado)): o corpo do pagamento
+  é só `{reservaId, resultadoSimulado}`, sem cartão em requisição, storage, cookie ou log.
 - **CORS por allow-list** de origem (`CORS_ALLOWED_ORIGINS`), sem `allowCredentials`.
-- **Token no `localStorage`**: escolha consciente. A SPA fica em domínio diferente da API, então
-  cookie exigiria CORS com credencial + proteção CSRF. O trade-off é exposição a XSS, mitigado por
-  React escapando conteúdo por padrão e por nenhum ponto do código usar `dangerouslySetInnerHTML`.
+- **Token no `localStorage`**: risco assumido de exposição a XSS, mitigado por React escapando
+  conteúdo por padrão e por nenhum ponto do código usar `dangerouslySetInnerHTML`. A razão de não
+  usar cookie está em [6. Arquitetura](#6-arquitetura).
 
 ---
 
@@ -754,40 +753,27 @@ vazia e erro. Os três são requisito do projeto, e cada um deles tem cobertura 
 
 O registro completo, decisão por decisão com o motivo, está em
 [`docs/decisions.md`](docs/decisions.md): 91 entradas, escritas no momento da decisão, não
-reconstruídas no fim. As que mais moldaram o resultado:
+reconstruídas no fim. As decisões de regra de negócio (buffer de sala, TTL de hold, HMAC no
+ingresso, trava de edição pós-venda, modelagem de `assento_sessao`, entre outras) já estão
+detalhadas com seu motivo na [seção 9](#9-regras-de-negócio-aplicadas-e-por-quê) e na
+[7](#7-modelo-de-dados); aqui ficam as de arquitetura e stack que não cabem lá:
 
 | Decisão | Alternativa descartada | Motivo |
 |---|---|---|
-| Cinema com mapa de assentos | Pista por quantidade | Expõe de verdade os invariantes de concorrência do enunciado |
 | Vite + React puro | Next.js | Não há SSR, SEO nem rota de servidor no escopo; Next traria conceitos que nenhuma tela usa |
 | Postgres + Flyway, `ddl-auto=validate` | Hibernate gerando schema | Schema é artefato revisável e versionado; `validate` faz o app reclamar se o mapeamento divergir |
-| Linha `assento_sessao` pré-criada + lock pessimista | `INSERT` disputado com `UNIQUE` | Transforma disputa em `UPDATE` de linha existente, travável e ordenável (sem deadlock) |
-| TTL de hold calculado na leitura | Job agendado limpando holds | Sem coordenação entre instâncias, sem janela de atraso, sem processo a monitorar |
-| Buffer fixo de 4h para conflito de sala | Duração de filme por sessão | Duração exigiria mais um campo (e o dado do TMDb não é confiável pra isso) por precisão que a avaliação não usa |
-| HMAC-SHA256 no código do ingresso | JWT assinado | Código curto e opaco, sem claims nem expiração pra gerenciar |
-| Parâmetro de resultado simulado no corpo | Sandbox de gateway real | Determinístico, testável nos dois caminhos, sem dependência externa no fluxo crítico |
-| Trava total de edição pós-venda | Trava por campo | Elimina a discussão de "qual campo é inofensivo", e o contrato do comprador é o conjunto |
 | Empacotamento por domínio | Pacotes por camada (`controllers/`, `services/`) | Mantém junto o que muda junto; a direção de dependência fica explícita e testável por leitura |
-| Snapshot do filme na sessão | Tabela `filmes` sincronizada | Ingresso vendido não pode mudar de nome por edição externa |
 | Português nas tabelas, inglês no código | Tudo em inglês | Domínio é local e o vocabulário do negócio é português; código segue a convenção da linguagem |
 | Erro em envelope `{codigo, mensagem}` | Texto ou `ProblemDetail` | Front trata por código, mensagem pode mudar sem quebrar tela |
-| QR gerado no front a partir do código | Endpoint de imagem na API | O QR não carrega informação que o cliente já não tenha; a autenticidade vem do HMAC, não do desenho |
-| Checkout se reconstrói por `GET /api/reservas/{id}`, sem lock | Guardar o estado da compra no navegador | Sobrevive a F5, aba restaurada e link colado; e ler para exibir não precisa disputar linha com quem está pagando |
-| Contador de hold informativo, expiração decidida no servidor | Confiar no relógio do cliente | Relógio de cliente é sugestão; o `409 RESERVA_EXPIRADA` é a verdade |
-
-Trade-offs que assumi com consciência: `localStorage` para o token (ver [11](#11-segurança)); buffer
-de 4h como aproximação de duração; garantia de conflito de horário por lock de aplicação, sem
-constraint de exclusão no banco; e emissão de ingresso sem `INSERT` em lote.
 
 ---
 
 ## 15. Uso de IA
 
-O desafio recomenda usar IA e pede transparência, então vou direto ao ponto: **este projeto foi
-construído com IA, e arquitetado, supervisionado e validado por mim.** A ferramenta escreveu a maior
-parte do código, mas as escolhas de domínio, arquitetura e escopo foram minhas, e nenhuma story se
-fechou sem passar por mim. Essa divisão de trabalho é auditável no repositório, e é o que esta seção
-documenta.
+Esta seção busca manter a transparência quanto ao uso de IA ao longo do projeto: ele foi construído
+majoritariamente pela IA, mas inteiramente arquitetado, supervisionado e validado por mim. As
+escolhas de domínio, arquitetura e escopo foram minhas, e nenhuma story se fechou sem passar por
+mim. Essa divisão de trabalho é auditável no repositório, e é o que esta seção documenta.
 
 | Quem | O quê |
 |---|---|
@@ -949,14 +935,55 @@ Tudo o que está aqui é escolha consciente, com o motivo junto, e cada item tem
 | Organização de branch caiu no fim do prazo | Começou disciplinada, uma branch por épico (`epic-1-...` a `epic-5-...`), mergeada em `main` a cada fatia fechada. Perto do fim do prazo, com pressa de fechar o que faltava, esse padrão não se sustentou: `epic-4-pagamento-e-ingressos` e `backup/retrofit-with-story-1-3` ficaram com commit que nunca voltou pra `main`, e parte do trabalho final passou a acontecer direto em `melhorias`. O código chegou testado e verde do mesmo jeito; o que ficou pra trás foi a disciplina de branch, não a qualidade do que foi entregue |
 | Telas sem *skeleton*: cada uma nasce em `loading` e pinta um "Carregando…" até o dado chegar | Não se vê rodando local, onde a resposta chega em ~10ms: o quadro de carregamento existe, mas nunca é desenhado. Em produção o TTFB medido de `GET /api/sessoes` ficou entre 271ms e 758ms, então esse quadro passa a ser sempre desenhado e cada troca de tela dá uma piscada. Não é lentidão de consulta: é o custo normal de SPA falando com API remota (rede, TLS, proxy), e as chamadas da listagem já são paralelas, sem waterfall a remover. A `ListagemSessoesPage` faz o certo: mantém hero e grade na tela e só escurece a grade enquanto recarrega; replicar isso nas outras telas é refatoração página a página, que eu não faço em cima de código verde no último dia |
 
-### Fora de escopo por decisão (o enunciado dispensa)
+### Fora de escopo por decisão
 
-Nota fiscal, revenda de ingresso entre usuários, aplicativo nativo, recuperação de senha e envio de
-ingresso por e-mail.
+Cortado para caber no prazo de 7 dias, por não fazer parte do fluxo crítico que o projeto se propõe
+a demonstrar (comprar assento, pagar, validar na portaria): nota fiscal, revenda de ingresso entre
+usuários, aplicativo nativo, recuperação de senha e envio de ingresso por e-mail.
 
 ---
 
-## 17. Mapa do repositório
+## 17. Autoavaliação após os 7 dias
+
+Três pontos fortes e dois pontos fracos, com o mesmo critério: nada aqui é opinião solta, cada um
+tem rastro no código ou na documentação linkada.
+
+Pontos fortes:
+
+- **Arquitetura de domínio, com índice, migration e query pensados juntos.** Os índices da
+  [seção 12](#12-performance-índices-e-n1) nasceram do caminho real que cada tela percorre, não por
+  reflexo, e a `V9` prova que o critério também vale pra remover índice redundante. As listagens que
+  juntam dado relacionado usam `JOIN` com projection, sem N+1. Migration e schema documentados na
+  [seção 7](#7-modelo-de-dados) sustentam essa arquitetura em vez de só registrar o que o Hibernate
+  geraria sozinho.
+- **Volume de teste que segurou dívida técnica no lugar.** 340 testes no back-end e 217 no front
+  (seção [13](#13-estratégia-de-testes)) não existem só como número: erros que a revisão encontrou
+  numa fatia (ver [Correções reais em cima do que a IA produziu](#correções-reais-em-cima-do-que-a-ia-produziu),
+  na seção 15) ganharam teste próprio e não voltaram a aparecer nas fatias seguintes. Foi essa rede
+  que segurou o projeto sem retrabalho ao longo das 7 dias, e o mesmo cuidado se refletiu no deploy:
+  no período em que a aplicação esteve no ar ([3.6](#36-deploy-histórico)), nenhum problema fora do
+  esperado apareceu.
+- **Segurança aplicada em profundidade, não como camada única.** Segredo sem fallback no código,
+  HMAC do ingresso distinto do secret do JWT, respostas que não viram oráculo de existência e
+  autorização sempre resolvida no back-end, nunca por esconder botão no front: a
+  [seção 11](#11-segurança) reúne essas decisões, e nenhuma delas depende das outras pra segurar o
+  sistema.
+
+Pontos fracos:
+
+- **Organização de branch, sem uso de PR.** O fluxo deveria ter passado por pull request a cada
+  fatia fechada, e não passou. Comecei disciplinado, uma branch por épico mergeada direto em `main`,
+  mas no fim do prazo, com pressa pra fechar o que faltava, esse padrão não se sustentou (detalhe na
+  tabela de [16. Dívida técnica e o que ficou de fora](#16-dívida-técnica-e-o-que-ficou-de-fora)). Não
+  foi limitação técnica, foi prioridade errada sob pressão de prazo.
+- **Arquitetura do front não seguiu o padrão do back-end.** O back-end tem empacotamento por domínio
+  e camadas claras (ver [6. Arquitetura](#6-arquitetura)); o front não recebeu o mesmo cuidado de
+  estrutura. Negligenciei essa parte ao longo do projeto e, quando sobrou tempo pra organizar, o
+  prazo já tinha acabado.
+
+---
+
+## 18. Mapa do repositório
 
 ```
 api/src/main/java/br/com/rolo35/api/
@@ -982,5 +1009,5 @@ docs/
 ```
 
 <p align="center">
-  <sub><code>▚▚▚ ROLO 35 · desafio elite dev · nenhum assento vendido duas vezes ▚▚▚</code></sub>
+  <sub><code>▚▚▚ ROLO 35 · plataforma de ingressos de cinema · nenhum assento vendido duas vezes ▚▚▚</code></sub>
 </p>
