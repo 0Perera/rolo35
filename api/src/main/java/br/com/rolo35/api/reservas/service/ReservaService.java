@@ -89,9 +89,9 @@ public class ReservaService {
         LocalDateTime agora = LocalDateTime.now();
         boolean algumIndisponivel = travados.size() != assentoIds.size()
                 || travados.stream().anyMatch(assento -> !statusEfetivoLivre(assento, agora));
-        //if (algumIndisponivel) {
-        //    throw new AssentoIndisponivelException();
-        //}
+        if (algumIndisponivel) {
+            throw new AssentoIndisponivelException();
+        }
 
         LocalDateTime expiraEm = agora.plusMinutes(MINUTOS_HOLD);
         Reserva reserva = reservaRepository.save(
